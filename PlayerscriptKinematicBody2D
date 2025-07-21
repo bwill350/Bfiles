@@ -4,7 +4,6 @@ class_name Player
 signal died
 
 var hud
-var Player_Laser = preload("res://Player_Laser.tscn")
 var SPEED = 210
 var velocity = Vector2(0,0)
 var input_vector = Vector2.ZERO
@@ -47,15 +46,12 @@ func _physics_process(_delta):
 					if Input.is_action_just_pressed("shoot_right"):
 						$Sprite.play("shoot_right")
 						shoot_right()
-						$Sprite.flip_h = true
 					if Input.is_action_pressed("move_left"):
 						$Sprite.play("move_left")
 				else:
 					velocity.x = SPEED
-				$Sprite.flip_h = true
 			elif Input.is_action_pressed("move_left"):
 				$Sprite.play("move_left")
-				$Sprite.flip_h = false
 				if Input.is_action_just_pressed("shoot_left"):
 					shoot_left()
 				if Input.is_action_just_pressed("run"):
@@ -65,7 +61,6 @@ func _physics_process(_delta):
 			if Input.is_action_pressed("shoot_right"):
 				shoot_right()
 				$Sprite.play("shoot_right")
-				$Sprite.flip_h = false
 			if Input.is_action_pressed("move_up"):
 				if Input.is_action_just_pressed("shootup"):
 					shootup()
@@ -76,31 +71,26 @@ func _physics_process(_delta):
 			if Input.is_action_just_pressed("climb"):
 				velocity.y = climbing
 				$Sprite.play("climb")
-			if Input.is_action_just_pressed("jump"):
+			if Input.is_action_pressed("jump"):
 				$Sprite.play("jump")
 				velocity.y = JUMPFORCE
+				$Sprite.flip_h = false
 				if Input.is_action_just_pressed("shoot_right"):
 					shoot_right()
 					$Sprite.play("shoot_right")
-					$Sprite.flip_h = false
 			if Input.is_action_just_pressed("shoot_left"):
 				$AnimationPlayer.play("shootleft")
 				$Sprite.play("shoot_left")
-				$Sprite.flip_h = false
 			if Input.is_action_just_pressed("shootup"):
 				$AnimationPlayer.play("shootup")
 				$Sprite.play("shoot_up")
 				shootup()
-				$Sprite.flip_h = true
 
 		States.FLOOR:
 			if is_on_floor():
-				state = States.FLOOR
-				continue
 				$Sprite.play("idle")
 			if Input.is_action_pressed("move_right"):
 				$Sprite.play("move_right")
-				$Sprite.flip_h = false
 				if Input.is_action_just_pressed("run"):
 					velocity.x = RUNSPEED
 				else:
@@ -112,8 +102,6 @@ func _physics_process(_delta):
 					shoot_left()
 				if Input.is_action_just_pressed("run"):
 					velocity.x = -RUNSPEED
-				else:
-					$Sprite.flip_H = true
 				if Input.is_action_just_pressed("shootdown"):
 					$AnimationPlayer.play("shootdown")
 					shootdown()
@@ -133,12 +121,6 @@ func shoot():
 
 func jump():
 	$AnimationPlayer.play("jump")
-	var b = Player_Laser.instance()
-	var direction = -1
-	b.direction = direction
-	get_parent().add_child(b)
-	b.position.y = position.y + 200 * direction
-	b.position.x = position.x + 0 * direction 
 
 func take_damage(damage):
 	ouch()
@@ -197,18 +179,12 @@ func shootup():
 		$Sprite.play("shoot_up")
 
 func shootdown():
-	var b = Player_Laser.instance()
-	var direction = 0 if not $Sprite.flip_h else -1
-	b.direction = direction
-	get_parent().add_child(b)
-	b.position.y = position.y - 10 * direction
-	b.position.x = position.x - 125 * direction 
 	$AanimationPlayer.play("shootdown")
+	$Sprite.play("shoot_left")
 
 func shoot_left():
 	$AnimationPlayer.play("shoot_left")
 	$Sprite.play("shoot_left")
-	$Sprite.flip_H = false
 
 func shoot_right():
 	$AnimationPlayer.play("shoot_right")
