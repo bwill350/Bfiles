@@ -55,6 +55,7 @@ func Healthbar():
 
 func climb():
 	jump()
+	velocity.x = 2 * gravity
 	$Sprite.play("climb")
 	var direction = Input.get_axis("move_left", "move_right")
 	if direction:
@@ -67,6 +68,8 @@ func shoot():
 
 func jump():
 	velocity.y = -1000
+	
+
 
 func take_damage(damage):
 	ouch()
