@@ -4,17 +4,37 @@ class_name Player
 signal died
 
 var hud
-var SPEED = 210
-var velocity = Vector2(0,0)
+var hp = 5
 var input_vector = Vector2.ZERO
+var velocity = Vector2(0,1)
 var coins = 0
-enum States {AIR, FLOOR}
-var state = States.AIR
 const RUNSPEED = 400
-const JUMPFORCE = -800
-const GRAVITY = 35
-var hp = 55
 var climbing = 210
+const SPEED = 199
+const JUMPFORCE = -60.0
+const gravity = 444
+
+func _physics_process(_delta):
+	if not is_on_floor():
+		if Input.is_action_pressed("jump"):
+			jump()
+			$Sprite.play("jump")
+			velocity.y = -1000
+		move_and_fall()
+		if is_on_floor():
+			if Input.is_action_pressed("jump"):
+				jump()
+				$Sprite.play("jump")
+				velocity.y = -1000
+	var direction = Input.get_axis("move_left", "move_right")
+	if direction:
+		velocity.x = direction * SPEED
+		$Sprite.play("move_right")
+		$Sprite.flip_h = direction < 0
+	else:
+		velocity.y = velocity.y + 30
+		velocity.x = lerp(velocity.x,0,0.2)
+		move_and_fall()
 
 func ready():
 	$Sprite.play("idle")
@@ -32,95 +52,12 @@ func Healthbar():
 func climb():
 	$Sprite.play("climb")
 
-func _physics_process(_delta):
-	match state:
-		States.AIR:
-			if is_on_floor():
-				state = States.FLOOR
-				$Sprite.play("idle")
-			if Input.is_action_pressed("move_right"):
-				$Sprite.play("move_right")
-				if Input.is_action_pressed("run"):
-					velocity.x = RUNSPEED
-				if Input.is_action_pressed("shoot_right"):
-					if Input.is_action_just_pressed("shoot_right"):
-						$Sprite.play("shoot_right")
-						shoot_right()
-					if Input.is_action_pressed("move_left"):
-						$Sprite.play("move_left")
-				else:
-					velocity.x = SPEED
-			elif Input.is_action_pressed("move_left"):
-				$Sprite.play("move_left")
-				if Input.is_action_just_pressed("shoot_left"):
-					shoot_left()
-				if Input.is_action_just_pressed("run"):
-					velocity.x = -RUNSPEED
-				else:
-					velocity.x = -SPEED
-			if Input.is_action_pressed("shoot_right"):
-				shoot_right()
-				$Sprite.play("shoot_right")
-			if Input.is_action_pressed("move_up"):
-				if Input.is_action_just_pressed("shootup"):
-					shootup()
-				velocity.y = -climbing
-			else:
-				velocity.x = lerp(velocity.x,0,0.2)
-			move_and_fall()
-			if Input.is_action_just_pressed("climb"):
-				velocity.y = climbing
-				$Sprite.play("climb")
-			if Input.is_action_pressed("jump"):
-				$Sprite.play("jump")
-				velocity.y = JUMPFORCE
-				$Sprite.flip_h = false
-				if Input.is_action_just_pressed("shoot_right"):
-					shoot_right()
-					$Sprite.play("shoot_right")
-			if Input.is_action_just_pressed("shoot_left"):
-				$AnimationPlayer.play("shootleft")
-				$Sprite.play("shoot_left")
-			if Input.is_action_just_pressed("shootup"):
-				$AnimationPlayer.play("shootup")
-				$Sprite.play("shoot_up")
-				shootup()
-
-		States.FLOOR:
-			if is_on_floor():
-				$Sprite.play("idle")
-			if Input.is_action_pressed("move_right"):
-				$Sprite.play("move_right")
-				if Input.is_action_just_pressed("run"):
-					velocity.x = RUNSPEED
-				else:
-					velocity.x -= SPEED
-					$Sprite.play("idle")
-			elif Input.is_action_pressed("move_left"):
-				$Sprite.play("move_left")
-				if Input.is_action_just_pressed("shoot_left"):
-					shoot_left()
-				if Input.is_action_just_pressed("run"):
-					velocity.x = -RUNSPEED
-				if Input.is_action_just_pressed("shootdown"):
-					$AnimationPlayer.play("shootdown")
-					shootdown()
-			else:
-				velocity.x = lerp(velocity.x,0,0.2)
-				state = States.FLOOR
-				move_and_fall()
-	
-				global_position += input_vector * SPEED
-		
-				move_and_slide(velocity,Vector2.UP)
-				shoot_right()
-
 func shoot():
 	$Sprite.play("shoot_right")
 	$AnimationPlayer.play("shoot_right")
 
 func jump():
-	$AnimationPlayer.play("jump")
+	velocity.y = -1000
 
 func take_damage(damage):
 	ouch()
@@ -146,11 +83,10 @@ func _on_player_body_entered(body):
 
 func is_on_floor():
 	velocity = move_and_slide(velocity,Vector2.UP)
-	velocity.y = velocity.y + GRAVITY
+	velocity.y = SPEED + gravity
 
 func move_and_fall():
-	velocity = move_and_slide(velocity,Vector2.UP)
-	velocity.y = velocity.y + GRAVITY
+	velocity.x = lerp(velocity.x,0,0.2)
 
 func _on_player_area_entered(area):
 	Healthbar()
@@ -166,7 +102,7 @@ func _on_player_area_entered(area):
 
 func run():
 	velocity = move_and_slide(velocity,Vector2.UP)
-	velocity.x = velocity.x + GRAVITY
+	velocity.x = velocity.x + gravity
 	$AanimationPlayer.play("run")
 
 func shoot_Laser():
@@ -192,3 +128,6 @@ func shoot_right():
 
 func _on_Timer_timeout():
 	get_tree().change_scene("res://GameOver.tscn")
+
+func _on_Sprite_animation_finished():
+	$Sprite.play("idle")
