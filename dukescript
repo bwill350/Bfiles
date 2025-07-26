@@ -1,57 +1,73 @@
-##Scripts/Player/FSM/Duke.gd
-## FSM Manager
 extends CharacterBody2D
 
 @export var SPEED = 500.0
-@export var JUMP_VELOCITY = -300.0
-@export var DOWN_VELOCITY = 300.0
+@export var JUMP_VELOCITY = -1700.0
+@export var DOWN_VELOCITY = 1800.0
 @export var VELOCITY = 0
-const GRAVITY = -1000
+const GRAVITY = -5000
 
-@onready var anim:AnimatedSprite2D = $Sprite
-#@onready var direction = 1 * SPEED
+@onready var anim: AnimatedSprite2D = $Sprite
 @onready var state_label = $StateLabel
 var current_state
-var last_facing_dir = 1 # Default Right
+var last_facing_dir = 1  # Default Right
 
 func change_state(new_state_name: String):
 	if current_state:
 		current_state.exit_state()	 # Exit current state
 	current_state = get_node(new_state_name)
-	if current_state:	 # Ensure new state exists
+	if current_state:  # Ensure new state exists
 		current_state.enter_state(self)	# Enter state 
 
 func _physics_process(delta: float) -> void:
-	# Add the gravity
+	# Handle movement and gravity
 	if is_on_floor():
+		# Grounded movement
 		if Input.is_action_pressed("right"):
-			$Sprite.play("move_right")
-			velocity.x = last_facing_dir * SPEED
-		if Input.is_action_pressed("left"):
-			$Sprite.play("move_left")
-			velocity.x = -last_facing_dir * SPEED
+			anim.play("move_right")
+			velocity.x = SPEED
+			last_facing_dir = 1
+		elif Input.is_action_pressed("left"):
+			anim.play("move_left")
+			velocity.x = -SPEED
+			last_facing_dir = -1
+		else:
+			velocity.x = 0
+			anim.play("Idle")
+
 		if Input.is_action_just_pressed("jump"):
 			velocity.y = JUMP_VELOCITY
-		else:
-			if Input.is_action_just_released("right"):
-				velocity.x = 0
-				$Sprite.play("Idle")
-			if Input.is_action_just_released("left"):
-				velocity.x = 0
-				$Sprite.play("Idle")
-	if not is_on_floor():
-		if Input.is_action_just_pressed("down"):
-			velocity.y = DOWN_VELOCITY
-		
-	
-	#Pass Input Handling is respective state
+		if velocity.x > 0:
+			anim.flip_h = true  # Facing right
+	elif velocity.x < 0:
+		anim.flip_h = false  # Facing left
+	# In the air (falling or jumping)
+	else:
+		# Horizontal air movement
+		if Input.is_action_pressed("right"):
+			velocity.x = SPEED
+			anim.play("move_right")
+			last_facing_dir = 1
+		elif Input.is_action_pressed("left"):
+			velocity.x = -SPEED
+			anim.play("move_left")
+			last_facing_dir = -1
+		# Fast falling when 'down' is pressed
+		if Input.is_action_pressed("down"):
+			velocity.y += GRAVITY * 1.5 * delta  # Make the player fall faster
+
+		# Shorten jump when 'jump' is released
+		if Input.is_action_just_released("jump") and velocity.y < 0:
+			velocity.y *= 0.5  # Shorten jump height
+
+	# Pass Input Handling to FSM state
 	if current_state:
 		current_state.handle_input(delta)
-	move_and_slide()	# Enable Movement
-	
-	## handle player facing
-	#direction * input get_axis("left", "right")
-	#if direction >= 1	# Right
-	#anim.flip_h = false
-	#if direction <= 1	# Left
-	#anim.flip_h = true 
+
+	# Move the player with gravity
+	move_and_slide()
+
+	# Flip sprite based on direction (while jumping or on the ground)
+	if velocity.x > 0:
+		anim.flip_h = false  # Facing right
+	elif velocity.x < 0:
+		anim.flip_h = true  # Facing left
