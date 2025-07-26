@@ -1,0 +1,39 @@
+# FSM - Slash State
+extends PlayerState
+
+var slash_finished := false
+
+func enter_state(player_node):
+	print("Entered Slash State")
+	super(player_node)
+	player.velocity.x = 0  # Stop movement during attack
+	player.anim.animation = "slash"
+	player.anim.play()
+	slash_finished = false
+
+	# Connect animation finished signal if not already connected
+	if not player.anim.is_connected("animation_finished", self, "_on_animation_finished"):
+		player.anim.connect("animation_finished", self, "_on_animation_finished")
+
+func physics_update(delta):
+	player.velocity.y += player.GRAVITY * delta
+	player.velocity.y = min(player.velocity.y, player.MAX_FALL_SPEED)
+	player.move_and_slide()
+
+	# Optional: Allow a small nudge forward during slash
+	# player.velocity.x = player.facing_direction * 50
+
+	if not player.is_on_floor():
+		player.change_state("Falling")
+
+func handle_input(_delta):
+	pass  # Ignore inputs during attack unless you want attack canceling
+
+func _on_animation_finished(anim_name):
+	if anim_name == "slash":
+		slash_finished = true
+		# Transition based on grounded state
+		if player.is_on_floor():
+			player.change_state("Idle")
+		else:
+			player.change_state("Falling")
