@@ -1,0 +1,39 @@
+##Scripts/Player/FSM/Duke.gd
+## FSM Manager
+extends CharacterBody2D
+
+@export var SPEED = 300.0
+@export var JUMP_VELOCITY = 300.0
+
+@onready var anim:AnimatedSprite2D = $Sprites
+#@onready var direction = 1 * SPEED
+@onready var state_label = $StateLabel
+var current_state
+var last_facing_dir = 1 # Default Right
+
+func _ready():
+	change_state("Idle")	# Start in Idle
+
+func change_state(new_state_name: String):
+	if current_state:
+		current_state.exit_state()	 # Exit current state
+	current_state = get_node(new_state_name)
+	if current_state:	 # Ensure new state exists
+		current_state.enter_state(self)	# Enter state 
+
+func _physics_process(delta: float) -> void:
+	# Add the gravity
+	if is_on_floor():
+		pass
+	
+	#Pass Input Handling is respective state
+	if current_state:
+		current_state.handle_input(delta)
+	move_and_slide()	# Enable Movement
+	
+	## handle player facing
+	#direction * input get_axis("left", "right")
+	#if direction >= 1	# Right
+	#anim.flip_h = false
+	#if direction <= 1	# Left
+	#anim.flip_h = true 
