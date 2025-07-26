@@ -1,0 +1,35 @@
+# FSM - Overhead State
+extends PlayerState
+
+var overhead_finished := false
+
+func enter_state(player_node):
+	print("Entered Overhead State")
+	super(player_node)
+	player.velocity.x = 0  # Stop movement during overhead attack
+	player.anim.animation = "overhead"
+	player.anim.play()
+	overhead_finished = false
+
+	# Connect animation finished signal
+	if not player.anim.is_connected("animation_finished", self, "_on_animation_finished"):
+		player.anim.connect("animation_finished", self, "_on_animation_finished")
+
+func physics_update(delta):
+	player.velocity.y += player.GRAVITY * delta
+	player.velocity.y = min(player.velocity.y, player.MAX_FALL_SPEED)
+	player.move_and_slide()
+
+	if not player.is_on_floor():
+		player.change_state("Falling")
+
+func handle_input(_delta):
+	pass  # Optionally allow jump/dodge cancel here
+
+func _on_animation_finished(anim_name):
+	if anim_name == "overhead":
+		overhead_finished = true
+		if player.is_on_floor():
+			player.change_state("Idle")
+		else:
+			player.change_state("Falling")
