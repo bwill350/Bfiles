@@ -6,27 +6,31 @@ signal died
 var hud
 var hp = 5
 var input_vector = Vector2.ZERO
-var velocity = Vector2(0,0)
+var velocity = Vector2(0, 0)
 var coins = 0
 const RUNSPEED = 400
 var climbing = 210
-const SPEED = 444
+const SPEED = 200
 const JUMPFORCE = -2.0
 const gravity = 200
+const FIREBALL = preload("res://Fireball.tscn")
 
 func _physics_process(_delta):
 	if not is_on_floor():
+		var direction = 1
 		if Input.is_action_pressed("climb"):
 			climb()
-		if Input.is_action_pressed("climb_left"):
-			climb_left()
+			velocity.y = -1000
+			
 		if Input.is_action_pressed("jump"):
 			jump()
 			$Sprite.play("jump")
+			fire()
 		move_and_fall()
 		if is_on_floor():
 			if Input.is_action_just_pressed("jump"):
 				jump()
+				
 	var direction = Input.get_axis("move_left", "move_right")
 	if direction:
 		velocity.x = direction * SPEED
@@ -34,15 +38,15 @@ func _physics_process(_delta):
 		$Sprite.flip_h = direction < 0
 	else:
 		if Input.is_action_just_pressed("shoot_up"):
-				shoot_up()
-				$Sprite.play("shoot_up")
+			shoot_up()
+			$Sprite.play("shoot_up")
 		if Input.is_action_just_pressed("shoot_right"):
-				shoot_right()
-				$Sprite.play("shoot_right")
+			shoot_right()
+			$Sprite.play("shoot_right")
 		if Input.is_action_just_pressed("shoot_left"):
-				shoot_left()
-				$Sprite.play("shoot_left")
-				$Sprite.flip_h = false
+			shoot_left()
+			$Sprite.play("shoot_left")
+			$Sprite.flip_h = false
 		move_and_fall()
 
 func ready():
@@ -58,32 +62,31 @@ func loadhearts():
 func Healthbar():
 	pass
 
-func climb():
-	jump()
-	velocity.x = 2 * gravity
-	$Sprite.play("climb")
-	var direction = Input.get_axis("move_left", "move_right")
-	if direction:
-		velocity.y = SPEED * gravity 
-		velocity.x = direction * SPEED
-		$Sprite.flip_h = direction
+func fire():
+	if Input.is_action_just_pressed("fire"):
+		var direction = 1 if not $Sprite.flip_h else -1
+		var f = FIREBALL.instance()
+		f.direction = direction
+		get_parent().add_child(f)
+		f.position.y = position.y
+		f.position.x = position.x + 200 * direction
 
-func climb_left():
-	jump()
-	velocity.x = -2 * gravity
+func climb():
 	$Sprite.play("climb")
-	$Sprite.flip_h = true
 	var direction = Input.get_axis("move_left", "move_right")
-	if direction:
-		velocity.y = SPEED * gravity 
+
+	if direction != 0:
 		velocity.x = direction * SPEED
-		$Sprite.flip_h = direction
+		$Sprite.flip_h = direction < 0
+
+	velocity.y = 0  # Stay in the air while climbing
 
 func shoot():
 	$Sprite.play("shoot_right")
 	$AnimationPlayer.play("shoot_right")
 
 func jump():
+	fire()
 	velocity.y = -1000
 
 func take_damage(damage):
@@ -96,7 +99,7 @@ func take_damage(damage):
 		$GameOver.play()
 
 func ouch():
-	set_modulate(Color(1,0.3,0.3,0.3))
+	set_modulate(Color(1, 0.3, 0.3, 0.3))
 
 func died():
 	$Sprite.play("death")
@@ -109,11 +112,13 @@ func _on_player_body_entered(body):
 		playerlives()
 
 func is_on_floor():
-	velocity = move_and_slide(velocity,Vector2.UP)
+	velocity = move_and_slide(velocity, Vector2.UP)
 	velocity.y = SPEED + gravity
+	fire()
 
 func move_and_fall():
-	velocity.x = lerp(velocity.x,0,0.2)
+	velocity.x = lerp(velocity.x, 0, 0.2)
+	fire()
 
 func _on_player_area_entered(area):
 	Healthbar()
@@ -128,9 +133,10 @@ func _on_player_area_entered(area):
 		get_tree().change_scene("res://YouWin.tscn")
 
 func run():
-	velocity = move_and_slide(velocity,Vector2.UP)
+	velocity = move_and_slide(velocity, Vector2.UP)
 	velocity.x = velocity.x + gravity
 	$AanimationPlayer.play("run")
+	fire()
 
 func shoot_Laser():
 	$AnimationPlayer.play("shoot_right")
