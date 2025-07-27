@@ -1,10 +1,8 @@
-##Scripts/Player/FSM/Duke.gd
 extends CharacterBody2D
 
 @export var SPEED = 500.0
 @export var JUMP_VELOCITY = -1300.0
 @export var DOWN_VELOCITY = 100.0
-@export var VELOCITY = 0
 @export var CLIMB_SPEED = 250.0
 const GRAVITY = 5000
 
@@ -33,96 +31,68 @@ func shoot():
 	bullet.look_at(bullet.global_position + bullet.velocity)
 	get_parent().add_child(bullet)
 
-func _physics_process(_delta: float) -> void:
-	# --- Climb toggle ---
+func _physics_process(delta: float) -> void:
+	# --- Climbing toggle ---
 	if Input.is_action_just_pressed("climb") and not is_on_floor() and is_on_wall():
-		is_climbing = !is_climbing  # Toggle climb mode
+		is_climbing = !is_climbing
+		anim.play("climb")
+		$Sprite.play("climb")
 	
 	# --- Gravity ---
 	if not is_climbing:
-		velocity.y += GRAVITY * _delta
+		velocity.y += GRAVITY * delta
 	else:
-		velocity.y = 0  # Freeze vertical movement
-		velocity.x = CLIMB_SPEED  # Move right while climbing
-		anim.animation = "move_right"
-		anim.play()
+		velocity.y = 0
+		velocity.x = CLIMB_SPEED  # Always climb right when climbing
+		anim.play("move_right")
 		anim.flip_h = false
+
+	# --- Movement Input (only if not climbing) ---
+	if not is_climbing:
+		if Input.is_action_pressed("right"):
+			velocity.x = SPEED
+			last_facing_dir = 1
+			anim.play("move_right")
+			anim.flip_h = false
+		elif Input.is_action_pressed("left"):
+			velocity.x = -SPEED
+			last_facing_dir = -1
+			anim.play("move_left")
+			anim.flip_h = false
+		else:
+			velocity.x = 0
+			if is_on_floor():
+				anim.play("Idle")
+				last_facing_dir = 1
+
+	# --- Jumping ---
+	if Input.is_action_just_pressed("jump") and is_on_floor():
 		
-	# --- Exit climb by jumping ---
-	if Input.is_action_just_pressed("jump"):
-		velocity = Vector2(-SPEED, JUMP_VELOCITY)
+		
+		velocity.y = JUMP_VELOCITY
 		anim.play("jump")
-		velocity.y = -1000
-		if Input.is_action_pressed("climb"):
-			-GRAVITY
-			anim.play("climb")
+
+	# --- Exit climbing with jump ---
+	if is_climbing and Input.is_action_just_pressed("jump"):
+		velocity.y = JUMP_VELOCITY
+		is_climbing = false
+		anim.play("climb")
+		$Sprite.play("climb")
 
 	# --- Shooting ---
 	if Input.is_action_just_pressed("shoot"):
 		shoot()
 
-	# --- Movement Input (ignore if climbing) ---
-	if not is_climbing:
-		if Input.is_action_just_released("climb"):
-			$Sprite.play("climb")
-			anim.play("climb")
-		if Input.is_action_pressed("right"):
-			velocity.x = SPEED
-			last_facing_dir = 1
-			anim.flip_h = false
-			if is_on_floor():
-				if Input.is_action_just_released("climb"):
-					velocity.y = -1000
-					-GRAVITY
-					anim.play("climb")
-					$Sprite.play("climb")
-				if Input.is_action_pressed("jump"):
-					anim.play("jump")
-					velocity.y = -1000
-					if Input.is_action_pressed("left"):
-						velocity.x = -SPEED
-						last_facing_dir = -1
-					anim.flip_h = false
-					is_climbing = false
-					velocity = Vector2(-SPEED, JUMP_VELOCITY)
-				anim.play("jump")
-				anim.play("move_right")
-				if Input.is_action_pressed("jump"):
-					anim.play("jump")
-					velocity.y = -1000
-		elif Input.is_action_pressed("left"):
-			velocity.x = -SPEED
-			last_facing_dir = -1
-			anim.flip_h = false
-			if is_on_floor():
-				anim.play("move_left")
-		else:
-			velocity.x = 0
-			if is_on_floor():
-				anim.play("Idle")
-			anim.flip_h = last_facing_dir == -1
-
-	# --- Jump ---
-	if is_on_floor() and Input.is_action_just_pressed("jump"):
-		velocity.y = JUMP_VELOCITY
-		anim.play("jump")
-		last_facing_dir = -1
-		if Input.is_action_just_released("climb"):
-			$Sprite.play("climb")
-			anim.play("climb")
-
-	# --- Fast Fall ---
+	# --- Fast fall ---
 	if Input.is_action_just_pressed("down"):
 		velocity.y = DOWN_VELOCITY
 
-	# --- Jump Cutoff ---
+	# --- Short hop ---
 	if Input.is_action_just_released("jump") and velocity.y < 0:
-		velocity.y -1000
-		if Input.is_action_just_released("climb"):
-			$Sprite.play("climb")
-			anim.play("climb")
+		velocity.y *= 0.5  # Cut upward velocity
 
-	# --- Pass to FSM ---
+	# FSM state logic
 	if current_state:
-		current_state.handle_input(_delta)
+		current_state.handle_input(delta)
+
 	move_and_slide()
