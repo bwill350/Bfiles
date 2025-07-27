@@ -33,22 +33,42 @@ func shoot():
 
 func _physics_process(delta: float) -> void:
 	# --- Climbing toggle ---
-	if Input.is_action_just_pressed("climb") and not is_on_floor() and is_on_wall():
-		is_climbing = !is_climbing
-		anim.play("climb")
-		$Sprite.play("climb")
-	
+	var on_wall = is_on_wall()
+	var climb_pressed = Input.is_action_pressed("climb")
+	if climb_pressed and not is_on_floor() and on_wall:
+		is_climbing = true
+	else:
+		if not climb_pressed:
+			is_climbing = false
+
 	# --- Gravity ---
 	if not is_climbing:
 		velocity.y += GRAVITY * delta
 	else:
-		velocity.y = 0
-		velocity.x = CLIMB_SPEED  # Always climb right when climbing
-		anim.play("move_right")
-		anim.flip_h = false
+		velocity.y = -CLIMB_SPEED  # Climb upward while holding climb
+
+		# Allow left/right input while climbing
+		if Input.is_action_pressed("right"):
+			velocity.x = SPEED
+			last_facing_dir = 1
+			anim.play("climb")
+			anim.flip_h = false
+		elif Input.is_action_pressed("left"):
+			velocity.x = -SPEED
+			last_facing_dir = -1
+			anim.play("climb")
+			anim.flip_h = true
+		else:
+			velocity.x = 0
+			anim.play("climb")
+			anim.flip_h = last_facing_dir == -1
 
 	# --- Movement Input (only if not climbing) ---
 	if not is_climbing:
+		if Input.is_action_just_pressed("jump") and not is_on_floor():
+			velocity.y = JUMP_VELOCITY
+			velocity.x = SPEED * last_facing_dir  # Jump in facing direction
+			anim.play("jump")
 		if Input.is_action_pressed("right"):
 			velocity.x = SPEED
 			last_facing_dir = 1
@@ -73,11 +93,10 @@ func _physics_process(delta: float) -> void:
 
 	# --- Exit climbing with jump ---
 	if is_climbing and Input.is_action_just_pressed("jump"):
-		velocity.y = JUMP_VELOCITY
-		velocity.x = SPEED * last_facing_dir
+		velocity.y = 1000  # Fall quickly to ground
 		is_climbing = false
-		anim.play("climb")
-		$Sprite.play("climb")
+		anim.play("jump")
+		$Sprite.play("jump")
 
 	# --- Shooting ---
 	if Input.is_action_just_pressed("shoot"):
