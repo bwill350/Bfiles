@@ -1,11 +1,11 @@
 ##Scripts/Player/FSM/Duke.gd
-## FSM Manager
 extends CharacterBody2D
 
 @export var SPEED = 500.0
 @export var JUMP_VELOCITY = -1300.0
-@export var DOWN_VELOCITY = 1800.0
+@export var DOWN_VELOCITY = 100.0
 @export var VELOCITY = 0
+@export var CLIMB_SPEED = 250.0
 const GRAVITY = 5000
 
 @onready var anim: AnimatedSprite2D = $Sprite
@@ -13,6 +13,7 @@ const GRAVITY = 5000
 
 var current_state
 var last_facing_dir = 1
+var is_climbing = false
 
 func change_state(new_state_name: String):
 	if current_state:
@@ -24,53 +25,92 @@ func change_state(new_state_name: String):
 func shoot():
 	var bullet_scene = preload("res://scenes/Bullet.tscn")
 	var bullet = bullet_scene.instantiate()
-
-	# Spawn slightly ahead of player based on facing direction
 	var offset = Vector2(30 * last_facing_dir, -10)
 	bullet.global_position = global_position + offset
-
-	# Aim toward mouse
 	var mouse_pos = get_global_mouse_position()
 	var direction = (mouse_pos - bullet.global_position).normalized()
 	bullet.velocity = direction * bullet.speed
-
-	# Rotate to face direction
 	bullet.look_at(bullet.global_position + bullet.velocity)
-
 	get_parent().add_child(bullet)
 
 func _physics_process(_delta: float) -> void:
-	# Apply gravity
-	velocity.y += GRAVITY * _delta
+	# --- Climb toggle ---
+	if Input.is_action_just_pressed("climb") and not is_on_floor() and is_on_wall():
+		is_climbing = !is_climbing  # Toggle climb mode
+
+	# --- Gravity ---
+	if not is_climbing:
+		velocity.y += GRAVITY * _delta
+	else:
+		velocity.y = 0  # Freeze vertical movement
+		velocity.x = CLIMB_SPEED  # Move right while climbing
+		anim.animation = "move_right"
+		anim.play()
+		anim.flip_h = false
+
+	# --- Exit climb by jumping ---
+	if Input.is_action_just_pressed("jump"):
+		velocity = Vector2(-SPEED, JUMP_VELOCITY)
+		anim.play("jump")
+		velocity.y = -1000
+		if Input.is_action_pressed("climb"):
+			-GRAVITY
+			velocity.y = -1000
+			anim.play("climb")
 
 	# --- Shooting ---
 	if Input.is_action_just_pressed("shoot"):
 		shoot()
 
-	# --- Movement Input (Affects Direction and Flip Always) ---
-	if Input.is_action_pressed("right"):
-		velocity.x = SPEED
-		last_facing_dir = 1
-		anim.flip_h = false
-		if is_on_floor():
-			anim.play("move_right")
-	elif Input.is_action_pressed("left"):
-		velocity.x = -SPEED
-		last_facing_dir = -1
-		anim.flip_h = false
-		if is_on_floor():
-			anim.play("move_left")
-	else:
-		velocity.x = 0
-		if is_on_floor():
-			anim.play("Idle")
-		anim.flip_h = last_facing_dir == -1
-		
-	# --- Jumping ---
+	# --- Movement Input (ignore if climbing) ---
+	if not is_climbing:
+		if Input.is_action_just_released("climb"):
+			$Sprite.play("climb")
+			anim.play("climb")
+		if Input.is_action_pressed("right"):
+			velocity.x = SPEED
+			last_facing_dir = 1
+			anim.flip_h = false
+			if is_on_floor():
+				if Input.is_action_just_released("climb"):
+					velocity.y = -1000
+					$Sprite.play("climb")
+				anim.play("climb")
+				if Input.is_action_pressed("jump"):
+					anim.play("jump")
+					velocity.y = -1000
+					if Input.is_action_pressed("left"):
+						velocity.x = -SPEED
+						last_facing_dir = -1
+					anim.flip_h = false
+					is_climbing = false
+					velocity = Vector2(-SPEED, JUMP_VELOCITY)
+				anim.play("jump")
+				anim.play("move_right")
+				if Input.is_action_pressed("jump"):
+					anim.play("jump")
+					velocity.y = -1000
+		elif Input.is_action_pressed("left"):
+			velocity.x = -SPEED
+			last_facing_dir = -1
+			anim.flip_h = false
+			if is_on_floor():
+				anim.play("move_left")
+		else:
+			velocity.x = 0
+			if is_on_floor():
+				anim.play("Idle")
+			anim.flip_h = last_facing_dir == -1
+
+	# --- Jump ---
 	if is_on_floor() and Input.is_action_just_pressed("jump"):
 		velocity.y = JUMP_VELOCITY
 		anim.play("jump")
 		last_facing_dir = -1
+		if Input.is_action_just_released("climb"):
+			$Sprite.play("climb")
+			anim.play("climb")
+			
 
 	# --- Fast Fall ---
 	if Input.is_action_just_pressed("down"):
@@ -78,7 +118,10 @@ func _physics_process(_delta: float) -> void:
 
 	# --- Jump Cutoff ---
 	if Input.is_action_just_released("jump") and velocity.y < 0:
-		velocity.y *= 0.5
+		velocity.y -1000
+		if Input.is_action_just_released("climb"):
+			$Sprite.play("climb")
+			anim.play("climb")
 
 	# --- Pass to FSM ---
 	if current_state:
