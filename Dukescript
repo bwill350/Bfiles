@@ -1,18 +1,31 @@
 extends CharacterBody2D
+class_name Duke
 
 @export var SPEED = 500.0
-@export var JUMP_VELOCITY = -1300.0
+@export var JUMP_VELOCITY = -1800.0
 @export var DOWN_VELOCITY = 100.0
 @export var CLIMB_SPEED = 250.0
 const GRAVITY = 5000
 
-@onready var anim: AnimatedSprite2D = $Sprite
-@onready var state_label = $StateLabel
-@onready var marker: Marker2D = $Marker2D  # Bullet spawn point & aimer
-
+var health: int = 15
 var current_state
 var last_facing_dir = 1
 var is_climbing = false
+var invincible = false
+var invincible_time = 1.0
+
+@onready var anim: AnimatedSprite2D = $Sprite
+@onready var state_label = $StateLabel
+@onready var marker: Marker2D = $Marker2D
+@onready var hitbox: Area2D = $HitBox
+@onready var hit_sound = $HitSound
+
+signal Die
+signal health_changed(health)
+
+func _ready():
+	add_to_group("player")
+	hitbox.area_entered.connect(_on_hitbox_area_entered)
 
 func change_state(new_state_name: String):
 	if current_state:
@@ -24,37 +37,30 @@ func change_state(new_state_name: String):
 func shoot():
 	var bullet_scene = preload("res://scenes/Bullet.tscn")
 	var bullet = bullet_scene.instantiate()
-	
 	bullet.global_position = marker.global_position
-	
+
 	var mouse_pos = get_global_mouse_position()
 	var direction = (mouse_pos - bullet.global_position).normalized()
 	bullet.velocity = direction * bullet.speed
 	bullet.look_at(bullet.global_position + bullet.velocity)
-	
+
 	get_tree().current_scene.add_child(bullet)
 
-func _process(delta: float) -> void:
-	# Make marker aim at mouse
+func _process(_delta: float) -> void:
 	marker.look_at(get_global_mouse_position())
 
 func _physics_process(delta: float) -> void:
-	# --- Climbing toggle ---
 	var on_wall = is_on_wall()
 	var climb_pressed = Input.is_action_pressed("climb")
+
 	if climb_pressed and not is_on_floor() and on_wall:
 		is_climbing = true
 	else:
 		if not climb_pressed:
 			is_climbing = false
 
-	# --- Gravity ---
-	if not is_climbing:
-		velocity.y += GRAVITY * delta
-	else:
-		velocity.y = -CLIMB_SPEED  # Climb upward while holding climb
-
-		# Allow left/right input while climbing
+	if is_climbing:
+		velocity.y = -CLIMB_SPEED
 		if Input.is_action_pressed("right"):
 			velocity.x = SPEED
 			last_facing_dir = 1
@@ -69,56 +75,81 @@ func _physics_process(delta: float) -> void:
 			velocity.x = 0
 			anim.play("climb")
 			anim.flip_h = last_facing_dir == -1
+	else:
+		# Gravity applies if not climbing
+		velocity.y += GRAVITY * delta
 
-	# --- Movement Input (only if not climbing) ---
-	if not is_climbing:
-		if Input.is_action_just_pressed("jump") and not is_on_floor():
-			velocity.y = JUMP_VELOCITY
-			velocity.x = SPEED * last_facing_dir  # Jump in facing direction
-			anim.play("jump")
+		# Allow horizontal movement in air and on ground
 		if Input.is_action_pressed("right"):
 			velocity.x = SPEED
 			last_facing_dir = 1
-			anim.play("move_right")
+			if is_on_floor():
+				anim.play("move_right")
 			anim.flip_h = false
 		elif Input.is_action_pressed("left"):
 			velocity.x = -SPEED
 			last_facing_dir = -1
-			anim.play("move_left")
+			if is_on_floor():
+				anim.play("move_left")
 			anim.flip_h = false
 		else:
 			velocity.x = 0
 			if is_on_floor():
 				anim.play("Idle")
-				anim.flip_h = last_facing_dir == -1  # Keep facing last direction
+				anim.flip_h = last_facing_dir == -1
 
-	# --- Jumping ---
+	# Jump from floor
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
-		velocity.x = SPEED * last_facing_dir  # Jump in facing direction
 		anim.play("jump")
 
-	# --- Exit climbing with jump ---
+	# Jump from climbing
 	if is_climbing and Input.is_action_just_pressed("jump"):
-		velocity.y = 1000  # Fall quickly to ground
+		velocity.y = 1000
 		is_climbing = false
 		anim.play("jump")
 		$Sprite.play("jump")
 
-	# --- Shooting ---
 	if Input.is_action_just_pressed("shoot"):
 		shoot()
 
-	# --- Fast fall ---
 	if Input.is_action_just_pressed("down"):
 		velocity.y = DOWN_VELOCITY
 
-	# --- Short hop ---
 	if Input.is_action_just_released("jump") and velocity.y < 0:
-		velocity.y *= 0.5  # Cut upward velocity
+		velocity.y *= 0.5
 
-	# FSM state logic
 	if current_state:
 		current_state.handle_input(delta)
 
 	move_and_slide()
+
+# ----------------------------------
+# Damage Handling
+# ----------------------------------
+
+func _on_hitbox_area_entered(area: Area2D) -> void:
+	if area.name == "Bob" or area.name == "DeadlyFlower" or area.is_in_group("enemies"):
+		take_damage(5)
+
+func take_damage(amount: int):
+	if invincible:
+		return
+	health -= amount
+	emit_signal("health_changed", health)
+	print("Duke took damage! Health now: ", health)
+	if hit_sound:
+		hit_sound.play()
+	flash_red()
+	if health <= 0:
+		emit_signal("Die")
+		die()
+
+func flash_red():
+	$Sprite.modulate = Color(1, 0.2, 0.2)
+	await get_tree().create_timer(0.1).timeout
+	$Sprite.modulate = Color(1, 1, 1)
+
+func die():
+	print("Duke has died.")
+	queue_free()
