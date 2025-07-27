@@ -37,8 +37,7 @@ func _physics_process(_delta: float) -> void:
 	# --- Climb toggle ---
 	if Input.is_action_just_pressed("climb") and not is_on_floor() and is_on_wall():
 		is_climbing = !is_climbing  # Toggle climb mode
-		-GRAVITY
-
+	
 	# --- Gravity ---
 	if not is_climbing:
 		velocity.y += GRAVITY * _delta
@@ -48,7 +47,7 @@ func _physics_process(_delta: float) -> void:
 		anim.animation = "move_right"
 		anim.play()
 		anim.flip_h = false
-
+		
 	# --- Exit climb by jumping ---
 	if Input.is_action_just_pressed("jump"):
 		velocity = Vector2(-SPEED, JUMP_VELOCITY)
