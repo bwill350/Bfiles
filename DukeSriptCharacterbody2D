@@ -37,12 +37,16 @@ func shoot():
 
 	get_tree().current_scene.add_child(bullet)
 
-func shoot_up():
-	if is_on_floor():
-		if Input.is_action_just_pressed("shoot_up"):
-			anim.play("shoot_up")
-			velocity.y = 0
-		anim.flip_h = last_facing_dir == -1
+func shootup():
+	if Input.is_action_pressed("shootup"):
+		var bullet_scene = preload("res://scenes/Bullet.tscn")
+		var bullet = bullet_scene.instantiate()
+		bullet.global_position = marker.global_position
+
+		var direction = Vector2(0, -1)  # Straight up
+		bullet.velocity = direction * bullet.speed
+
+		get_tree().current_scene.add_child(bullet)
 
 func _process(_delta: float) -> void:
 	marker.look_at(get_global_mouse_position())
@@ -89,23 +93,23 @@ func _physics_process(delta: float) -> void:
 				anim.play("move_left")
 			anim.flip_h = false
 		else:
-			shoot_up()
+			shootup()
 			velocity.x = 0
 			if is_on_floor():
 
 				anim.play("Idle")
 				anim.flip_h = last_facing_dir == -1
 			
-	if Input.is_action_pressed("shoot_up") and is_on_floor():
-		if Input.is_action_just_pressed("shoot_up"):
-			$Sprite.play("shoot_up")
+	if Input.is_action_pressed("shootup") and is_on_floor():
+			$Sprite.play("shootup")
+			shootup()
 			
 	if Input.is_action_just_pressed("jump") and is_on_floor():
-		shoot_up()
+		shootup()
 		velocity.y = JUMP_VELOCITY
 		anim.play("jump")
-		if Input.is_action_just_pressed("shoot_up"):
-			$Sprite.play("shoot_up")
+		if Input.is_action_pressed("shootup"):
+			$Sprite.play("shootup")
 		
 	if is_climbing and Input.is_action_just_pressed("jump"):
 		velocity.y = 1000
@@ -114,7 +118,7 @@ func _physics_process(delta: float) -> void:
 		anim.play("jump")
 		$Sprite.play("jump")
 		
-	if Input.is_action_just_pressed("shoot"):
+	if Input.is_action_pressed("shoot"):
 		$Sprite.play("Idle")
 		shoot()
 		
