@@ -38,12 +38,34 @@ func shoot():
 	get_tree().current_scene.add_child(bullet)
 
 func shootup():
-	if Input.is_action_pressed("shootup"):
+	if Input.is_action_just_pressed("shootup"):
 		var bullet_scene = preload("res://scenes/Bullet.tscn")
 		var bullet = bullet_scene.instantiate()
 		bullet.global_position = marker.global_position
 
 		var direction = Vector2(0, -1)  # Straight up
+		bullet.velocity = direction * bullet.speed
+
+		get_tree().current_scene.add_child(bullet)
+
+func shootleft():
+	if Input.is_action_just_pressed("shootleft"):
+		var bullet_scene = preload("res://scenes/Bullet.tscn")
+		var bullet = bullet_scene.instantiate()
+		bullet.global_position = marker.global_position
+
+		var direction = Vector2(-1, 0)  # Straight up
+		bullet.velocity = direction * bullet.speed
+
+		get_tree().current_scene.add_child(bullet)
+	
+func shootright():
+	if Input.is_action_pressed("shootright"):
+		var bullet_scene = preload("res://scenes/Bullet.tscn")
+		var bullet = bullet_scene.instantiate()
+		bullet.global_position = marker.global_position
+
+		var direction = Vector2(1, 0)  # Straight up
 		bullet.velocity = direction * bullet.speed
 
 		get_tree().current_scene.add_child(bullet)
@@ -92,6 +114,17 @@ func _physics_process(delta: float) -> void:
 			if is_on_floor():
 				anim.play("move_left")
 			anim.flip_h = false
+			if Input.is_action_just_pressed("shootup"):
+				$Sprite.play("shootup")
+				shootup()
+			if Input.is_action_pressed("shootleft"):
+				$Sprite.play("Idle")
+				$Sprite.flip_h = true
+				velocity.x = 0
+				shootleft()
+			if Input.is_action_pressed("shootright"):
+				$Sprite.play("Idle")
+				shootright()
 		else:
 			shootup()
 			velocity.x = 0
@@ -99,10 +132,14 @@ func _physics_process(delta: float) -> void:
 
 				anim.play("Idle")
 				anim.flip_h = last_facing_dir == -1
-			
+			 
 	if Input.is_action_pressed("shootup") and is_on_floor():
 			$Sprite.play("shootup")
 			shootup()
+			
+	if Input.is_action_just_pressed("shootright") and is_on_floor():
+			$Sprite.play("shootright")
+			shootright()
 			
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		shootup()
@@ -124,6 +161,7 @@ func _physics_process(delta: float) -> void:
 		
 	if Input.is_action_just_pressed("down"):
 		velocity.y = DOWN_VELOCITY
+	
 	
 	move_and_slide()
 
