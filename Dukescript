@@ -46,6 +46,13 @@ func shoot():
 
 	get_tree().current_scene.add_child(bullet)
 
+func shoot_up():
+	if is_on_wall():
+		if Input.is_action_just_pressed("shoot_up"):
+			anim.play("shoot_up")
+			velocity.y = 0
+		anim.flip_h = last_facing_dir == -1
+
 func _process(_delta: float) -> void:
 	marker.look_at(get_global_mouse_position())
 
@@ -76,10 +83,8 @@ func _physics_process(delta: float) -> void:
 			anim.play("climb")
 			anim.flip_h = last_facing_dir == -1
 	else:
-		# Gravity applies if not climbing
 		velocity.y += GRAVITY * delta
 
-		# Allow horizontal movement in air and on ground
 		if Input.is_action_pressed("right"):
 			velocity.x = SPEED
 			last_facing_dir = 1
@@ -93,17 +98,24 @@ func _physics_process(delta: float) -> void:
 				anim.play("move_left")
 			anim.flip_h = false
 		else:
+			shoot_up()
 			velocity.x = 0
 			if is_on_floor():
+				$Sprite.play("shoot_up")
 				anim.play("Idle")
 				anim.flip_h = last_facing_dir == -1
 
-	# Jump from floor
+	if Input.is_action_pressed("shoot_up") and is_on_floor():
+		if Input.is_action_just_pressed("shoot_up"):
+			$Sprite.play("shoot_up")
+
 	if Input.is_action_just_pressed("jump") and is_on_floor():
+		shoot_up()
 		velocity.y = JUMP_VELOCITY
 		anim.play("jump")
-
-	# Jump from climbing
+		if Input.is_action_just_pressed("shoot_up"):
+			$Sprite.play("shoot_up")
+		
 	if is_climbing and Input.is_action_just_pressed("jump"):
 		velocity.y = 1000
 		is_climbing = false
@@ -116,11 +128,9 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("down"):
 		velocity.y = DOWN_VELOCITY
 
-	if Input.is_action_just_released("jump") and velocity.y < 0:
-		velocity.y *= 0.5
-
 	if current_state:
 		current_state.handle_input(delta)
+		$Sprite.play("shoot_up")
 
 	move_and_slide()
 
@@ -129,7 +139,7 @@ func _physics_process(delta: float) -> void:
 # ----------------------------------
 
 func _on_hitbox_area_entered(area: Area2D) -> void:
-	if area.name == "Bob" or area.name == "DeadlyFlower" or area.is_in_group("enemies"):
+	if area.name == "Bat" or area.name == "DeadlyFlower" or area.name == "DeadlyFlowerBullet" or area.is_in_group("enemies"):
 		take_damage(5)
 
 func take_damage(amount: int):
@@ -138,9 +148,15 @@ func take_damage(amount: int):
 	health -= amount
 	emit_signal("health_changed", health)
 	print("Duke took damage! Health now: ", health)
+
 	if hit_sound:
 		hit_sound.play()
+
 	flash_red()
+	invincible = true
+	await get_tree().create_timer(invincible_time).timeout
+	invincible = false
+
 	if health <= 0:
 		emit_signal("Die")
 		die()
