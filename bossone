@@ -2,10 +2,22 @@ extends Area2D
 class_name Bossone
 
 signal Die
-
+@export var heart = 40
 @export var health: int = 100
 @export var shoot_interval: float = 5.0  # Shoot every 5 seconds
 const BULLET_SCENE = preload("res://BossoneBullet.tscn")  # Update the path if needed
+
+func bosslivesone():
+	$"../../HUD/Bossheartsone".visible = false
+
+func bosslivestwo():
+	$"../../HUD/Bossheartstwo".visible = false
+
+func bosslivesthree():
+	$"../../HUD/Bossheartsthree".visible = false
+
+func bosslivesfour():
+	$"../../HUD/Bossheartsfour".visible = false
 
 func _ready():
 	start_shooting()
@@ -15,8 +27,17 @@ func _on_area_entered(area):
 		take_damage(1)
 
 func take_damage(amount: int):
+	emit_signal("add_score")
 	health -= amount
 	print("Bossone took damage! Health now: ", health)
+	if health <= 100:
+		bosslivesfour()
+	if health <= 75:
+		bosslivesthree()
+	if health <= 50:
+		bosslivestwo()
+	if health <= 0:
+		bosslivesone()
 	if health <= 0:
 		emit_signal("Die")
 		die()
@@ -33,7 +54,6 @@ func shoot_bullet():
 	var duke_candidates = get_tree().get_nodes_in_group("player")
 	if duke_candidates.size() > 0:
 		bullet.target = duke_candidates[0]
-
 	get_tree().current_scene.add_child(bullet)
 
 func start_shooting():
