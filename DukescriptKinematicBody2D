@@ -15,9 +15,9 @@ var hp = 5
 var coins = 0
 var velocity = Vector2.ZERO
 var facing_right = true
+var facing_left = true
 
 func _ready():
-	$Sprite.play("idle")
 	loadhearts()
 
 func _physics_process(delta):
@@ -30,11 +30,10 @@ func handle_input():
 	var direction = Input.get_axis("move_left", "move_right")
 	if direction != 0:
 		facing_right = direction > 0
+		facing_left = direction > 0
 		velocity.x = direction * SPEED
-		$Sprite.flip_h = direction < 0
-		$Sprite.play("move_right")
 	else:
-		velocity.x = lerp(velocity.x, 0, 0.2)
+		velocity.x = 0
 
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		jump()
@@ -43,20 +42,19 @@ func handle_input():
 		climb()
 
 	if Input.is_action_just_pressed("shoot_up"):
-		$Sprite.play("shoot_up")
 		shoot_up()
 	elif Input.is_action_just_pressed("shoot_left"):
+		facing_right = false
 		shoot_left()
 	elif Input.is_action_just_pressed("shoot_right"):
+		facing_right = true
 		shoot_right()
 	elif Input.is_action_just_pressed("shoot"):
+		facing_right = true
 		shoot()
-	elif Input.is_action_just_pressed("jump"):
-		jump()
 
 func apply_gravity(delta):
 	if not is_on_floor():
-		# Faster fall when jump is released
 		if not Input.is_action_pressed("jump"):
 			velocity.y = GRAVITY
 		else:
@@ -66,11 +64,21 @@ func update_animation():
 	if not is_on_floor():
 		$Sprite.play("jump")
 	elif abs(velocity.x) > 10:
-		$AnimationPlayer.play("run")
+		if facing_right:
+			$Sprite.play("move_right")
+		else:
+			$Sprite.play("move_left")
+	elif Input.is_action_pressed("shoot_up"):
+		$Sprite.play("shoot_up")
+	elif Input.is_action_pressed("shoot_left"):
+		$Sprite.play("shoot_left")
+	elif Input.is_action_pressed("shoot_right"):
+		$Sprite.play("shoot_right")
 	else:
-		$Sprite.play("idle")
-		if Input.is_action_pressed("shoot_up"):
-			$Sprite.play("shoot_up")
+		if facing_right:
+			$Sprite.play("idle")
+		else:
+			$Sprite.play("idle_left")
 
 func jump():
 	velocity.y = JUMPFORCE
@@ -82,8 +90,7 @@ func wall_jump():
 			var wall_dir = collision.normal.x
 			velocity.x = wall_dir * WALL_JUMP_FORCE.x
 			velocity.y = WALL_JUMP_FORCE.y
-			facing_right = wall_dir < 0  # Flip facing
-			$Sprite.flip_h = !facing_right
+			facing_right = wall_dir < 0
 			break
 
 func climb():
@@ -91,7 +98,6 @@ func climb():
 	var direction = Input.get_axis("move_left", "move_right")
 	if direction != 0:
 		velocity.x = direction * SPEED
-		$Sprite.flip_h = direction < 0
 	velocity.y = GRAVITY
 
 func shoot():
@@ -101,7 +107,6 @@ func shoot():
 	bullet.rotation = bullet.velocity.angle()
 	get_tree().current_scene.add_child(bullet)
 	$Sprite.play("shoot_right")
-	$AnimationPlayer.play("shoot_right")
 
 func shoot_up():
 	var bullet = BULLET.instance()
@@ -110,7 +115,6 @@ func shoot_up():
 	bullet.rotation = bullet.velocity.angle()
 	get_tree().current_scene.add_child(bullet)
 	$Sprite.play("shoot_up")
-	$AnimationPlayer.play("shoot_up")
 
 func shoot_down():
 	var bullet = BULLET.instance()
@@ -119,7 +123,6 @@ func shoot_down():
 	bullet.rotation = bullet.velocity.angle()
 	get_tree().current_scene.add_child(bullet)
 	$Sprite.play("shoot_down")
-	$AnimationPlayer.play("shoot_down")
 
 func shoot_left():
 	var bullet = BULLET.instance()
@@ -128,7 +131,6 @@ func shoot_left():
 	bullet.rotation = bullet.velocity.angle()
 	get_tree().current_scene.add_child(bullet)
 	$Sprite.play("shoot_left")
-	$AnimationPlayer.play("shoot_left")
 
 func shoot_right():
 	var bullet = BULLET.instance()
@@ -137,7 +139,6 @@ func shoot_right():
 	bullet.rotation = bullet.velocity.angle()
 	get_tree().current_scene.add_child(bullet)
 	$Sprite.play("shoot_right")
-	$AnimationPlayer.play("shoot_right")
 
 func take_damage(damage):
 	if hp <= 0:
@@ -173,6 +174,3 @@ func _on_player_area_entered(area):
 
 func _on_Timer_timeout():
 	get_tree().change_scene("res://GameOver.tscn")
-
-func _on_Sprite_animation_finished():
-	$Sprite.play("idle")
