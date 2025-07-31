@@ -3,164 +3,173 @@ class_name Player
 
 signal died
 
+const RUNSPEED = 400
+const SPEED = 1200
+const JUMPFORCE = -1000
+const GRAVITY = 200
+const BULLET = preload("res://Bullet.tscn")
+const WALL_JUMP_FORCE = Vector2(1000, -1000)
+
 var hud
 var hp = 5
-var input_vector = Vector2.ZERO
-var velocity = Vector2(0, 0)
 var coins = 0
-const RUNSPEED = 400
-var climbing = 210
-const SPEED = 200
-const JUMPFORCE = -2.0
-const gravity = 200
-const FIREBALL = preload("res://Fireball.tscn")
+var velocity = Vector2.ZERO
+var facing_right = true
 
-func _physics_process(_delta):
-	if not is_on_floor():
-		var direction = 1
-		if Input.is_action_pressed("climb"):
-			climb()
-			velocity.y = -1000
-			velocity.x = SPEED * direction
-		if Input.is_action_pressed("climb_left"):
-			velocity.y = -1000
-			velocity.x = -SPEED * direction
-		if Input.is_action_pressed("jump"):
-			jump()
-			$Sprite.play("jump")
-			fire()
-		move_and_fall()
-		if is_on_floor():
-			if Input.is_action_just_pressed("jump"):
-				jump()
-				
-	var direction = Input.get_axis("move_left", "move_right")
-	if direction:
-		velocity.x = direction * SPEED
-		$Sprite.play("move_right")
-		$Sprite.flip_h = direction < 0
-	else:
-		if Input.is_action_just_pressed("shoot_up"):
-			shoot_up()
-			$Sprite.play("shoot_up")
-		if Input.is_action_just_pressed("shoot_right"):
-			shoot_right()
-			$Sprite.play("shoot_right")
-		if Input.is_action_just_pressed("shoot_left"):
-			shoot_left()
-			$Sprite.play("shoot_left")
-			$Sprite.flip_h = false
-		move_and_fall()
-
-func ready():
+func _ready():
 	$Sprite.play("idle")
 	loadhearts()
 
-func playerlives():
-	$"../HUD/Playerlives".text = " Playerlives: " 
+func _physics_process(delta):
+	handle_input()
+	apply_gravity(delta)
+	velocity = move_and_slide(velocity, Vector2.UP)
+	update_animation()
 
-func loadhearts():
-	$"../HUD/Playerhearts".rect_size.x = hp % 3
+func handle_input():
+	var direction = Input.get_axis("move_left", "move_right")
+	if direction != 0:
+		facing_right = direction > 0
+		velocity.x = direction * SPEED
+		$Sprite.flip_h = direction < 0
+		$Sprite.play("move_right")
+	else:
+		velocity.x = lerp(velocity.x, 0, 0.2)
 
-func Healthbar():
-	pass
+	if Input.is_action_just_pressed("jump") and is_on_floor():
+		jump()
 
-func fire():
-	if Input.is_action_just_pressed("fire"):
-		var direction = 1 if not $Sprite.flip_h else -1
-		var f = FIREBALL.instance()
-		f.direction = direction
-		get_parent().add_child(f)
-		f.position.y = position.y
-		f.position.x = position.x + 200 * direction
+	if Input.is_action_pressed("climb"):
+		climb()
+
+	if Input.is_action_just_pressed("shoot_up"):
+		$Sprite.play("shoot_up")
+		shoot_up()
+	elif Input.is_action_just_pressed("shoot_left"):
+		shoot_left()
+	elif Input.is_action_just_pressed("shoot_right"):
+		shoot_right()
+	elif Input.is_action_just_pressed("shoot"):
+		shoot()
+	elif Input.is_action_just_pressed("jump"):
+		jump()
+
+func apply_gravity(delta):
+	if not is_on_floor():
+		# Faster fall when jump is released
+		if not Input.is_action_pressed("jump"):
+			velocity.y = GRAVITY
+		else:
+			velocity.y = -GRAVITY
+
+func update_animation():
+	if not is_on_floor():
+		$Sprite.play("jump")
+	elif abs(velocity.x) > 10:
+		$AnimationPlayer.play("run")
+	else:
+		$Sprite.play("idle")
+		if Input.is_action_pressed("shoot_up"):
+			$Sprite.play("shoot_up")
+
+func jump():
+	velocity.y = JUMPFORCE
+
+func wall_jump():
+	for i in range(get_slide_count()):
+		var collision = get_slide_collision(i)
+		if collision.normal.x != 0:
+			var wall_dir = collision.normal.x
+			velocity.x = wall_dir * WALL_JUMP_FORCE.x
+			velocity.y = WALL_JUMP_FORCE.y
+			facing_right = wall_dir < 0  # Flip facing
+			$Sprite.flip_h = !facing_right
+			break
 
 func climb():
 	$Sprite.play("climb")
 	var direction = Input.get_axis("move_left", "move_right")
-
 	if direction != 0:
 		velocity.x = direction * SPEED
 		$Sprite.flip_h = direction < 0
-
-	velocity.y = 0  # Stay in the air while climbing
+	velocity.y = GRAVITY
 
 func shoot():
+	var bullet = BULLET.instance()
+	bullet.global_position = $FirePoint.global_position
+	bullet.velocity = Vector2.RIGHT * bullet.speed
+	bullet.rotation = bullet.velocity.angle()
+	get_tree().current_scene.add_child(bullet)
 	$Sprite.play("shoot_right")
 	$AnimationPlayer.play("shoot_right")
 
-func jump():
-	fire()
-	velocity.y = -1000
+func shoot_up():
+	var bullet = BULLET.instance()
+	bullet.global_position = $FirePoint.global_position
+	bullet.velocity = Vector2.UP * bullet.speed
+	bullet.rotation = bullet.velocity.angle()
+	get_tree().current_scene.add_child(bullet)
+	$Sprite.play("shoot_up")
+	$AnimationPlayer.play("shoot_up")
+
+func shoot_down():
+	var bullet = BULLET.instance()
+	bullet.global_position = $FirePoint.global_position
+	bullet.velocity = Vector2.DOWN * bullet.speed
+	bullet.rotation = bullet.velocity.angle()
+	get_tree().current_scene.add_child(bullet)
+	$Sprite.play("shoot_down")
+	$AnimationPlayer.play("shoot_down")
+
+func shoot_left():
+	var bullet = BULLET.instance()
+	bullet.global_position = $FirePoint.global_position
+	bullet.velocity = Vector2.LEFT * bullet.speed
+	bullet.rotation = bullet.velocity.angle()
+	get_tree().current_scene.add_child(bullet)
+	$Sprite.play("shoot_left")
+	$AnimationPlayer.play("shoot_left")
+
+func shoot_right():
+	var bullet = BULLET.instance()
+	bullet.global_position = $FirePoint.global_position
+	bullet.velocity = Vector2.RIGHT * bullet.speed
+	bullet.rotation = bullet.velocity.angle()
+	get_tree().current_scene.add_child(bullet)
+	$Sprite.play("shoot_right")
+	$AnimationPlayer.play("shoot_right")
 
 func take_damage(damage):
-	ouch()
-	hp -= damage
-	hp -= 1
 	if hp <= 0:
-		$Sprite.play("death")
-		emit_signal("died")
-		$GameOver.play()
+		return
+	hp -= damage
+	ouch()
+	loadhearts()
+	if hp <= 0:
+		died()
 
 func ouch():
 	set_modulate(Color(1, 0.3, 0.3, 0.3))
 
 func died():
 	$Sprite.play("death")
-	Healthbar()
-	loadhearts()
+	$AnimationPlayer.play("death")
+	emit_signal("died")
+	$GameOver.play()
 	$Timer.start()
+
+func loadhearts():
+	$"../HUD/Playerhearts".rect_size.x = hp % 3
 
 func _on_player_body_entered(body):
 	if body.is_in_group("enemies"):
-		playerlives()
-
-func is_on_floor():
-	velocity = move_and_slide(velocity, Vector2.UP)
-	velocity.y = SPEED + gravity
-	fire()
-
-func move_and_fall():
-	velocity.x = lerp(velocity.x, 0, 0.2)
-	fire()
+		take_damage(1)
 
 func _on_player_area_entered(area):
-	Healthbar()
-	if is_in_group("eyeleft"):
+	if area.is_in_group("eyeleft") or area.is_in_group("Boss"):
 		take_damage(1)
-	if is_in_group("Boss"):
-		take_damage(1)
-	hp -= 1
-	if hp <= 0:
-		died()
-	if area.is_in_group("door"):
+	elif area.is_in_group("door"):
 		get_tree().change_scene("res://YouWin.tscn")
-
-func run():
-	velocity = move_and_slide(velocity, Vector2.UP)
-	velocity.x = velocity.x + gravity
-	$AnimationPlayer.play("run")
-	fire()
-
-func shoot_Laser():
-	$AnimationPlayer.play("shoot_right")
-	$Sprite.play("shoot_right")
-
-func shoot_up():
-	if Input.is_action_just_pressed("shoot_up"):
-		$AnimationPlayer.play("shoot_up")
-		$Sprite.play("shoot_up")
-
-func shoot_down():
-	$AnimationPlayer.play("shoot_down")
-	$Sprite.play("shoot_down")
-
-func shoot_left():
-	$AnimationPlayer.play("shoot_left")
-	$Sprite.play("shoot_left")
-
-func shoot_right():
-	$AnimationPlayer.play("shoot_right")
-	$Sprite.play("shoot_right")
 
 func _on_Timer_timeout():
 	get_tree().change_scene("res://GameOver.tscn")
