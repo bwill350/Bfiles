@@ -68,7 +68,7 @@ func apply_gravity(delta):
 		elif Input.is_action_pressed("jump"):
 			velocity.y = -GRAVITY
 		else:
-			velocity.y = GRAVITY
+			velocity.y += GRAVITY * 3 * delta  # 3x gravity multiplier when falling
 	else:
 		if Input.is_action_pressed("jump"):
 			velocity.y = JUMPFORCE
