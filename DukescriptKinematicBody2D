@@ -98,7 +98,7 @@ func climb():
 	var direction = Input.get_axis("move_left", "move_right")
 	if direction != 0:
 		velocity.x = direction * SPEED
-	velocity.y = GRAVITY
+	velocity.y = -GRAVITY
 
 func shoot():
 	var bullet = BULLET.instance()
