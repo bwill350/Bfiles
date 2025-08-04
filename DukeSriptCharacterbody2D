@@ -1,20 +1,21 @@
 extends CharacterBody2D
 class_name Duke
 
-@export var SPEED = 500.0
+@export var SPEED = 900.0
 @export var JUMP_VELOCITY = -1800.0
 @export var CLIMB_SPEED = 250.0
 const GRAVITY = 5000
 
 var health: int = 5
 var current_state
-var last_facing_dir = 1
-var is_climbing = false
+var last_facing_dir = -1
+var is_climbing = true
 
 @onready var anim: AnimatedSprite2D = $Sprite
 @onready var marker: Marker2D = $Marker2D
 @onready var hitbox: Area2D = $HitBox
 @onready var hit_sound = $HitSound
+@onready var mark: Marker2D = $Marker2D2
 
 signal Die
 signal health_changed(health)
@@ -27,6 +28,18 @@ func shoot():
 	var bullet_scene = preload("res://scenes/Bullet.tscn")
 	var bullet = bullet_scene.instantiate()
 	bullet.global_position = marker.global_position
+
+	var mouse_pos = get_global_mouse_position()
+	var direction = (mouse_pos - bullet.global_position).normalized()
+	bullet.velocity = direction * bullet.speed
+	bullet.look_at(bullet.global_position + bullet.velocity)
+
+	get_tree().current_scene.add_child(bullet)
+
+func shoot2():
+	var bullet_scene = preload("res://scenes/Bullet.tscn")
+	var bullet = bullet_scene.instantiate()
+	bullet.global_position = mark.global_position
 
 	var mouse_pos = get_global_mouse_position()
 	var direction = (mouse_pos - bullet.global_position).normalized()
@@ -99,7 +112,6 @@ func _physics_process(delta: float) -> void:
 			anim.flip_h = last_facing_dir == -1
 	else:
 		velocity.y += GRAVITY * delta
-		
 		if Input.is_action_pressed("right"):
 			velocity.x = SPEED
 			last_facing_dir = 1
@@ -116,8 +128,8 @@ func _physics_process(delta: float) -> void:
 				$Sprite.play("shootup")
 				shootup()
 			if Input.is_action_pressed("shootleft"):
-				$Sprite.play("Idle")
-				$Sprite.flip_h = true
+				$Sprite.play("shootleft")
+				
 				velocity.x = 0
 				shootleft()
 			if Input.is_action_pressed("shootright"):
@@ -126,8 +138,29 @@ func _physics_process(delta: float) -> void:
 		else:
 			velocity.x = 0
 			if is_on_floor():
-				anim.play("Idle")
+				if Input.is_action_just_pressed("left"):
+					anim.play("shootleft")
+				anim.flip_h = last_facing_dir == 1
+				
+			if Input.is_action_just_pressed("shootleft"):
+				anim.play("shootleft")
+				anim.flip_h = last_facing_dir == 1
+			else:
+				$Sprite.play("Idle")
 				anim.flip_h = last_facing_dir == -1
+				if Input.is_action_pressed("shootright"):
+					$Sprite.play("Idle")
+					anim.flip_h = last_facing_dir == 1
+					$Sprite.flip_h = false
+				if Input.is_action_pressed("shoot"):
+					$Sprite.play("Idle")
+					anim.flip_h = last_facing_dir == 1
+					$Sprite.flip_h = false
+				if Input.is_action_pressed("jump"):
+					$Sprite.play("jump")
+				if not is_on_floor():
+					if Input.is_action_just_pressed("jump"):
+						$Sprite.play("jump")
 			 
 	if Input.is_action_pressed("shootup") and is_on_floor():
 		$Sprite.play("shootup")
@@ -151,12 +184,15 @@ func _physics_process(delta: float) -> void:
 		anim.play("jump")
 		$Sprite.play("jump")
 		
+	if Input.is_action_just_pressed("shoot2"):
+		shoot2()
 	if Input.is_action_pressed("shoot"):
 		$Sprite.play("Idle")
 		shoot()
 	if Input.is_action_just_pressed("shootright"):
 		$Sprite.play("shootright")
 		shootright()
+		anim.flip_h = last_facing_dir == 1
 	if Input.is_action_just_pressed("shootleft"):
 		$Sprite.play("shootleft")
 		shootleft()
@@ -168,7 +204,7 @@ func _physics_process(delta: float) -> void:
 # ----------------------------------
 
 func _on_hitbox_area_entered(area: Area2D) -> void:
-	if area.name == "Bat" or area.name == "DeadlyFlower" or area.name == "Bossone" or area.name == "DeadlyFlowerBullet" or area.name == "Bossonebullet" or area.is_in_group("enemies"):
+	if area.name == "Bat" or area.name == "DeadlyFlower" or area.name == "Bossone" or area.name == "DeadlyFlowerBullet" or area.name == "Bossonebullet" or area.name == "Bosstwo" or area.name == "Bosstwobullet"  or area.name == "Bossthree" or area.name == "Bossthreebullet" or area.name == "Bossthreebullet" or area.name == "Bossfour" or area.name == "Bossfourbullet" or area.is_in_group("enemies"):
 		take_damage(1)
 
 func take_damage(amount: int):
