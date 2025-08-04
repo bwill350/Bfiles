@@ -28,25 +28,22 @@ func shoot():
 	var bullet_scene = preload("res://scenes/Bullet.tscn")
 	var bullet = bullet_scene.instantiate()
 	bullet.global_position = marker.global_position
-
 	var mouse_pos = get_global_mouse_position()
 	var direction = (mouse_pos - bullet.global_position).normalized()
 	bullet.velocity = direction * bullet.speed
 	bullet.look_at(bullet.global_position + bullet.velocity)
-
 	get_tree().current_scene.add_child(bullet)
 
 func shoot2():
-	var bullet_scene = preload("res://scenes/Bullet.tscn")
-	var bullet = bullet_scene.instantiate()
-	bullet.global_position = mark.global_position
+	if Input.is_action_just_pressed("shoot2"):
+		var bullet_scene = preload("res://scenes/Bullet.tscn")
+		var bullet = bullet_scene.instantiate()
+		bullet.global_position = marker.global_position
 
-	var mouse_pos = get_global_mouse_position()
-	var direction = (mouse_pos - bullet.global_position).normalized()
-	bullet.velocity = direction * bullet.speed
-	bullet.look_at(bullet.global_position + bullet.velocity)
+		var direction = Vector2(4, -6)
+		bullet.velocity = direction * bullet.speed
 
-	get_tree().current_scene.add_child(bullet)
+		get_tree().current_scene.add_child(bullet)
 
 func shootup():
 	if Input.is_action_just_pressed("shootup"):
@@ -150,7 +147,7 @@ func _physics_process(delta: float) -> void:
 				anim.flip_h = last_facing_dir == -1
 				if Input.is_action_pressed("shootright"):
 					$Sprite.play("Idle")
-					anim.flip_h = last_facing_dir == 1
+					
 					$Sprite.flip_h = false
 				if Input.is_action_pressed("shoot"):
 					$Sprite.play("Idle")
