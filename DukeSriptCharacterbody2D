@@ -67,6 +67,17 @@ func shootleft():
 
 		get_tree().current_scene.add_child(bullet)
 
+func shootaround():
+	if Input.is_action_just_pressed("shootaround"):
+		var bullet_scene = preload("res://scenes/Bullet.tscn")
+		var bullet = bullet_scene.instantiate()
+		bullet.global_position = marker.global_position
+
+		var direction = Vector2(4, -6)
+		bullet.velocity = direction * bullet.speed
+
+		get_tree().current_scene.add_child(bullet)
+
 func shootright():
 	if Input.is_action_pressed("shootright"):
 		var bullet_scene = preload("res://scenes/Bullet.tscn")
@@ -193,6 +204,9 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("shootleft"):
 		$Sprite.play("shootleft")
 		shootleft()
+	if Input.is_action_just_pressed("shootaround"):
+		$Sprite.play("shootaround")
+		shootaround()
 	
 	move_and_slide()
 
