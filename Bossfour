@@ -1,0 +1,81 @@
+extends Area2D
+class_name Bossfour
+
+signal Die
+@export var heart = 40
+@export var health: int = 100
+@export var shoot_interval: float = 5.0  # Shoot every 5 seconds
+const BULLET_SCENE = preload("res://Scenes/Levels/Bossfourbullet.tscn")  # Update the path if needed
+
+func bosslivesone():
+	get_tree().get_root().get_node("lvl_04/HUD/Bossheartsone").visible = false
+
+func bosslivestwo():
+	get_tree().get_root().get_node("lvl_04/HUD/Bossheartstwo").visible = false
+
+func bosslivesthree():
+	get_tree().get_root().get_node("lvl_04/HUD/Bossheartsthree").visible = false
+
+func bosslivesfour():
+	get_tree().get_root().get_node("lvl_04/HUD/Bossheartsfour").visible = false
+
+
+func _ready():
+	$Sprite2D.play("default")
+	start_shooting()
+	start_flipping()
+
+func _on_area_entered(area):
+	if area.is_in_group("Bullet"):
+		take_damage(1)
+
+func take_damage(amount: int):
+	health -= amount
+	print("Bossfour took damage! Health now: ", health)
+	if health <= 100:
+		bosslivesfour()
+	if health <= 75:
+		bosslivesthree()
+	if health <= 50:
+		bosslivestwo()
+	if health <= 0:
+		bosslivesone()
+	if health <= 0:
+		get_tree().change_scene_to_file("res://Scenes/GameOver.tscn")
+
+func die():
+	print("Bossfour has died.")
+	call_deferred("queue_free")
+
+func shoot_bullet():
+	var bullet = BULLET_SCENE.instantiate()
+	bullet.global_position = global_position + Vector2(0, -10)  # Offset so it spawns just above Bossone
+
+	# 🔥 Assign Duke as the target using the "player" group
+	var duke_candidates = get_tree().get_nodes_in_group("player")
+	if duke_candidates.size() > 0:
+		bullet.target = duke_candidates[0]
+	get_tree().current_scene.add_child(bullet)
+
+func start_shooting():
+	var timer = Timer.new()
+	timer.wait_time = shoot_interval
+	timer.autostart = true
+	timer.one_shot = false
+	timer.timeout.connect(shoot_bullet)
+	add_child(timer)
+
+func start_flipping():
+	var flip_timer = Timer.new()
+	flip_timer.wait_time = 10.0
+	flip_timer.autostart = true
+	flip_timer.one_shot = false
+	flip_timer.timeout.connect(_on_flip_timer_timeout)
+	add_child(flip_timer)
+
+func _on_flip_timer_timeout():
+	$Sprite2D.flip_h = !$Sprite2D.flip_h
+
+
+func _on_die() -> void:
+	get_tree().change_scene_to_file("res://Scenes/GameOver.tscn")
