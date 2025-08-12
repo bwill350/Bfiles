@@ -39,10 +39,8 @@ func shoot2():
 		var bullet_scene = preload("res://scenes/Bullet.tscn")
 		var bullet = bullet_scene.instantiate()
 		bullet.global_position = marker.global_position
-
 		var direction = Vector2(4, -6)
 		bullet.velocity = direction * bullet.speed
-
 		get_tree().current_scene.add_child(bullet)
 
 func shootup():
@@ -50,10 +48,8 @@ func shootup():
 		var bullet_scene = preload("res://scenes/Bullet.tscn")
 		var bullet = bullet_scene.instantiate()
 		bullet.global_position = marker.global_position
-
 		var direction = Vector2(0, -1)
 		bullet.velocity = direction * bullet.speed
-
 		get_tree().current_scene.add_child(bullet)
 
 func shootleft():
@@ -61,10 +57,8 @@ func shootleft():
 		var bullet_scene = preload("res://scenes/Bullet.tscn")
 		var bullet = bullet_scene.instantiate()
 		bullet.global_position = marker.global_position
-
 		var direction = Vector2(-1, 0)
 		bullet.velocity = direction * bullet.speed
-
 		get_tree().current_scene.add_child(bullet)
 
 func shootaround():
@@ -72,10 +66,8 @@ func shootaround():
 		var bullet_scene = preload("res://scenes/Bullet.tscn")
 		var bullet = bullet_scene.instantiate()
 		bullet.global_position = marker.global_position
-
 		var direction = Vector2(4, -6)
 		bullet.velocity = direction * bullet.speed
-
 		get_tree().current_scene.add_child(bullet)
 
 func shootright():
@@ -83,10 +75,8 @@ func shootright():
 		var bullet_scene = preload("res://scenes/Bullet.tscn")
 		var bullet = bullet_scene.instantiate()
 		bullet.global_position = marker.global_position
-
 		var direction = Vector2(1, 0)
 		bullet.velocity = direction * bullet.speed
-
 		get_tree().current_scene.add_child(bullet)
 
 func _process(_delta: float) -> void:
@@ -120,70 +110,55 @@ func _physics_process(delta: float) -> void:
 			anim.flip_h = last_facing_dir == -1
 	else:
 		velocity.y += GRAVITY * delta
-		if Input.is_action_pressed("right"):
-			velocity.x = SPEED
+		
+		# Fix: When shooting right, update last_facing_dir and flip correctly, do NOT revert immediately
+		if Input.is_action_pressed("shootright"):
 			last_facing_dir = 1
-			if is_on_floor():
-				anim.play("move_right")
+			$Sprite.play("shootright")
+			shootright()
 			anim.flip_h = false
-		elif Input.is_action_pressed("left"):
-			velocity.x = -SPEED
-			last_facing_dir = -1
-			if is_on_floor():
-				anim.play("move_left")
-			anim.flip_h = false
-			if Input.is_action_just_pressed("shootup"):
-				$Sprite.play("shootup")
-				shootup()
-			if Input.is_action_pressed("shootleft"):
-				$Sprite.play("shootleft")
-				
-				velocity.x = 0
-				shootleft()
-			if Input.is_action_pressed("shootright"):
-				$Sprite.play("Idle")
-				shootright()
-		else:
 			velocity.x = 0
-			if is_on_floor():
-				if Input.is_action_just_pressed("left"):
-					anim.play("shootleft")
-				anim.flip_h = last_facing_dir == 1
-				
-			if Input.is_action_just_pressed("shootleft"):
-				anim.play("shootleft")
-				anim.flip_h = last_facing_dir == 1
+		# When shooting left, same treatment
+		elif Input.is_action_pressed("shootleft"):
+			last_facing_dir = -1
+			$Sprite.play("shootleft")
+			shootleft()
+			anim.flip_h = true
+			velocity.x = 0
+		else:
+			if Input.is_action_pressed("right"):
+				velocity.x = SPEED
+				last_facing_dir = 1
+				if is_on_floor():
+					anim.play("move_right")
+				anim.flip_h = false
+			elif Input.is_action_pressed("left"):
+				velocity.x = -SPEED
+				last_facing_dir = -1
+				if is_on_floor():
+					anim.play("move_left")
+				anim.flip_h = false
 			else:
-				$Sprite.play("Idle")
-				anim.flip_h = last_facing_dir == -1
-				if Input.is_action_pressed("shootright"):
+				velocity.x = 0
+				if is_on_floor():
 					$Sprite.play("Idle")
-					
-					$Sprite.flip_h = false
-				if Input.is_action_pressed("shoot"):
-					$Sprite.play("Idle")
-					anim.flip_h = last_facing_dir == 1
-					$Sprite.flip_h = false
-				if Input.is_action_pressed("jump"):
-					$Sprite.play("jump")
-				if not is_on_floor():
-					if Input.is_action_just_pressed("jump"):
-						$Sprite.play("jump")
-			 
-	if Input.is_action_pressed("shootup") and is_on_floor():
-		$Sprite.play("shootup")
-		shootup()
-			
-	if Input.is_action_just_pressed("shootright") and is_on_floor():
-		$Sprite.play("shootright")
-		shootright()
-			
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		shootup()
-		velocity.y = JUMP_VELOCITY
-		anim.play("jump")
-		if Input.is_action_pressed("shootup"):
+					anim.flip_h = last_facing_dir == -1
+				
+		# Jump animation handling etc. (keep as you had)
+		if Input.is_action_pressed("shootup") and is_on_floor():
 			$Sprite.play("shootup")
+			shootup()
+		
+		if Input.is_action_just_pressed("shootright") and is_on_floor():
+			$Sprite.play("shootright")
+			shootright()
+		
+		if Input.is_action_just_pressed("jump") and is_on_floor():
+			shootup()
+			velocity.y = JUMP_VELOCITY
+			anim.play("jump")
+			if Input.is_action_pressed("shootup"):
+				$Sprite.play("shootup")
 		
 	if is_climbing and Input.is_action_just_pressed("jump"):
 		velocity.y = 1000
@@ -197,13 +172,6 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_pressed("shoot"):
 		$Sprite.play("Idle")
 		shoot()
-	if Input.is_action_just_pressed("shootright"):
-		$Sprite.play("shootright")
-		shootright()
-		anim.flip_h = last_facing_dir == 1
-	if Input.is_action_just_pressed("shootleft"):
-		$Sprite.play("shootleft")
-		shootleft()
 	if Input.is_action_just_pressed("shootaround"):
 		$Sprite.play("shootaround")
 		shootaround()
