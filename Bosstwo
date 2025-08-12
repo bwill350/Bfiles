@@ -1,0 +1,84 @@
+extends Area2D
+class_name Bosstwo
+
+signal Die
+@export var heart = 40
+@export var health: int = 100
+@export var shoot_interval: float = 5.0  # Shoot every 5 seconds
+@export var move_speed: float = 100.0
+@export var left_boundary: float
+@export var right_boundary: float
+
+const BULLET_SCENE = preload("res://BossoneBullet.tscn")  # Update the path if needed
+
+var direction := 1  # 1 = right, -1 = left
+
+func bosslivesone():
+	$"../../HUD/Bossheartsone".visible = false
+
+func bosslivestwo():
+	$"../../HUD/Bossheartstwo".visible = false
+
+func bosslivesthree():
+	$"../../HUD/Bossheartsthree".visible = false
+
+func bosslivesfour():
+	$"../../HUD/Bossheartsfour".visible = false
+
+func _ready():
+	left_boundary = position.x - 500
+	right_boundary = position.x + 500
+	start_shooting()
+
+func _physics_process(delta):
+	# Move horizontally
+	position.x += direction * move_speed * delta
+
+	# Reverse direction at boundaries
+	if position.x <= left_boundary:
+		direction = 1
+	elif position.x >= right_boundary:
+		direction = -1
+
+func _on_area_entered(area):
+	if area.is_in_group("Bullet"):
+		take_damage(1)
+
+func take_damage(amount: int):
+	health -= amount
+	print("Bosstwo took damage! Health now: ", health)
+
+	if health <= 100:
+		bosslivesfour()
+	if health <= 75:
+		bosslivesthree()
+	if health <= 50:
+		bosslivestwo()
+	if health <= 0:
+		bosslivesone()
+	if health <= 0:
+		get_tree().change_scene_to_file("res://Scenes/Levels/lvl_03.tscn")
+
+func shoot_bullet():
+	var bullet = BULLET_SCENE.instantiate()
+	bullet.global_position = global_position + Vector2(0, -10)  # Offset above boss
+
+	var duke_candidates = get_tree().get_nodes_in_group("player")
+	if duke_candidates.size() > 0:
+		bullet.target = duke_candidates[0]
+	get_tree().current_scene.add_child(bullet)
+
+func start_shooting():
+	var timer = Timer.new()
+	timer.wait_time = shoot_interval
+	timer.autostart = true
+	timer.one_shot = false
+	timer.timeout.connect(self.shoot_bullet)
+	add_child(timer)
+
+func _on_die():
+	print("Bosstwo has died.")
+	call_deferred("_change_level")
+
+func _change_level():
+	get_tree().change_scene_to("res://Scenes/Levels/lvl_03.tscn")
