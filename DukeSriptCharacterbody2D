@@ -19,6 +19,7 @@ var _mouse_pos := Vector2.ZERO
 
 @onready var anim: AnimatedSprite2D = $Sprite
 @onready var marker: Marker2D = $Marker2D
+@onready var marker2: Marker2D = $Marker2D
 @onready var hitbox: Area2D = $HitBox
 @onready var hit_sound = $HitSound
 
@@ -27,34 +28,28 @@ signal health_changed(health)
 
 func _ready():
 	add_to_group("player")
-	hitbox.area_entered.connect(_on_hitbox_area_entered)
-	# Allow mouse cursor to be visible for stick aiming
+	hitbox.area_entered.connect(_on_HitBox_area_entered)
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_mouse_pos = get_viewport().get_mouse_position()
 
 func _process(delta):
 	if enable_mouse_aim:
-		# Get stick input
 		var stick_input = Vector2(
 			Input.get_joy_axis(0, JOY_AXIS_RIGHT_X),
 			Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
 		)
 
-		# Deadzone filtering
 		if stick_input.length() < stick_deadzone:
 			stick_input = Vector2.ZERO
 		else:
 			stick_input = stick_input.normalized()
 
-		# Move virtual mouse position
 		_mouse_pos += stick_input * stick_sensitivity * delta
 		_mouse_pos.x = clamp(_mouse_pos.x, 0, get_viewport().get_visible_rect().size.x)
 		_mouse_pos.y = clamp(_mouse_pos.y, 0, get_viewport().get_visible_rect().size.y)
 
-		# Warp the mouse in the viewport
 		Input.warp_mouse(_mouse_pos)
 
-	# Always aim marker at current mouse position
 	marker.look_at(get_global_mouse_position())
 
 func _physics_process(delta):
@@ -68,6 +63,12 @@ func _physics_process(delta):
 			is_climbing = false
 			
 	if is_climbing:
+		if Input.is_action_pressed("shoot"):
+			shoot()
+		if Input.is_action_pressed("shootright"):
+			shootright()
+		if Input.is_action_pressed("shootleft"):
+			shootleft()
 		velocity.y = -CLIMB_SPEED
 		if Input.is_action_pressed("right"):
 			velocity.x = SPEED
@@ -142,13 +143,13 @@ func _physics_process(delta):
 	move_and_slide()
 
 # ------------------------
-# Shooting (unchanged logic)
+# Shooting
 # ------------------------
 func shoot():
 	var bullet_scene = preload("res://scenes/Bullet.tscn")
 	var bullet = bullet_scene.instantiate()
 	bullet.global_position = marker.global_position
-	var direction = (marker.global_position.direction_to(get_global_mouse_position())).normalized()
+	var direction = (marker2.global_position.direction_to(get_global_mouse_position())).normalized()
 	bullet.velocity = direction * bullet.speed
 	bullet.look_at(bullet.global_position + bullet.velocity)
 	get_tree().current_scene.add_child(bullet)
@@ -192,9 +193,8 @@ func shootaround():
 # ------------------------
 # Damage
 # ------------------------
-func _on_hitbox_area_entered(area: Area2D) -> void:
-	if area.is_in_group("enemies"):
-		take_damage(1)
+func _on_HitBox_area_entered(area: Area2D) -> void:
+	take_damage(1)
 
 func take_damage(amount: int):
 	health -= amount
@@ -203,8 +203,7 @@ func take_damage(amount: int):
 		hit_sound.play()
 	flash_red()
 	if health <= 0:
-		emit_signal("Die")
-		die()
+		get_tree().change_scene_to_file("res://Scenes/GameOver.tscn")
 
 func flash_red():
 	$Sprite.modulate = Color(1, 0.2, 0.2)
@@ -212,4 +211,4 @@ func flash_red():
 	$Sprite.modulate = Color(1, 1, 1)
 
 func die():
-	get_tree().change_scene_to_file("res://Scenes/GameOver.tscn")
+	print("died")
