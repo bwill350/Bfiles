@@ -124,10 +124,20 @@ func _physics_process(delta):
 			shootaround()
 
 		if Input.is_action_just_pressed("jump") and is_on_floor():
+			if Input.is_action_pressed("shoot"):
+				shoot()
+			if Input.is_action_pressed("shootright"):
+				shootright()
 			velocity.y = JUMP_VELOCITY
 			anim.play("jump")
 			if Input.is_action_pressed("shootup"):
 				$Sprite.play("shootup")
+				shootup()
+		if Input.is_action_just_pressed("jump") and not is_on_floor():
+			if Input.is_action_pressed("shootright"):
+				shootright()
+			if Input.is_action_pressed("shootleft"):
+				shootleft()
 		
 	if is_climbing and Input.is_action_just_pressed("jump"):
 		velocity.y = 1000
@@ -139,6 +149,13 @@ func _physics_process(delta):
 	if Input.is_action_pressed("shoot"):
 		$Sprite.play("Idle")
 		shoot()
+		
+	if Input.is_action_just_pressed("shootright"):
+		shootright()
+		
+	if Input.is_action_just_pressed("shootleft"):
+		shootleft()
+
 
 	move_and_slide()
 
@@ -193,7 +210,7 @@ func shootaround():
 # ------------------------
 # Damage
 # ------------------------
-func _on_HitBox_area_entered(area: Area2D) -> void:
+func _on_HitBox_area_entered(_area: Area2D) -> void:
 	take_damage(1)
 
 func take_damage(amount: int):
