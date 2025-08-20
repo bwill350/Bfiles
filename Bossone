@@ -72,6 +72,7 @@ func start_shooting():
 
 # --- First explosion sequence ---
 func spawn_explosions():
+	$Sprite2.visible = false
 	$Explosion1.play()
 	var texture = preload("res://Art/Bullet.png")
 	var center_pos = global_position
