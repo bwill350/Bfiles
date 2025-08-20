@@ -4,62 +4,134 @@ class_name Bossone
 signal Die
 @export var heart = 40
 @export var health: int = 100
-@export var shoot_interval: float = 5.0  # Shoot every 5 seconds
-const BULLET_SCENE = preload("res://BossoneBullet.tscn")  # Update the path if needed
+@export var shoot_interval: float = 5.0
+@export var move_speed: float = 100.0
 
-func bosslivesone():
-	$"../../HUD/Bossheartsone".visible = false
+const BULLET_SCENE = preload("res://BossoneBullet.tscn")
+const SECOND_EXPLOSION_TEXTURE = preload("res://Art/bullet1.png")
 
-func bosslivestwo():
-	$"../../HUD/Bossheartstwo".visible = false
+var direction := 1
+var left_boundary: float
+var right_boundary: float
+var shooting_timer: Timer
 
-func bosslivesthree():
-	$"../../HUD/Bossheartsthree".visible = false
-
-func bosslivesfour():
-	$"../../HUD/Bossheartsfour".visible = false
+func bosslivesone(): $"../../HUD/Bossheartsone".visible = false
+func bosslivestwo(): $"../../HUD/Bossheartstwo".visible = false
+func bosslivesthree(): $"../../HUD/Bossheartsthree".visible = false
+func bosslivesfour(): $"../../HUD/Bossheartsfour".visible = false
 
 func _ready():
+	left_boundary = position.x - 500
+	right_boundary = position.x + 500
 	start_shooting()
+	$Sprite2.visible = false
+	$Explosion1.stop()
+	$Explosion2.stop()
+
+func _physics_process(delta):
+	position.x += direction * move_speed * delta
+	if position.x <= left_boundary:
+		direction = 1
+	elif position.x >= right_boundary:
+		direction = -1
 
 func _on_area_entered(area):
 	if area.is_in_group("Bullet"):
 		take_damage(1)
 
 func take_damage(amount: int):
-	emit_signal("add_score")
 	health -= amount
 	print("Bossone took damage! Health now: ", health)
-	if health <= 100:
-		bosslivesfour()
-	if health <= 75:
-		bosslivesthree()
-	if health <= 50:
-		bosslivestwo()
+
+	if health <= 100: bosslivesfour()
+	if health <= 75: bosslivesthree()
+	if health <= 50: bosslivestwo()
 	if health <= 0:
 		bosslivesone()
-	if health <= 0:
-		emit_signal("Die")
-		die()
-
-func die():
-	print("Bossone has died.")
-	queue_free()
+		if shooting_timer:
+			shooting_timer.stop()
+		$Sprite2.visible = true
+		$Sprite2.play("explode")
+		spawn_explosions()
 
 func shoot_bullet():
 	var bullet = BULLET_SCENE.instantiate()
-	bullet.global_position = global_position + Vector2(0, -10)  # Offset so it spawns just above Bossone
-
-	# 🔥 Assign Duke as the target using the "player" group
+	bullet.global_position = global_position + Vector2(0, -10)
 	var duke_candidates = get_tree().get_nodes_in_group("player")
 	if duke_candidates.size() > 0:
 		bullet.target = duke_candidates[0]
 	get_tree().current_scene.add_child(bullet)
 
 func start_shooting():
-	var timer = Timer.new()
-	timer.wait_time = shoot_interval
-	timer.autostart = true
-	timer.one_shot = false
-	timer.timeout.connect(shoot_bullet)
-	add_child(timer)
+	shooting_timer = Timer.new()
+	shooting_timer.wait_time = shoot_interval
+	shooting_timer.autostart = true
+	shooting_timer.one_shot = false
+	shooting_timer.timeout.connect(shoot_bullet)
+	add_child(shooting_timer)
+
+# --- First explosion sequence ---
+func spawn_explosions():
+	$Explosion1.play()
+	var texture = preload("res://Art/Bullet.png")
+	var center_pos = global_position
+	var distance = 500
+	var num_images_per_direction = 3
+	var delay_between_directions = 0.2
+	var directions = [Vector2(-1,0), Vector2(0,-1), Vector2(1,0), Vector2(0,1)]
+
+	for dir_index in range(directions.size()):
+		var dir = directions[dir_index]
+		var timer = Timer.new()
+		timer.wait_time = dir_index * delay_between_directions
+		timer.one_shot = true
+		timer.autostart = true
+		timer.timeout.connect(Callable(self, "_spawn_direction").bind(dir, center_pos, distance, num_images_per_direction, texture))
+		add_child(timer)
+
+	var boss_timer = Timer.new()
+	boss_timer.wait_time = 6.0
+	boss_timer.one_shot = true
+	boss_timer.autostart = true
+	boss_timer.timeout.connect(second_explosion_sequence)
+	add_child(boss_timer)
+
+func _spawn_direction(dir: Vector2, center_pos: Vector2, distance: float, num_images: int, texture: Texture2D):
+	for i in range(num_images):
+		var offset = Vector2(randf_range(-50,50), randf_range(-50,50))
+		var pos = center_pos + offset
+		var sprite = Sprite2D.new()
+		sprite.texture = texture
+		sprite.global_position = pos
+		sprite.rotation_degrees = randf_range(0,360)
+		sprite.scale = Vector2(0.5,0.5)
+		get_tree().current_scene.add_child(sprite)
+		var final_pos = pos + dir * randf_range(distance*0.5, distance) + Vector2(randf_range(-50,50), randf_range(-50,50))
+		var tween = sprite.create_tween()
+		tween.tween_property(sprite, "scale", Vector2(1.0,1.0), 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tween.tween_property(sprite, "global_position", final_pos, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tween.finished.connect(Callable(sprite, "queue_free"))
+
+# --- Second explosion sequence ---
+func second_explosion_sequence():
+	$Explosion2.play()
+	$Sprite2.position = Vector2.ZERO
+	$Sprite2.scale = Vector2.ZERO
+	var tween = create_tween()
+	$Sprite2.visible = false
+	$Sprite.visible = false
+	tween.tween_property($Sprite2, "scale", Vector2(3,33), 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property($Sprite2, "scale", Vector2(0,0), 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.finished.connect(func():
+		$Sprite2.visible = false
+		# Wait 5 seconds before changing scene
+		var delay_timer = Timer.new()
+		delay_timer.wait_time = 7.0
+		delay_timer.one_shot = true
+		delay_timer.autostart = true
+		delay_timer.timeout.connect(func():
+			queue_free()
+			get_tree().change_scene_to_file("res://Scenes/Levels/lvl_02.tscn")
+		)
+		add_child(delay_timer)
+	)
