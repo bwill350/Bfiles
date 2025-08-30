@@ -8,8 +8,10 @@ signal Die
 
 const BULLET_SCENE = preload("res://Bossonebullet.tscn")
 const SECOND_EXPLOSION_TEXTURE = preload("res://Art/bullet1.png")
+const DRONE_SCENE = preload("res://Drone2.tscn")  # <-- needed for radial shooting
 
 var shooting_timer: Timer
+var radial_timer: Timer   # <-- added
 
 # --- HUD updates ---
 func bosslivesone(): $"../../HUD/Bossheartsone".visible = false
@@ -18,6 +20,7 @@ func bosslivesthree(): $"../../HUD/Bossheartsthree".visible = false
 func bosslivesfour(): $"../../HUD/Bossheartsfour".visible = false
 
 func _ready():
+	$"../../door".visible = false
 	start_shooting()
 	$Sprite2D.visible = false
 	$Explosion1.stop()
@@ -32,13 +35,17 @@ func take_damage(amount: int):
 	print("Bossfour took damage! Health now: ", health)
 
 	if health <= 100: bosslivesfour()
-	if health <= 75: bosslivesthree()
+	if health <= 75:
+		bosslivesthree()
+		start_radial_shooting()   # <-- start circle shooting here
 	if health <= 50: bosslivestwo()
 	if health <= 0:
 		bosslivesone()
-
+		$"../../door". visible = true
 		if shooting_timer:
 			shooting_timer.stop()
+		if radial_timer:
+			radial_timer.stop()
 
 		$Sprite.visible = true
 		$Sprite.play("explode")
@@ -47,6 +54,7 @@ func take_damage(amount: int):
 func _on_die():
 	print("Bossfour has died.")
 
+# --- Regular shooting ---
 func shoot_bullet():
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = global_position + Vector2(0, -10)
@@ -62,6 +70,38 @@ func start_shooting():
 	shooting_timer.one_shot = false
 	shooting_timer.timeout.connect(shoot_bullet)
 	add_child(shooting_timer)
+
+# --- Radial shooting ---
+func start_radial_shooting():
+	if radial_timer: # prevent multiple timers
+		return
+	radial_timer = Timer.new()
+	radial_timer.wait_time = 3.0  # every 3 seconds shoot a circle
+	radial_timer.autostart = true
+	radial_timer.one_shot = false
+	radial_timer.timeout.connect(radial_bullet_burst)
+	add_child(radial_timer)
+
+func radial_bullet_burst():
+	var center_pos = global_position
+	var bullet_count = 16
+	var radius = 400
+
+	for i in range(bullet_count):
+		var angle = TAU * i / bullet_count
+		var direction = Vector2(cos(angle), sin(angle)).normalized()
+
+		var drone = DRONE_SCENE.instantiate()
+		drone.global_position = center_pos
+		drone.scale = Vector2(0, 0)  # start at scale 0
+		get_tree().current_scene.add_child(drone)
+
+		var final_pos = center_pos + direction * radius
+
+		var tween = drone.create_tween()
+		tween.tween_property(drone, "scale", Vector2(1,1), 0.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tween.tween_property(drone, "global_position", final_pos, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tween.finished.connect(Callable(drone, "queue_free"))
 
 # --- First explosion sequence ---
 func spawn_explosions():
@@ -120,7 +160,7 @@ func second_explosion_sequence():
 
 	var tween = create_tween()
 	$Sprite2D.visible = true
-	tween.tween_property($Sprite2D, "scale", Vector2(3,33), 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property($Sprite2D, "scale", Vector2(3,3), 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tween.tween_property($Sprite2D, "scale", Vector2(0,0), 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 
 	tween.finished.connect(func():
