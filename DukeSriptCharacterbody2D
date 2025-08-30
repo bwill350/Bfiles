@@ -169,10 +169,8 @@ func _physics_process(delta):
 		$Sprite.play("jump")
 		anim.play("jump")
 		
-	#[ADDED]
 	if not is_on_floor and not is_climbing:
 		$Sprite.play("jump")
-
 
 	move_and_slide()
 
@@ -180,7 +178,7 @@ func _physics_process(delta):
 # Shooting
 # ------------------------
 func shoot():
-	var bullet_scene = preload("res://scenes/Bullet.tscn")
+	var bullet_scene = preload("res://Scenes/Bullet.tscn")
 	var bullet = bullet_scene.instantiate()
 	bullet.global_position = marker.global_position
 	var direction = (marker2.global_position.direction_to(get_global_mouse_position())).normalized()
@@ -235,12 +233,15 @@ func shootaroundleft():
 		bullet.velocity = direction * bullet.speed
 		get_tree().current_scene.add_child(bullet)
 	
-
 # ------------------------
 # Damage
 # ------------------------
 func _on_HitBox_area_entered(_area: Area2D) -> void:
 	take_damage(1)
+
+	# NEW: Drone2 collision damage
+	if is_in_group("Drone2"):
+		take_damage(1)
 
 func take_damage(amount: int):
 	health -= amount
