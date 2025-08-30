@@ -1,0 +1,28 @@
+extends Area2D
+class_name Bullet
+
+@export var speed = 1400.0
+var velocity: Vector2 = Vector2.ZERO
+
+func _ready():
+	$Timer.start()
+	if velocity != Vector2.ZERO:
+		look_at(global_position + velocity)  # Face movement direction
+
+	# Automatically remove after 4 seconds
+	await get_tree().create_timer(4.0).timeout
+
+
+func _physics_process(delta):
+	position += velocity * delta
+
+	if not get_viewport_rect().has_point(global_position):
+		pass
+
+func _on_area_entered(area: Area2D) -> void:
+	if area.is_in_group("enemies"):
+		$Timer.start()
+		queue_free()
+
+func _on_timer_timeout() -> void:
+	queue_free()
