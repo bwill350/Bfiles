@@ -20,6 +20,7 @@ func bosslivesthree(): $"../../HUD/Bossheartsthree".visible = false
 func bosslivesfour(): $"../../HUD/Bossheartsfour".visible = false
 
 func _ready():
+	$Sprite.play("default")
 	$"../../door".visible = false
 	start_shooting()
 	$Sprite2D.visible = false
