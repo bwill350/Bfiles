@@ -39,8 +39,10 @@ func _physics_process(delta):
 	position.x += direction * move_speed * delta
 	if position.x <= left_boundary:
 		direction = 1
+		$Sprite.flip_h = true
 	elif position.x >= right_boundary:
 		direction = -1
+		$Sprite.flip_h = false
 
 # --- Damage Handling ---
 func _on_area_entered(area):
