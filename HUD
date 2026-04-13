@@ -1,8 +1,10 @@
-extends CanvasLayer
+=extends CanvasLayer
 
 @onready var health_label = $HealthLabel
 @onready var boss_label = $BossoneHealthLabel
 @onready var flower_label = $FlowerLabel
+@onready var drone2_label = $Drone2HealthLabel
+@onready var points_label = $Points
 
 func _ready():
 	var duke = get_tree().get_first_node_in_group("player")
@@ -12,25 +14,48 @@ func _ready():
 	var boss = get_tree().get_first_node_in_group("Bossone")
 	if boss:
 		boss.health_changed.connect(_on_boss_health_changed)
+		boss.points_changed.connect(_on_points_changed) # ✅ FIX ADDED
 
 	var flower = get_tree().get_first_node_in_group("DeadlyFlower")
 	if flower:
 		flower.health_changed.connect(_on_flower_health_changed)
 
+	var drone2 = get_tree().get_first_node_in_group("Drone2")
+	if drone2:
+		drone2.health_changed.connect(_on_drone2_health_changed)
+	
+
+
 # -------------------------
 # DUKE
 # -------------------------
 func _on_duke_health_changed(health):
-	health_label.text = str(health)
+	health_label.text = "Player Health: " + str(health)
+
 
 # -------------------------
 # BOSS
 # -------------------------
 func _on_boss_health_changed(health):
-	boss_label.text = "Bossone: " + str(health)
+	boss_label.text = "Bossone Health: " + str(health)
+
 
 # -------------------------
 # FLOWER
 # -------------------------
 func _on_flower_health_changed(health):
 	flower_label.text = "Flower: " + str(health)
+
+
+# -------------------------
+# DRONE2
+# -------------------------
+func _on_drone2_health_changed(health):
+	drone2_label.text = "Drone2: " + str(health)
+
+
+# -------------------------
+# POINTS
+# -------------------------
+func _on_points_changed(points):
+	points_label.text = "Points: " + str(points)
