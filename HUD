@@ -1,4 +1,4 @@
-=extends CanvasLayer
+extends CanvasLayer
 
 @onready var health_label = $HealthLabel
 @onready var boss_label = $BossoneHealthLabel
