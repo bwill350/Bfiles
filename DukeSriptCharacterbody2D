@@ -10,13 +10,13 @@ class_name Duke
 
 const GRAVITY = 5000
 
-var health: int = 100
+var health: int = 500
 var current_state
 var last_facing_dir = -1
 var is_climbing = true
 var aim_vector := Vector2.ZERO
 var _mouse_pos := Vector2.ZERO
-
+@onready var health_label = $HealthLabel
 @onready var anim: AnimatedSprite2D = $Sprite
 @onready var marker: Marker2D = $Marker2D
 @onready var marker2: Marker2D = $Marker2D
@@ -28,6 +28,10 @@ signal health_changed(health)
 
 func _ready():
 	add_to_group("player")
+	
+	# ✅ NEW: important so flower detects Duke
+	add_to_group("Duke")
+	
 	hitbox.area_entered.connect(_on_HitBox_area_entered)
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_mouse_pos = get_viewport().get_mouse_position()
@@ -48,7 +52,6 @@ func _process(delta):
 		_mouse_pos.x = clamp(_mouse_pos.x, 0, get_viewport().get_visible_rect().size.x)
 		_mouse_pos.y = clamp(_mouse_pos.y, 0, get_viewport().get_visible_rect().size.y)
 
-	
 	marker.look_at(get_global_mouse_position())
 
 func _physics_process(delta):
@@ -62,7 +65,7 @@ func _physics_process(delta):
 			is_climbing = false
 			
 	if is_climbing:
-		if Input.is_action_pressed("shoot"):
+		if Input.is_action_just_pressed("shoot"):
 			shoot()
 		if Input.is_action_pressed("shootright"):
 			shootright()
@@ -97,7 +100,7 @@ func _physics_process(delta):
 			last_facing_dir = -1
 			shootleft()
 			if is_on_floor():
-				anim.play("idle")
+				$Sprite.play("Idle")
 			anim.flip_h = false
 			velocity.x = 0
 			if Input.is_action_pressed("left"):
@@ -174,7 +177,7 @@ func _physics_process(delta):
 	move_and_slide()
 
 # ------------------------
-# Shooting
+# Shooting (UNCHANGED)
 # ------------------------
 func shoot():
 	var bullet_scene = preload("res://Scenes/Bullet.tscn")
@@ -233,14 +236,10 @@ func shootaroundleft():
 		get_tree().current_scene.add_child(bullet)
 	
 # ------------------------
-# Damage
+# Damage (WORKS WITH FLOWER NOW)
 # ------------------------
 func _on_HitBox_area_entered(_area: Area2D) -> void:
 	take_damage(1)
-
-	# NEW: Drone2 collision damage
-	if is_in_group("Drone2"):
-		take_damage(1)
 
 func take_damage(amount: int):
 	health -= amount
@@ -258,3 +257,9 @@ func flash_red():
 
 func die():
 	print("died")
+
+func _on_hit_box_area_entered(area):
+	take_damage(1)
+
+func _on_health_changed(health):
+	health_label.text = str(health)
