@@ -1,0 +1,58 @@
+extends Area2D
+class_name Drone1
+
+signal Die
+signal health_changed(new_health)
+
+@export var health: int = 11
+@export var shoot_interval: float = 5.0
+
+const BULLET_SCENE = preload("res://Deadlyflowerbullet.tscn")
+
+@onready var sprite: AnimatedSprite2D = $Sprite
+
+var shoot_timer: Timer
+
+
+func _ready():
+	sprite.play("default")
+	start_shooting()
+
+
+# -------------------------
+# DAMAGE
+# -------------------------
+func _on_area_entered(area):
+	if area.is_in_group("Bullet") or area.is_in_group("Duke"):
+		take_damage(1)
+
+
+func take_damage(amount: int):
+	health -= amount
+	emit_signal("health_changed", health)
+
+	if health <= 0:
+		emit_signal("Die")
+		die()
+
+
+func die():
+	queue_free()
+
+
+# -------------------------
+# SHOOTING
+# -------------------------
+func shoot_bullet():
+	var bullet = BULLET_SCENE.instantiate()
+	bullet.global_position = global_position + Vector2(0, -10)
+	get_tree().current_scene.add_child(bullet)
+
+
+func start_shooting():
+	shoot_timer = Timer.new()
+	shoot_timer.wait_time = shoot_interval
+	shoot_timer.autostart = true
+	shoot_timer.one_shot = false
+	shoot_timer.timeout.connect(shoot_bullet)
+	add_child(shoot_timer)
