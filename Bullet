@@ -1,28 +1,32 @@
 extends Area2D
 class_name Bullet
 
-@export var speed = 1400.0
+@export var speed: float = 600.0
+
 var velocity: Vector2 = Vector2.ZERO
+
 
 func _ready():
 	$Timer.start()
-	if velocity != Vector2.ZERO:
-		look_at(global_position + velocity)  # Face movement direction
 
-	# Automatically remove after 4 seconds
-	await get_tree().create_timer(0.9).timeout
+	# default direction if none was set
+	if velocity == Vector2.ZERO:
+		velocity = Vector2.DOWN * speed
+	else:
+		velocity = velocity.normalized() * speed
+
+	look_at(global_position + velocity)
 
 
 func _physics_process(delta):
 	position += velocity * delta
 
-	if not get_viewport_rect().has_point(global_position):
-		pass
 
 func _on_area_entered(area: Area2D) -> void:
-	if area.is_in_group("enemies"):
-		$Timer.start()
+	# damage enemies, then delete bullet
+	if area.is_in_group("enemy"):
 		queue_free()
+
 
 func _on_timer_timeout() -> void:
 	queue_free()
