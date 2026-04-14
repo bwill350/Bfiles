@@ -16,6 +16,7 @@ var last_facing_dir = -1
 var is_climbing = true
 var aim_vector := Vector2.ZERO
 var _mouse_pos := Vector2.ZERO
+
 @onready var health_label = $HealthLabel
 @onready var anim: AnimatedSprite2D = $Sprite
 @onready var marker: Marker2D = $Marker2D
@@ -28,13 +29,12 @@ signal health_changed(health)
 
 func _ready():
 	add_to_group("player")
-	
-	# ✅ NEW: important so flower detects Duke
 	add_to_group("Duke")
-	
+
 	hitbox.area_entered.connect(_on_HitBox_area_entered)
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_mouse_pos = get_viewport().get_mouse_position()
+
 
 func _process(delta):
 	if enable_mouse_aim:
@@ -54,16 +54,20 @@ func _process(delta):
 
 	marker.look_at(get_global_mouse_position())
 
+
 func _physics_process(delta):
 	var on_wall = is_on_wall()
 	var climb_pressed = Input.is_action_pressed("climb")
-	
+
+	# ------------------------
+	# CLIMB STATE
+	# ------------------------
 	if climb_pressed and not is_on_floor() and on_wall:
 		is_climbing = true
 	else:
 		if not climb_pressed:
 			is_climbing = false
-			
+
 	if is_climbing:
 		if Input.is_action_just_pressed("shoot"):
 			shoot()
@@ -71,113 +75,105 @@ func _physics_process(delta):
 			shootright()
 		if Input.is_action_pressed("shootleft"):
 			shootleft()
+
 		velocity.y = -CLIMB_SPEED
+
 		if Input.is_action_pressed("right"):
 			velocity.x = SPEED
 			last_facing_dir = 1
 			anim.play("climb")
 			anim.flip_h = false
+
 		elif Input.is_action_pressed("left"):
 			velocity.x = -SPEED
 			last_facing_dir = -1
-			anim.play("climb")
-			anim.flip_h = true
-		else:
-			velocity.x = 0
-			anim.play("climb")
-			anim.flip_h = last_facing_dir == -1
-	else:
-		velocity.x = 0
-		velocity.y += GRAVITY * delta
-		if Input.is_action_pressed("right"):
-			velocity.x = SPEED
-			last_facing_dir = 1
-			shootright()
-			anim.play("move_right")
-			anim.flip_h = false
-		elif Input.is_action_pressed("left"):
-			velocity.x = -SPEED
-			last_facing_dir = -1
-			shootleft()
-			if is_on_floor():
-				$Sprite.play("Idle")
-			anim.flip_h = false
-			velocity.x = 0
-			if Input.is_action_pressed("left"):
-				velocity.x = -488
-			anim.flip_h = last_facing_dir == 1
 			anim.play("move_left")
-			move_and_slide()
+			anim.flip_h = true
+
 		else:
-			anim.play("Idle")
 			velocity.x = 0
-			velocity.y += GRAVITY * delta
+			anim.play("climb")
 			anim.flip_h = last_facing_dir == -1
-			if Input.is_action_just_pressed("jump") and not is_on_floor():
-				anim.play("jump")
-				$Sprite.play("jump")
 
-		if Input.is_action_pressed("shootup") and is_on_floor():
-			$Sprite.play("shootup")
-			shootup()
+	else:
+		# ------------------------
+		# GRAVITY
+		# ------------------------
+		velocity.y += GRAVITY * delta
 
-		if Input.is_action_just_pressed("shootright") and is_on_floor():
-			$Sprite.play("shootright")
-			shootright()
+		# ------------------------
+		# INPUT
+		# ------------------------
+		var input_dir = 0
 
-		if Input.is_action_just_pressed("shootleft") and is_on_floor():
-			$Sprite.play("shootleft")
-			shootleft()
+		if Input.is_action_pressed("right"):
+			input_dir += 1
+		if Input.is_action_pressed("left"):
+			input_dir -= 1
 
-		if Input.is_action_just_pressed("shootaroundright") and is_on_floor():
-			$Sprite.play("shootaroundright")
-			shootaroundright()
-			
-		if Input.is_action_just_pressed("shootaroundleft") and is_on_floor():
-			$Sprite.play("shootaroundleft")
-			shootaroundleft()
+		velocity.x = input_dir * SPEED
 
-		if Input.is_action_just_pressed("jump") and is_on_floor():
-			$Sprite.play("jump")
+		if input_dir != 0:
+			last_facing_dir = input_dir
+
+		# ------------------------
+		# AIR ANIMATION
+		# ------------------------
+		if not is_on_floor():
 			anim.play("jump")
-			velocity.y = JUMP_VELOCITY
-		
-	if is_climbing and Input.is_action_just_pressed("jump"):
-		velocity.y = 1000
-		velocity.x = 1000
-		is_climbing = false
-		anim.play("jump")
-		$Sprite.play("jump")
+			anim.flip_h = last_facing_dir == -1
 
+		# ------------------------
+		# GROUND ANIMATION
+		# ------------------------
+		else:
+			if input_dir == -1:
+				anim.play("move_left")
+				anim.flip_h = false
+
+			elif input_dir == 1:
+				anim.play("move_right")
+				anim.flip_h = false
+
+			else:
+				anim.play("Idle")
+
+		# ------------------------
+		# JUMP
+		# ------------------------
+		if Input.is_action_just_pressed("jump") and is_on_floor():
+			velocity.y = JUMP_VELOCITY
+			anim.play("jump")
+
+	# ------------------------
+	# EXTRA SHOOT INPUTS (kept)
+	# ------------------------
 	if Input.is_action_pressed("shoot"):
-		$Sprite.play("Idle")
 		shoot()
-		
+
 	if Input.is_action_just_pressed("shootright"):
 		shootright()
-		
+
 	if Input.is_action_just_pressed("shootleft"):
 		shootleft()
-		$Sprite.flip_h = false
-	
+
 	if Input.is_action_just_pressed("shootaroundright"):
 		shootaroundright()
-		
+
 	if Input.is_action_just_pressed("shootaroundleft"):
 		shootaroundleft()
-		$Sprite.flip_h = false
-		
-	if Input.is_action_pressed("jump") and not is_on_floor():
-		$Sprite.play("jump")
+
+	# ------------------------
+	# FALL BACKUP ANIMATION
+	# ------------------------
+	if not is_on_floor() and not is_climbing:
 		anim.play("jump")
-		
-	if not is_on_floor and not is_climbing:
-		$Sprite.play("jump")
 
 	move_and_slide()
 
+
 # ------------------------
-# Shooting (UNCHANGED)
+# SHOOTING (UNCHANGED)
 # ------------------------
 func shoot():
 	var bullet_scene = preload("res://Scenes/Bullet.tscn")
@@ -188,78 +184,80 @@ func shoot():
 	bullet.look_at(bullet.global_position + bullet.velocity)
 	get_tree().current_scene.add_child(bullet)
 
+
 func shootup():
-	if Input.is_action_just_pressed("shootup"):
-		var bullet_scene = preload("res://Scenes/Bullet.tscn")
-		var bullet = bullet_scene.instantiate()
-		bullet.global_position = marker.global_position
-		var direction = Vector2(0, -1)
-		bullet.velocity = direction * bullet.speed
-		get_tree().current_scene.add_child(bullet)
+	var bullet_scene = preload("res://Scenes/Bullet.tscn")
+	var bullet = bullet_scene.instantiate()
+	bullet.global_position = marker.global_position
+	bullet.velocity = Vector2(0, -1) * bullet.speed
+	get_tree().current_scene.add_child(bullet)
+
 
 func shootright():
-	if Input.is_action_pressed("shootright"):
-		var bullet_scene = preload("res://Scenes/Bullet.tscn")
-		var bullet = bullet_scene.instantiate()
-		bullet.global_position = marker.global_position
-		var direction = Vector2(1, 0)
-		bullet.velocity = direction * bullet.speed
-		get_tree().current_scene.add_child(bullet)
+	var bullet_scene = preload("res://Scenes/Bullet.tscn")
+	var bullet = bullet_scene.instantiate()
+	bullet.global_position = marker.global_position
+	bullet.velocity = Vector2(1, 0) * bullet.speed
+	get_tree().current_scene.add_child(bullet)
+
 
 func shootleft():
-	if Input.is_action_pressed("shootleft"):
-		var bullet_scene = preload("res://Scenes/Bullet.tscn")
-		var bullet = bullet_scene.instantiate()
-		bullet.global_position = marker.global_position
-		var direction = Vector2(-1, 0)
-		bullet.velocity = direction * bullet.speed
-		get_tree().current_scene.add_child(bullet)
+	var bullet_scene = preload("res://Scenes/Bullet.tscn")
+	var bullet = bullet_scene.instantiate()
+	bullet.global_position = marker.global_position
+	bullet.velocity = Vector2(-1, 0) * bullet.speed
+	get_tree().current_scene.add_child(bullet)
+
 
 func shootaroundright():
-	if Input.is_action_just_pressed("shootaroundright"):
-		$Sprite.play("shootaroundright")
-		var bullet_scene = preload("res://Scenes/Bullet.tscn")
-		var bullet = bullet_scene.instantiate()
-		bullet.global_position = marker.global_position
-		var direction = Vector2(4, -6)
-		bullet.velocity = direction * bullet.speed
-		get_tree().current_scene.add_child(bullet)
+	var bullet_scene = preload("res://Scenes/Bullet.tscn")
+	var bullet = bullet_scene.instantiate()
+	bullet.global_position = marker.global_position
+	bullet.velocity = Vector2(4, -6) * bullet.speed
+	get_tree().current_scene.add_child(bullet)
+
 
 func shootaroundleft():
-	if Input.is_action_just_pressed("shootaroundleft"):
-		$Sprite.play("shootaroundleft")
-		var bullet_scene = preload("res://Scenes/Bullet.tscn")
-		var bullet = bullet_scene.instantiate()
-		bullet.global_position = marker.global_position
-		var direction = Vector2(-4, -6)
-		bullet.velocity = direction * bullet.speed
-		get_tree().current_scene.add_child(bullet)
-	
+	var bullet_scene = preload("res://Scenes/Bullet.tscn")
+	var bullet = bullet_scene.instantiate()
+	bullet.global_position = marker.global_position
+	bullet.velocity = Vector2(-4, -6) * bullet.speed
+	get_tree().current_scene.add_child(bullet)
+
+
 # ------------------------
-# Damage (WORKS WITH FLOWER NOW)
+# DAMAGE
 # ------------------------
 func _on_HitBox_area_entered(_area: Area2D) -> void:
 	take_damage(1)
 
+
 func take_damage(amount: int):
 	health -= amount
 	emit_signal("health_changed", health)
+
 	if hit_sound:
 		hit_sound.play()
+
 	flash_red()
+
 	if health <= 0:
 		get_tree().change_scene_to_file("res://Scenes/GameOver.tscn")
 
+
 func flash_red():
-	$Sprite.modulate = Color(1, 0.2, 0.2)
+	anim.modulate = Color(1, 0.2, 0.2)
 	await get_tree().create_timer(0.1).timeout
-	$Sprite.modulate = Color(1, 1, 1)
+	anim.modulate = Color(1, 1, 1)
+
 
 func die():
 	print("died")
 
+
 func _on_hit_box_area_entered(area):
 	take_damage(1)
+
 
 func _on_health_changed(health):
 	health_label.text = str(health)
