@@ -137,6 +137,7 @@ func _physics_process(delta):
 
 			else:
 				anim.play("Idle")
+				anim.flip_h = last_facing_dir == -1
 
 		# ------------------------
 		# JUMP
