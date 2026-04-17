@@ -23,9 +23,9 @@ const EXPLOSION_SCENE = preload("res://Explosion.tscn")
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hit_box: Area2D = $HitBox
 
-@onready var scorpion75: Node2D = $"../Scorpion75"
-@onready var scorpion50: Node2D = $"../Scorpion50"
-@onready var scorpion25: Node2D = $"../Scorpion25"
+@onready var scorpion75: Node2D = $"../HUD/Scorpion75"
+@onready var scorpion50: Node2D = $"../HUD/Scorpion50"
+@onready var scorpion25: Node2D = $"../HUD/Scorpion25"
 
 @onready var explosion1: AudioStreamPlayer2D = $Explosion1
 @onready var explosion2: AudioStreamPlayer2D = $Explosion2
@@ -108,7 +108,6 @@ func take_damage(amount: int):
 	if health == 0:
 		next_life()
 
-
 # -------------------------
 # HUD
 # -------------------------
@@ -125,7 +124,6 @@ func update_health_display():
 func _on_points_changed(new_points):
 	if points_label:
 		points_label.text = "Points: %d" % new_points
-
 
 # -------------------------
 # EFFECTS
@@ -145,7 +143,6 @@ func play_hit_sound():
 	add_child(t)
 	t.start()
 
-
 func flash_red():
 	sprite_node.modulate = Color(1, 0.2, 0.2)
 
@@ -159,7 +156,6 @@ func flash_red():
 	add_child(t)
 	t.start()
 
-
 func flash_white():
 	sprite_node.modulate = Color(1.5, 1.5, 1.5)
 
@@ -172,7 +168,6 @@ func flash_white():
 	)
 	add_child(t)
 	t.start()
-
 
 # -------------------------
 # PHASES
@@ -194,7 +189,6 @@ func check_phases():
 			scorpion25.visible = false
 		start_radial_burst()
 
-
 # -------------------------
 # SHOOTING
 # -------------------------
@@ -208,7 +202,6 @@ func shoot_bullet():
 
 	get_tree().current_scene.add_child(bullet)
 
-
 func start_shooting():
 	if shooting_timer == null:
 		shooting_timer = Timer.new()
@@ -218,7 +211,6 @@ func start_shooting():
 		add_child(shooting_timer)
 
 	shooting_timer.wait_time = shoot_interval
-
 
 # -------------------------
 # RADIAL BURST
@@ -238,7 +230,6 @@ func radial_bullet_burst():
 
 		get_tree().current_scene.add_child(bullet)
 
-
 func start_radial_burst():
 	if radial_timer == null:
 		radial_timer = Timer.new()
@@ -248,7 +239,6 @@ func start_radial_burst():
 		add_child(radial_timer)
 
 	radial_timer.wait_time = radial_interval
-
 
 # -------------------------
 # LIFE SYSTEM
@@ -287,7 +277,7 @@ func next_life():
 		explosion1.play()
 		explosion2.play()
 		queue_free()
-
+		print("Bossone has died.")
 
 # -------------------------
 # EXPLOSIONS
@@ -302,7 +292,6 @@ func spawn_death_explosions():
 		var explosion = EXPLOSION_SCENE.instantiate()
 		explosion.global_position = center_pos
 		get_tree().current_scene.add_child(explosion)
-
 
 # -------------------------
 # RESET
