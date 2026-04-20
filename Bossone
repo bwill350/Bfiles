@@ -4,33 +4,24 @@ class_name Bossone
 signal health_changed(health)
 signal points_changed(new_points)
 
+enum State { MOVE, PHASE, DEAD }
+var state: State = State.MOVE
+
 @export var max_health: int = 100
 @export var total_lives: int = 5
 
 var health: int
-var points: int = 0
 var current_life: int = 1
 
-@export var shoot_interval: float = 5.0
+# 🔥 SHARED SCORE (NO RESET EVER)
+static var points: int = 0
+
 @export var move_speed: float = 100.0
-@export var radial_interval: float = 1.0
-@export var death_explosion_count: int = 32
 
 const BULLET_SCENE = preload("res://BossoneBullet.tscn")
-const EXPLOSION_SCENE = preload("res://Explosion.tscn")
 
 @onready var sprite_node: AnimatedSprite2D = $Sprite
-@onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hit_box: Area2D = $HitBox
-
-@onready var scorpion75: Node2D = $"../HUD/Scorpion75"
-@onready var scorpion50: Node2D = $"../HUD/Scorpion50"
-@onready var scorpion25: Node2D = $"../HUD/Scorpion25"
-
-@onready var explosion1: AudioStreamPlayer2D = $Explosion1
-@onready var explosion2: AudioStreamPlayer2D = $Explosion2
-
-# HUD
 @onready var points_label: Label = $HUD/PointsLabel
 @onready var health_label: Label = $HUD/HealthLabel
 
@@ -38,36 +29,32 @@ var direction := 1
 var left_boundary: float
 var right_boundary: float
 
-var shooting_timer: Timer
-var radial_timer: Timer
 
-var phase_triggered75 := false
-var phase_triggered50 := false
-var phase_triggered25 := false
-
-
+# -------------------------
+# READY
+# -------------------------
 func _ready():
+	$Sprite.play("one")
 	health = max_health
+
 	add_to_group("Bossone")
 
 	left_boundary = position.x - 500
 	right_boundary = position.x + 500
 
-	hit_box.body_entered.connect(_on_body_entered)
 	hit_box.area_entered.connect(_on_area_entered)
+	hit_box.body_entered.connect(_on_body_entered)
 
-	points_changed.connect(_on_points_changed)
-
-	update_points()
-	update_health_display()
-
-	start_shooting()
-
-	explosion1.stop()
-	explosion2.stop()
+	update_ui()
 
 
+# -------------------------
+# MOVE
+# -------------------------
 func _physics_process(delta):
+	if state == State.DEAD:
+		return
+
 	position.x += direction * move_speed * delta
 
 	if position.x < left_boundary:
@@ -79,166 +66,63 @@ func _physics_process(delta):
 
 
 # -------------------------
-# DAMAGE
+# BULLET HIT = POINTS + DAMAGE
+# -------------------------
+func _on_area_entered(area):
+	if area.is_in_group("Bullet"):
+		area.queue_free()
+
+		add_points(1)
+		take_damage(1)
+
+
+# -------------------------
+# DAMAGE HIT (optional heavier hit)
 # -------------------------
 func _on_body_entered(body):
 	if body.is_in_group("Bullet"):
 		body.queue_free()
+
+		add_points(1)
 		take_damage(25)
 
 
-func _on_area_entered(area):
-	points += 1
+# -------------------------
+# POINT SYSTEM (SHARED)
+# -------------------------
+func add_points(amount: int):
+	points += amount
 	points_changed.emit(points)
-	update_points()
-	take_damage(1)
+	update_ui()
 
 
+# -------------------------
+# DAMAGE
+# -------------------------
 func take_damage(amount: int):
+	if state == State.DEAD:
+		return
+
 	health -= amount
 	health = max(health, 0)
 
 	health_changed.emit(health)
-	update_health_display()
+	update_ui()
 
-	play_hit_sound()
-	flash_red()
-	check_phases()
-
-	if health == 0:
+	if health <= 0:
 		next_life()
 
+
 # -------------------------
-# HUD
+# UI
 # -------------------------
-func update_points():
+func update_ui():
 	if points_label:
 		points_label.text = "Points: %d" % points
 
-
-func update_health_display():
 	if health_label:
 		health_label.text = "Health: %d" % health
 
-
-func _on_points_changed(new_points):
-	if points_label:
-		points_label.text = "Points: %d" % new_points
-
-# -------------------------
-# EFFECTS
-# -------------------------
-func play_hit_sound():
-	hit_sound.pitch_scale = 1.0
-	hit_sound.play()
-
-	var t = Timer.new()
-	t.wait_time = 0.08
-	t.one_shot = true
-	t.timeout.connect(func():
-		hit_sound.pitch_scale = 0.75
-		hit_sound.play()
-		t.queue_free()
-	)
-	add_child(t)
-	t.start()
-
-func flash_red():
-	sprite_node.modulate = Color(1, 0.2, 0.2)
-
-	var t = Timer.new()
-	t.wait_time = 0.1
-	t.one_shot = true
-	t.timeout.connect(func():
-		sprite_node.modulate = Color(1, 1, 1)
-		t.queue_free()
-	)
-	add_child(t)
-	t.start()
-
-func flash_white():
-	sprite_node.modulate = Color(1.5, 1.5, 1.5)
-
-	var t = Timer.new()
-	t.wait_time = 0.12
-	t.one_shot = true
-	t.timeout.connect(func():
-		sprite_node.modulate = Color(1, 1, 1)
-		t.queue_free()
-	)
-	add_child(t)
-	t.start()
-
-# -------------------------
-# PHASES
-# -------------------------
-func check_phases():
-	if not phase_triggered75 and health <= max_health * 0.75:
-		phase_triggered75 = true
-		if is_instance_valid(scorpion75):
-			scorpion75.visible = false
-
-	if not phase_triggered50 and health <= max_health * 0.5:
-		phase_triggered50 = true
-		if is_instance_valid(scorpion50):
-			scorpion50.visible = false
-
-	if not phase_triggered25 and health <= max_health * 0.25:
-		phase_triggered25 = true
-		if is_instance_valid(scorpion25):
-			scorpion25.visible = false
-		start_radial_burst()
-
-# -------------------------
-# SHOOTING
-# -------------------------
-func shoot_bullet():
-	var bullet = BULLET_SCENE.instantiate()
-	bullet.global_position = global_position + Vector2(0, -10)
-
-	var players = get_tree().get_nodes_in_group("player")
-	if players.size() > 0:
-		bullet.target = players[0]
-
-	get_tree().current_scene.add_child(bullet)
-
-func start_shooting():
-	if shooting_timer == null:
-		shooting_timer = Timer.new()
-		shooting_timer.autostart = true
-		shooting_timer.one_shot = false
-		shooting_timer.timeout.connect(shoot_bullet)
-		add_child(shooting_timer)
-
-	shooting_timer.wait_time = shoot_interval
-
-# -------------------------
-# RADIAL BURST
-# -------------------------
-func radial_bullet_burst():
-	var center_pos = global_position
-	var bullet_count = 16
-
-	for i in range(bullet_count):
-		var angle = TAU * i / bullet_count
-		var dir = Vector2(cos(angle), sin(angle)).normalized()
-
-		var bullet = BULLET_SCENE.instantiate()
-		bullet.global_position = center_pos
-		bullet.direction = dir
-		bullet.rotation = dir.angle()
-
-		get_tree().current_scene.add_child(bullet)
-
-func start_radial_burst():
-	if radial_timer == null:
-		radial_timer = Timer.new()
-		radial_timer.autostart = true
-		radial_timer.one_shot = false
-		radial_timer.timeout.connect(radial_bullet_burst)
-		add_child(radial_timer)
-
-	radial_timer.wait_time = radial_interval
 
 # -------------------------
 # LIFE SYSTEM
@@ -246,57 +130,12 @@ func start_radial_burst():
 func next_life():
 	if current_life < total_lives:
 		current_life += 1
-
-		spawn_death_explosions()
-		explosion1.play()
-
 		health = max_health
-		health_changed.emit(health)
-		update_health_display()
-
-		reset_phases()
-
-		points = 0
-		points_changed.emit(points)
-		update_points()
-
-		move_speed += 40
-		shoot_interval *= 0.8
-		radial_interval *= 0.8
-
-		if shooting_timer:
-			shooting_timer.wait_time = shoot_interval
-
-		if radial_timer:
-			radial_timer.wait_time = radial_interval
-
-		flash_white()
-
+		update_ui()
 	else:
-		spawn_death_explosions()
-		explosion1.play()
-		explosion2.play()
-		queue_free()
-		print("Bossone has died.")
+		die()
 
-# -------------------------
-# EXPLOSIONS
-# -------------------------
-func spawn_death_explosions():
-	var center_pos = global_position
 
-	for i in range(death_explosion_count):
-		var angle = TAU * i / death_explosion_count
-		var dir = Vector2(cos(angle), sin(angle)).normalized()
-
-		var explosion = EXPLOSION_SCENE.instantiate()
-		explosion.global_position = center_pos
-		get_tree().current_scene.add_child(explosion)
-
-# -------------------------
-# RESET
-# -------------------------
-func reset_phases():
-	phase_triggered75 = false
-	phase_triggered50 = false
-	phase_triggered25 = false
+func die():
+	state = State.DEAD
+	queue_free()
