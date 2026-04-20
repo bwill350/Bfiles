@@ -1,0 +1,288 @@
+extends Area2D
+class_name SpawnBoss
+
+signal health_changed(health)
+
+enum State { ACTIVE, RADIAL_PHASE, DEAD }
+var state: State = State.ACTIVE
+
+@export var max_health: int = 100
+@export var total_lives: int = 5
+
+@export var shoot_interval: float = 5.0
+@export var radial_interval: float = 1.0
+@export var boss_spawn_interval: float = 8.0
+
+var health: int
+var current_life: int = 1
+
+var shooting_timer: Timer
+var radial_timer: Timer
+var boss_spawn_timer: Timer
+
+var phase_triggered75 := false
+var phase_triggered50 := false
+var phase_triggered25 := false
+
+const BOSS_SCENE = preload("res://Bossone.tscn")
+const BULLET_SCENE = preload("res://BossoneBullet.tscn")
+
+@onready var sprite_node: AnimatedSprite2D = $Sprite
+@onready var marker: Marker2D = $Marker2D
+@onready var spawn_label: Label = $"../HUD/SpawnLabel"
+
+@onready var scorpion75: Node2D = $"../HUD/Scorpion75"
+@onready var scorpion50: Node2D = $"../HUD/Scorpion50"
+@onready var scorpion25: Node2D = $"../HUD/Scorpion25"
+
+@onready var points_label: Label = $"../HUD/Points"
+
+
+# -------------------------
+# READY
+# -------------------------
+func _ready():
+	add_to_group("Spawn")
+
+	health = max_health
+
+	body_entered.connect(_on_body_entered)
+	area_entered.connect(_on_area_entered)
+
+	start_shooting()
+	start_boss_spawning()
+
+	update_ui()
+	update_points_display()
+
+
+# -------------------------
+# STATE MACHINE
+# -------------------------
+func _physics_process(delta):
+
+	match state:
+		State.ACTIVE:
+			pass
+
+		State.RADIAL_PHASE:
+			pass
+
+		State.DEAD:
+			return
+
+	update_points_display()
+
+
+# -------------------------
+# POINTS (SHARED WITH BOSSONE)
+# -------------------------
+func add_points(amount: int):
+	Bossone.points += amount
+
+
+func update_points_display():
+	if points_label:
+		points_label.text = "Points: %d" % Bossone.points
+
+
+# -------------------------
+# BOSS SPAWN
+# -------------------------
+func start_boss_spawning():
+	boss_spawn_timer = Timer.new()
+	boss_spawn_timer.wait_time = boss_spawn_interval
+	boss_spawn_timer.autostart = true
+	boss_spawn_timer.one_shot = false
+	boss_spawn_timer.timeout.connect(spawn_boss)
+	add_child(boss_spawn_timer)
+
+
+func spawn_boss():
+	if state == State.DEAD:
+		return
+
+	var boss = BOSS_SCENE.instantiate()
+	boss.global_position = marker.global_position
+	get_tree().current_scene.add_child(boss)
+
+
+# -------------------------
+# DAMAGE
+# -------------------------
+func _on_body_entered(body):
+	if body.is_in_group("Bullet"):
+		body.queue_free()
+
+		add_points(1)
+		take_damage(25)
+
+
+func _on_area_entered(area):
+	if area.is_in_group("Bullet"):
+		area.queue_free()
+
+		add_points(1)
+		take_damage(1)
+
+
+func take_damage(amount: int):
+	if state == State.DEAD:
+		return
+
+	health -= amount
+	health = max(health, 0)
+
+	health_changed.emit(health)
+
+	update_ui()
+	flash_red()
+	check_phases()
+
+	if health <= 0:
+		next_life()
+
+
+# -------------------------
+# UI
+# -------------------------
+func update_ui():
+	if spawn_label:
+		spawn_label.text = "Spawn Health: %d" % health
+
+
+# -------------------------
+# PHASES
+# -------------------------
+func check_phases():
+
+	if not phase_triggered75 and health <= max_health * 0.75:
+		phase_triggered75 = true
+		scorpion75.visible = false
+
+	if not phase_triggered50 and health <= max_health * 0.5:
+		phase_triggered50 = true
+		scorpion50.visible = false
+
+	if not phase_triggered25 and health <= max_health * 0.25:
+		phase_triggered25 = true
+		scorpion25.visible = false
+
+		state = State.RADIAL_PHASE
+		start_radial_burst()
+
+
+# -------------------------
+# SHOOTING
+# -------------------------
+func start_shooting():
+	shooting_timer = Timer.new()
+	shooting_timer.wait_time = shoot_interval
+	shooting_timer.autostart = true
+	shooting_timer.one_shot = false
+	shooting_timer.timeout.connect(shoot_bullet)
+	add_child(shooting_timer)
+
+
+func shoot_bullet():
+	if state == State.DEAD:
+		return
+
+	var bullet = BULLET_SCENE.instantiate()
+	bullet.global_position = global_position + Vector2(0, -10)
+
+	var players = get_tree().get_nodes_in_group("player")
+	if players.size() > 0:
+		bullet.target = players[0]
+
+	get_tree().current_scene.add_child(bullet)
+
+
+# -------------------------
+# RADIAL
+# -------------------------
+func start_radial_burst():
+	radial_timer = Timer.new()
+	radial_timer.wait_time = radial_interval
+	radial_timer.autostart = true
+	radial_timer.one_shot = false
+	radial_timer.timeout.connect(radial_bullet_burst)
+	add_child(radial_timer)
+
+
+func radial_bullet_burst():
+	if state == State.DEAD:
+		return
+
+	var center_pos = global_position
+	var bullet_count = 16
+
+	for i in range(bullet_count):
+		var angle = TAU * i / bullet_count
+		var dir = Vector2(cos(angle), sin(angle)).normalized()
+
+		var bullet = BULLET_SCENE.instantiate()
+		bullet.global_position = center_pos
+		bullet.direction = dir
+		bullet.rotation = dir.angle()
+
+		get_tree().current_scene.add_child(bullet)
+
+
+# -------------------------
+# LIFE SYSTEM
+# -------------------------
+func next_life():
+	if current_life < total_lives:
+		current_life += 1
+		health = max_health
+		update_ui()
+		reset_phases()
+	else:
+		die()
+
+
+# -------------------------
+# DEATH
+# -------------------------
+func die():
+	state = State.DEAD
+
+	print("Spawn destroyed")
+
+	if boss_spawn_timer:
+		boss_spawn_timer.queue_free()
+
+	if shooting_timer:
+		shooting_timer.queue_free()
+
+	if radial_timer:
+		radial_timer.queue_free()
+
+	queue_free()
+
+
+# -------------------------
+# RESET
+# -------------------------
+func reset_phases():
+	phase_triggered75 = false
+	phase_triggered50 = false
+	phase_triggered25 = false
+
+
+# -------------------------
+# EFFECTS
+# -------------------------
+func flash_red():
+	sprite_node.modulate = Color(1, 0.2, 0.2)
+
+	var t = Timer.new()
+	t.wait_time = 0.1
+	t.one_shot = true
+	t.timeout.connect(func():
+		sprite_node.modulate = Color(1, 1, 1)
+		t.queue_free()
+	)
+	add_child(t)
+	t.start()
