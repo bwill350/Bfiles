@@ -5,16 +5,19 @@ extends CanvasLayer
 @onready var flower_label = $FlowerLabel
 @onready var drone2_label = $Drone2HealthLabel
 @onready var points_label = $Points
+@onready var spawn_label = $SpawnLabel   # ✅ NEW
 
+var boss
+var spawn
+
+
+# -------------------------
+# READY
+# -------------------------
 func _ready():
 	var duke = get_tree().get_first_node_in_group("player")
 	if duke:
 		duke.health_changed.connect(_on_duke_health_changed)
-
-	var boss = get_tree().get_first_node_in_group("Bossone")
-	if boss:
-		boss.health_changed.connect(_on_boss_health_changed)
-		boss.points_changed.connect(_on_points_changed) # ✅ FIX ADDED
 
 	var flower = get_tree().get_first_node_in_group("DeadlyFlower")
 	if flower:
@@ -23,39 +26,74 @@ func _ready():
 	var drone2 = get_tree().get_first_node_in_group("Drone2")
 	if drone2:
 		drone2.health_changed.connect(_on_drone2_health_changed)
-	
+
+
+# -------------------------
+# PROCESS (handles late spawns)
+# -------------------------
+func _process(_delta):
+
+	# -------------------------
+	# BOSS CONNECTION
+	# -------------------------
+	if boss == null:
+		boss = get_tree().get_first_node_in_group("Bossone")
+		if boss:
+			boss.health_changed.connect(_on_boss_health_changed)
+			boss.points_changed.connect(_on_points_changed)
+
+	# -------------------------
+	# SPAWN CONNECTION
+	# -------------------------
+	if spawn == null:
+		spawn = get_tree().get_first_node_in_group("Spawn")
+		if spawn:
+			spawn.health_changed.connect(_on_spawn_health_changed)
 
 
 # -------------------------
 # DUKE
 # -------------------------
 func _on_duke_health_changed(health):
-	health_label.text = "Player Health: " + str(health)
+	if health_label:
+		health_label.text = "Player Health: " + str(health)
 
 
 # -------------------------
 # BOSS
 # -------------------------
 func _on_boss_health_changed(health):
-	boss_label.text = "Bossone Health: " + str(health)
+	if boss_label:
+		boss_label.text = "Bossone Health: " + str(health)
+
+
+# -------------------------
+# SPAWN (NEW)
+# -------------------------
+func _on_spawn_health_changed(health):
+	if spawn_label:
+		spawn_label.text = "Spawn Health: " + str(health)
 
 
 # -------------------------
 # FLOWER
 # -------------------------
 func _on_flower_health_changed(health):
-	flower_label.text = "Flower: " + str(health)
+	if flower_label:
+		flower_label.text = "Flower: " + str(health)
 
 
 # -------------------------
 # DRONE2
 # -------------------------
 func _on_drone2_health_changed(health):
-	drone2_label.text = "Drone2: " + str(health)
+	if drone2_label:
+		drone2_label.text = "Drone2: " + str(health)
 
 
 # -------------------------
 # POINTS
 # -------------------------
 func _on_points_changed(points):
-	points_label.text = "Points: " + str(points)
+	if points_label:
+		points_label.text = "Points: " + str(points)
