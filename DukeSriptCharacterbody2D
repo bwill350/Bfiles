@@ -10,10 +10,12 @@ class_name Duke
 
 const GRAVITY = 5000
 
+enum State { IDLE, RUN, JUMP, CLIMB }
+var state: State = State.IDLE
+
 var health: int = 500
-var current_state
 var last_facing_dir = -1
-var is_climbing = true
+
 var aim_vector := Vector2.ZERO
 var _mouse_pos := Vector2.ZERO
 
@@ -32,6 +34,7 @@ func _ready():
 	add_to_group("Duke")
 
 	hitbox.area_entered.connect(_on_HitBox_area_entered)
+
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_mouse_pos = get_viewport().get_mouse_position()
 
@@ -56,98 +59,78 @@ func _process(delta):
 
 
 func _physics_process(delta):
-	var on_wall = is_on_wall()
-	var climb_pressed = Input.is_action_pressed("climb")
 
 	# ------------------------
-	# CLIMB STATE
+	# INPUT
+	# ------------------------
+	var input_dir = Input.get_axis("left", "right")
+	var climb_pressed = Input.is_action_pressed("climb")
+	var on_wall = is_on_wall()
+
+	# ------------------------
+	# STATE DECISION
 	# ------------------------
 	if climb_pressed and not is_on_floor() and on_wall:
-		is_climbing = true
+		state = State.CLIMB
+	elif not is_on_floor():
+		state = State.JUMP
+	elif input_dir != 0:
+		state = State.RUN
 	else:
-		if not climb_pressed:
-			is_climbing = false
-
-	if is_climbing:
-		if Input.is_action_just_pressed("shoot"):
-			shoot()
-		if Input.is_action_pressed("shootright"):
-			shootright()
-		if Input.is_action_pressed("shootleft"):
-			shootleft()
-
-		velocity.y = -CLIMB_SPEED
-
-		if Input.is_action_pressed("right"):
-			velocity.x = SPEED
-			last_facing_dir = 1
-			anim.play("climb")
-			anim.flip_h = false
-
-		elif Input.is_action_pressed("left"):
-			velocity.x = -SPEED
-			last_facing_dir = -1
-			anim.play("move_left")
-			anim.flip_h = true
-
-		else:
-			velocity.x = 0
-			anim.play("climb")
-			anim.flip_h = last_facing_dir == -1
-
-	else:
-		# ------------------------
-		# GRAVITY
-		# ------------------------
-		velocity.y += GRAVITY * delta
-
-		# ------------------------
-		# INPUT
-		# ------------------------
-		var input_dir = 0
-
-		if Input.is_action_pressed("right"):
-			input_dir += 1
-		if Input.is_action_pressed("left"):
-			input_dir -= 1
-
-		velocity.x = input_dir * SPEED
-
-		if input_dir != 0:
-			last_facing_dir = input_dir
-
-		# ------------------------
-		# AIR ANIMATION
-		# ------------------------
-		if not is_on_floor():
-			anim.play("jump")
-			anim.flip_h = last_facing_dir == -1
-
-		# ------------------------
-		# GROUND ANIMATION
-		# ------------------------
-		else:
-			if input_dir == -1:
-				anim.play("move_left")
-				anim.flip_h = false
-
-			elif input_dir == 1:
-				anim.play("move_right")
-				anim.flip_h = false
-
-			else:
-				anim.play("Idle")
-				anim.flip_h = last_facing_dir == -1
-
-		# ------------------------
-		# JUMP
-		# ------------------------
-		if Input.is_action_just_pressed("jump") and is_on_floor():
-			velocity.y = JUMP_VELOCITY
-			anim.play("jump")
+		state = State.IDLE
 
 	# ------------------------
-	# EXTRA SHOOT INPUTS (kept)
+	# STATE BEHAVIOUR
+	# ------------------------
+	match state:
+
+		State.CLIMB:
+			velocity.y = -CLIMB_SPEED
+			velocity.x = input_dir * SPEED
+
+			if input_dir != 0:
+				last_facing_dir = sign(input_dir)
+
+			anim.play("climb")
+			anim.flip_h = last_facing_dir == -1
+
+		State.JUMP:
+			velocity.y += GRAVITY * delta
+			velocity.x = input_dir * SPEED
+
+			anim.play("jump")
+			anim.flip_h = last_facing_dir == -1
+
+		State.RUN:
+			velocity.y += GRAVITY * delta
+			velocity.x = input_dir * SPEED
+
+			if input_dir == 1:
+				anim.play("move_right")
+				anim.flip_h = false
+				last_facing_dir = 1
+
+			elif input_dir == -1:
+				anim.play("move_left")
+				anim.flip_h = false
+				last_facing_dir = -1
+
+		State.IDLE:
+			velocity.y += GRAVITY * delta
+			velocity.x = 0
+
+			anim.play("Idle")
+			anim.flip_h = last_facing_dir == -1
+
+	# ------------------------
+	# JUMP INPUT
+	# ------------------------
+	if Input.is_action_just_pressed("jump") and is_on_floor():
+		velocity.y = JUMP_VELOCITY
+		state = State.JUMP
+
+	# ------------------------
+	# SHOOTING (UNCHANGED)
 	# ------------------------
 	if Input.is_action_pressed("shoot"):
 		shoot()
@@ -163,12 +146,6 @@ func _physics_process(delta):
 
 	if Input.is_action_just_pressed("shootaroundleft"):
 		shootaroundleft()
-
-	# ------------------------
-	# FALL BACKUP ANIMATION
-	# ------------------------
-	if not is_on_floor() and not is_climbing:
-		anim.play("jump")
 
 	move_and_slide()
 
@@ -227,10 +204,13 @@ func shootaroundleft():
 
 
 # ------------------------
-# DAMAGE
+# DAMAGE SYSTEM
 # ------------------------
-func _on_HitBox_area_entered(_area: Area2D) -> void:
+func _on_HitBox_area_entered(area: Area2D) -> void:
 	take_damage(1)
+
+	if area.is_in_group("Bossonebullet"):
+		take_damage(1)
 
 
 func take_damage(amount: int):
@@ -256,9 +236,5 @@ func die():
 	print("died")
 
 
-func _on_hit_box_area_entered(area):
-	take_damage(1)
-
-
-func _on_health_changed(health):
-	health_label.text = str(health)
+func _on_health_changed(value):
+	health_label.text = str(value)
