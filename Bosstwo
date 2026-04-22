@@ -35,6 +35,7 @@ var spiral_angle := 0.0
 
 # ---------------- READY ----------------
 func _ready():
+	$Sprite.play("one")
 	health = max_health
 	add_to_group("Boss")
 
