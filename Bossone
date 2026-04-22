@@ -19,11 +19,12 @@ static var points: int = 0
 @export var move_speed: float = 100.0
 
 const BULLET_SCENE = preload("res://BossoneBullet.tscn")
+const EXPLOSION_SCENE = preload("res://Explosion.tscn")
 
 @onready var sprite_node: AnimatedSprite2D = $Sprite
 @onready var hit_box: Area2D = $HitBox
-@onready var points_label: Label = $HUD/PointsLabel
-@onready var health_label: Label = $HUD/HealthLabel
+@onready var points_label: Label = $"../HUD/Points"
+@onready var health_label: Label = $"../HUD/BossoneHealthLabel"
 
 var direction := 1
 var left_boundary: float
@@ -71,7 +72,6 @@ func _physics_process(delta):
 func _on_area_entered(area):
 	if area.is_in_group("Bullet"):
 		area.queue_free()
-
 		add_points(1)
 		take_damage(1)
 
@@ -82,7 +82,6 @@ func _on_area_entered(area):
 func _on_body_entered(body):
 	if body.is_in_group("Bullet"):
 		body.queue_free()
-
 		add_points(1)
 		take_damage(25)
 
@@ -111,6 +110,7 @@ func take_damage(amount: int):
 
 	if health <= 0:
 		next_life()
+		$Hit.play()
 
 
 # -------------------------
@@ -121,7 +121,7 @@ func update_ui():
 		points_label.text = "Points: %d" % points
 
 	if health_label:
-		health_label.text = "Health: %d" % health
+		health_label.text = "Bossone Health: %d" % health
 
 
 # -------------------------
@@ -136,6 +136,30 @@ func next_life():
 		die()
 
 
+# -------------------------
+# RADIAL EXPLOSION (ON DEATH)
+# -------------------------
+func radial_explosion():
+	var center_pos = global_position
+	var explosion_count := 16
+
+	for i in range(explosion_count):
+		var angle = TAU * i / explosion_count
+		var offset = Vector2(cos(angle), sin(angle)) * 120
+
+		var explosion = EXPLOSION_SCENE.instantiate()
+		get_tree().current_scene.add_child(explosion)
+		explosion.global_position = center_pos + offset
+
+
+# -------------------------
+# DIE
+# -------------------------
 func die():
 	state = State.DEAD
+
+	radial_explosion()   # 💥 BIG FINISH
+
+	$Explosion1.play()
+	await get_tree().create_timer(0.4).timeout
 	queue_free()
