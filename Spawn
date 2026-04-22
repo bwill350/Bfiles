@@ -26,6 +26,7 @@ var phase_triggered25 := false
 
 const BOSS_SCENE = preload("res://Bossone.tscn")
 const BULLET_SCENE = preload("res://BossoneBullet.tscn")
+const EXPLOSION_SCENE = preload("res://Explosion.tscn")
 
 @onready var sprite_node: AnimatedSprite2D = $Sprite
 @onready var marker: Marker2D = $Marker2D
@@ -46,7 +47,6 @@ func _ready():
 
 	health = max_health
 
-	body_entered.connect(_on_body_entered)
 	area_entered.connect(_on_area_entered)
 
 	start_shooting()
@@ -60,16 +60,11 @@ func _ready():
 # STATE MACHINE
 # -------------------------
 func _physics_process(delta):
-
 	match state:
-		State.ACTIVE:
-			pass
-
-		State.RADIAL_PHASE:
-			pass
-
 		State.DEAD:
 			return
+		_:
+			pass
 
 	update_points_display()
 
@@ -99,7 +94,8 @@ func start_boss_spawning():
 
 
 func spawn_boss():
-	if state == State.DEAD:
+	# STOP spawning when on the final life
+	if state == State.DEAD or current_life >= total_lives:
 		return
 
 	var boss = BOSS_SCENE.instantiate()
@@ -110,18 +106,11 @@ func spawn_boss():
 # -------------------------
 # DAMAGE
 # -------------------------
-func _on_body_entered(body):
-	if body.is_in_group("Bullet"):
-		body.queue_free()
-
-		add_points(1)
-		take_damage(25)
 
 
 func _on_area_entered(area):
 	if area.is_in_group("Bullet"):
 		area.queue_free()
-
 		add_points(1)
 		take_damage(1)
 
@@ -167,7 +156,6 @@ func check_phases():
 	if not phase_triggered25 and health <= max_health * 0.25:
 		phase_triggered25 = true
 		scorpion25.visible = false
-
 		state = State.RADIAL_PHASE
 		start_radial_burst()
 
@@ -199,7 +187,7 @@ func shoot_bullet():
 
 
 # -------------------------
-# RADIAL
+# RADIAL BULLETS
 # -------------------------
 func start_radial_burst():
 	radial_timer = Timer.new()
@@ -230,11 +218,33 @@ func radial_bullet_burst():
 
 
 # -------------------------
+# RADIAL EXPLOSION (ON DEATH)
+# -------------------------
+func radial_explosion():
+	var center_pos = global_position
+	var explosion_count := 20
+
+	for i in range(explosion_count):
+		var angle = TAU * i / explosion_count
+		var offset = Vector2(cos(angle), sin(angle)) * 140
+
+		var explosion = EXPLOSION_SCENE.instantiate()
+		get_tree().current_scene.add_child(explosion)
+		explosion.global_position = center_pos + offset
+
+
+# -------------------------
 # LIFE SYSTEM
 # -------------------------
 func next_life():
 	if current_life < total_lives:
 		current_life += 1
+
+		# When we ENTER the 5th life, stop spawning Bossone
+		if current_life >= total_lives and boss_spawn_timer:
+			boss_spawn_timer.stop()
+			print("Boss spawning stopped on final life")
+
 		health = max_health
 		update_ui()
 		reset_phases()
@@ -252,13 +262,14 @@ func die():
 
 	if boss_spawn_timer:
 		boss_spawn_timer.queue_free()
-
 	if shooting_timer:
 		shooting_timer.queue_free()
-
 	if radial_timer:
 		radial_timer.queue_free()
 
+	radial_explosion()
+
+	await get_tree().create_timer(0.5).timeout
 	queue_free()
 
 
