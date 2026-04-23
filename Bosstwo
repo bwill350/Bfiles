@@ -1,4 +1,4 @@
-extends Area2D
+extends CharacterBody2D
 class_name Bosstwo
 
 signal health_changed(health)
@@ -11,6 +11,7 @@ var state: State = State.MOVE
 
 @export var move_speed: float = 120.0
 @export var shoot_interval: float = 1.1
+@export var gravity: float = 900.0
 
 var health: int
 var current_life: int = 1
@@ -19,7 +20,7 @@ const BULLET_SCENE = preload("res://BossoneBullet.tscn")
 const EXPLOSION_SCENE = preload("res://Explosion.tscn")
 
 @onready var sprite: AnimatedSprite2D = $Sprite
-@onready var hit_box: Area2D = $HitBox
+@onready var hit_area: Area2D = $Area2D   # ✅ UPDATED (your new node)
 @onready var shoot_timer: Timer = $ShootTimer
 @onready var points_label: Label = $"../HUD/Points"
 @onready var health_label: Label = $"../HUD/BosstwoHealthLabel"
@@ -28,21 +29,26 @@ var direction := 1
 var left_boundary: float
 var right_boundary: float
 
-# FINISHER CONTROL
 var finishing := false
 var spiral_angle := 0.0
 
 
 # ---------------- READY ----------------
 func _ready():
-	$Sprite.play("one")
+	# animation fix
+	sprite.animation = "one"
+	sprite.frame = 0
+	sprite.play()
+
 	health = max_health
 	add_to_group("Boss")
 
 	left_boundary = position.x - 650
 	right_boundary = position.x + 650
 
-	hit_box.area_entered.connect(_on_area_entered)
+	# ✅ FIXED AREA2D CONNECTIONS
+	hit_area.area_entered.connect(_on_area_entered)
+	hit_area.body_entered.connect(_on_area_entered)
 
 	shoot_timer.wait_time = shoot_interval
 	shoot_timer.timeout.connect(shoot_player)
@@ -51,12 +57,18 @@ func _ready():
 	update_ui()
 
 
-# ---------------- MOVE (LONGER + SLOWER THAN BOSSONE) ----------------
+# ---------------- PHYSICS + GRAVITY ----------------
 func _physics_process(delta):
 	if state == State.DEAD or finishing:
 		return
 
-	position.x += direction * move_speed * delta
+	if not is_on_floor():
+		velocity.y += gravity * delta
+	else:
+		velocity.y = 0
+
+	velocity.x = direction * move_speed
+	move_and_slide()
 
 	if position.x < left_boundary:
 		direction = 1
@@ -64,7 +76,7 @@ func _physics_process(delta):
 		direction = -1
 
 
-# ---------------- SMART SHOOTING (DUKE AIM + PRESSURE) ----------------
+# ---------------- SHOOT ----------------
 func shoot_player():
 	if finishing:
 		return
@@ -74,10 +86,8 @@ func shoot_player():
 		return
 
 	var player = players[0]
-
 	var predicted_pos = player.global_position
 
-	# Duke-style prediction
 	if "velocity" in player:
 		predicted_pos += player.velocity * 0.3
 
@@ -104,6 +114,16 @@ func _on_area_entered(area):
 		take_damage(1)
 
 
+func _on_body_entered(body):
+	if finishing:
+		return
+
+	if body.is_in_group("Bullet"):
+		body.queue_free()
+		take_damage(1)
+
+
+# ---------------- HEALTH ----------------
 func take_damage(amount: int):
 	if finishing:
 		return
@@ -119,12 +139,10 @@ func take_damage(amount: int):
 		next_life()
 
 
-# ---------------- LIFE SYSTEM (LONGER THAN BOSSONE) ----------------
+# ---------------- LIFE SYSTEM ----------------
 func next_life():
 	if current_life < total_lives:
 		current_life += 1
-
-		# gradual speed increase each life
 		move_speed += 15
 
 		health = max_health
@@ -142,14 +160,14 @@ func update_ui():
 		health_label.text = "Bosstwo Health: %d" % health
 
 
-# ---------------- DAMAGE FLASH ----------------
+# ---------------- FLASH ----------------
 func flash_red():
 	sprite.modulate = Color(1, 0.3, 0.3)
 	await get_tree().create_timer(0.07).timeout
 	sprite.modulate = Color(1, 1, 1)
 
 
-# ---------------- DEATH -> LONG FINISHER ----------------
+# ---------------- DEATH ----------------
 func die():
 	if finishing:
 		return
@@ -164,12 +182,11 @@ func die():
 
 
 # =========================================================
-# 💀 LONGER THAN BOSSONE DEATH (IMPORTANT PART)
+# FINISHER
 # =========================================================
 func bosstwo_finisher():
 	set_physics_process(false)
 
-	# 🔥 STAGE 1: LONGER SPIRAL (Bossone = none, Bosstwo = chaos start)
 	var t := 0.0
 	while t < 3.5:
 		fire_spiral_ring()
@@ -177,12 +194,10 @@ func bosstwo_finisher():
 		spiral_angle += 0.5
 		t += 0.04
 
-	# 💥 STAGE 2: EXPANDING DEATH WAVES (MORE THAN BOSSONE)
 	for i in range(10):
 		radial_explosion()
 		await get_tree().create_timer(0.1).timeout
 
-	# ☠️ STAGE 3: DOUBLE APOCALYPSE BURST
 	final_apocalypse_burst()
 	await get_tree().create_timer(0.3).timeout
 	final_apocalypse_burst()
@@ -190,7 +205,7 @@ func bosstwo_finisher():
 	await get_tree().create_timer(0.8).timeout
 
 
-# ---------------- SPIRAL ATTACK ----------------
+# ---------------- SPIRAL ----------------
 func fire_spiral_ring():
 	var center = global_position
 
@@ -206,7 +221,7 @@ func fire_spiral_ring():
 		get_tree().current_scene.add_child(bullet)
 
 
-# ---------------- FINAL WIPE ----------------
+# ---------------- FINAL BURST ----------------
 func final_apocalypse_burst():
 	var center = global_position
 
@@ -226,7 +241,7 @@ func final_apocalypse_burst():
 	radial_explosion()
 
 
-# ---------------- EXPLOSION RING ----------------
+# ---------------- EXPLOSION ----------------
 func radial_explosion():
 	var center = global_position
 
