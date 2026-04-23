@@ -107,10 +107,20 @@ func take_damage(amount: int):
 
 	health_changed.emit(health)
 	update_ui()
+	flash_red()   # ✅ FLASH ADDED HERE
 
 	if health <= 0:
 		next_life()
 		$Hit.play()
+
+
+# -------------------------
+# FLASH EFFECT
+# -------------------------
+func flash_red():
+	sprite_node.modulate = Color(1, 0.3, 0.3)
+	await get_tree().create_timer(0.07).timeout
+	sprite_node.modulate = Color(1, 1, 1)
 
 
 # -------------------------
