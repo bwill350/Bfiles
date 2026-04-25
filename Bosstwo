@@ -3,102 +3,98 @@ class_name Bosstwo
 
 signal health_changed(health)
 
-enum State { MOVE, PHASE, RAGE, DEAD }
+enum State { MOVE, PANIC, DEAD }
 var state: State = State.MOVE
 
 @export var max_health: int = 250
 @export var total_lives: int = 7
-
 @export var move_speed: float = 120.0
-@export var shoot_interval: float = 1.1
 @export var gravity: float = 900.0
+@export var attack_delay: float = 1.5
+@export var panic_speed_multiplier: float = 1.6
 
 var health: int
 var current_life: int = 1
-
-const EXPLOSION_SCENE = preload("res://Explosion.tscn")
-
-@onready var sprite: AnimatedSprite2D = $Sprite
-@onready var hit_area: Area2D = $Area2D
-@onready var shoot_timer: Timer = $ShootTimer
-@onready var points_label: Label = $"../HUD/Points"
-@onready var health_label: Label = $"../HUD/BosstwoHealthLabel"
 
 var direction := 1
 var left_boundary: float
 var right_boundary: float
 
 var finishing := false
-var flicker_active := false
+var panic := false
+
+# SPIKES
+const SPIKE_ONE = preload("res://Scenes/Boss/BosstwoSpikeBallone.tscn")
+const SPIKE_TWO = preload("res://Scenes/Boss/BosstwoSpikeBalltwo.tscn")
+
+@onready var sprite_node: AnimatedSprite2D = $Sprite
+@onready var hit_area: Area2D = $Area2D   # ✅ THIS IS YOUR HIT DETECTOR
 
 
 # ---------------- READY ----------------
 func _ready():
-	sprite.animation = "one"
-	sprite.frame = 0
-	sprite.play()
-
 	health = max_health
 	add_to_group("Boss")
 
 	left_boundary = position.x - 650
 	right_boundary = position.x + 650
 
+	# IMPORTANT: connect Area2D
 	hit_area.area_entered.connect(_on_area_entered)
-	hit_area.body_entered.connect(_on_area_entered)
 
-	shoot_timer.wait_time = shoot_interval
-	shoot_timer.timeout.connect(shoot_player)
-	shoot_timer.start()
+	start_attack_loop()
 
-	update_ui()
+
+# ---------------- ATTACK LOOP ----------------
+func start_attack_loop():
+	while not finishing:
+
+		shoot_one()
+		await get_tree().create_timer(attack_delay if not panic else 0.7).timeout
+
+		shoot_two()
+		await get_tree().create_timer(attack_delay if not panic else 0.7).timeout
+
+
+# ---------------- SPIKE 1 ----------------
+func shoot_one():
+	if finishing:
+		return
+
+	var spike = SPIKE_ONE.instantiate()
+	spike.global_position = global_position
+	get_tree().current_scene.add_child(spike)
+
+
+# ---------------- SPIKE 2 ----------------
+func shoot_two():
+	if finishing:
+		return
+
+	var spike = SPIKE_TWO.instantiate()
+	spike.global_position = global_position
+	get_tree().current_scene.add_child(spike)
 
 
 # ---------------- MOVEMENT ----------------
 func _physics_process(delta):
-	if state == State.DEAD or finishing:
+	if state == State.DEAD:
 		return
+
+	var speed = move_speed * (panic_speed_multiplier if panic else 1.0)
 
 	if not is_on_floor():
 		velocity.y += gravity * delta
 	else:
 		velocity.y = 0
 
-	velocity.x = direction * move_speed
+	velocity.x = direction * speed
 	move_and_slide()
 
 	if position.x < left_boundary:
 		direction = 1
 	elif position.x > right_boundary:
 		direction = -1
-
-
-# ---------------- SHOOT ----------------
-func shoot_player():
-	if finishing:
-		return
-
-	var players = get_tree().get_nodes_in_group("player")
-	if players.is_empty():
-		return
-
-	var player = players[0]
-	var predicted_pos = player.global_position
-
-	if "velocity" in player:
-		predicted_pos += player.velocity * 0.3
-
-	if player.state == player.State.JUMP:
-		predicted_pos.y -= 50
-
-	var bullet = preload("res://BossoneBullet.tscn").instantiate()
-	bullet.global_position = global_position
-
-	var dir = (predicted_pos - global_position).normalized()
-	bullet.direction = dir
-	bullet.rotation = dir.angle()
-
-	get_tree().current_scene.add_child(bullet)
 
 
 # ---------------- DAMAGE ----------------
@@ -111,16 +107,6 @@ func _on_area_entered(area):
 		take_damage(1)
 
 
-func _on_body_entered(body):
-	if finishing:
-		return
-
-	if body.is_in_group("Bullet"):
-		body.queue_free()
-		take_damage(1)
-
-
-# ---------------- HEALTH ----------------
 func take_damage(amount: int):
 	if finishing:
 		return
@@ -129,83 +115,26 @@ func take_damage(amount: int):
 	health = max(health, 0)
 
 	health_changed.emit(health)
-	update_ui()
-	flash_red()
+
+	# PANIC MODE ON LAST LIFE
+	if current_life == total_lives - 1:
+		panic = true
+		state = State.PANIC
 
 	if health <= 0:
-		next_life()
+		call_deferred("next_life")
 
 
 # ---------------- LIFE SYSTEM ----------------
 func next_life():
+	if finishing:
+		return
+
 	if current_life < total_lives:
 		current_life += 1
-		move_speed += 15
-
 		health = max_health
-		update_ui()
-
-		if current_life == 5 and not flicker_active:
-			start_color_flicker()
 	else:
-		die()
-
-
-# ---------------- UI ----------------
-func update_ui():
-	if points_label:
-		points_label.text = "Points: %d" % Bossone.points
-
-	if health_label:
-		health_label.text = "Bosstwo Health: %d" % health
-
-
-# ---------------- FLASH ----------------
-func flash_red():
-	sprite.modulate = Color(1, 0.3, 0.3)
-	await get_tree().create_timer(0.07).timeout
-	sprite.modulate = Color(1, 1, 1)
-
-
-# ---------------- COLOR FLICKER ----------------
-func start_color_flicker():
-	flicker_active = true
-	color_flicker_loop()
-
-func color_flicker_loop():
-	while flicker_active and state != State.DEAD:
-		sprite.modulate = Color(1, 0.2, 0.2)
-		await get_tree().create_timer(0.1).timeout
-
-		sprite.modulate = Color(0.2, 0.6, 1.0)
-		await get_tree().create_timer(0.1).timeout
-
-		sprite.modulate = Color(1, 1, 1)
-		await get_tree().create_timer(0.1).timeout
-
-
-# =========================================================
-# FINISHER (ONLY EXPLOSION SCENE)
-# =========================================================
-func bosstwo_finisher():
-	set_physics_process(false)
-	finishing = true
-
-	var center = global_position
-
-	# clean perimeter explosion around body
-	for i in range(12):
-		var angle = TAU * i / 12
-		var radius = 100.0
-		var offset = Vector2(cos(angle), sin(angle)) * radius
-
-		var explosion = EXPLOSION_SCENE.instantiate()
-		explosion.global_position = center + offset
-		get_tree().current_scene.add_child(explosion)
-
-		await get_tree().create_timer(0.08).timeout
-
-	await get_tree().create_timer(0.6).timeout
+		call_deferred("die")
 
 
 # ---------------- DEATH ----------------
@@ -215,11 +144,19 @@ func die():
 
 	finishing = true
 	state = State.DEAD
+	panic = false
 
-	flicker_active = false
-	sprite.modulate = Color(1, 1, 1)
+	await final_flash()
 
-	shoot_timer.stop()
-
-	await bosstwo_finisher()
 	queue_free()
+
+
+# ---------------- FINAL FLASH (GUARANTEED) ----------------
+func final_flash():
+	sprite_node.modulate = Color(1, 0.2, 0.2)
+
+	await get_tree().create_timer(0.25).timeout
+
+	sprite_node.modulate = Color(1, 1, 1)
+
+	await get_tree().create_timer(0.1).timeout
