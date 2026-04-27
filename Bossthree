@@ -222,7 +222,7 @@ func next_life():
 		current_life += 1
 		health = max_health
 
-		if current_life >= 7:
+		if current_life >= 6:
 			flash_enabled = true
 	else:
 		call_deferred("die")
