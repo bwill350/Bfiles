@@ -1,193 +1,276 @@
-extends Area2D
+extends CharacterBody2D
 class_name Bossthree
 
-signal Die
-@export var heart = 40
-@export var health: int = 100
-@export var shoot_interval: float = 5.0
-@export var move_speed: float = 100.0
-@export var left_boundary: float
-@export var right_boundary: float
+signal health_changed(health)
 
-const BULLET_SCENE = preload("res://BossoneBullet.tscn")
-const DRONE_SCENE = preload("res://Drone2.tscn")
+enum State { PHASE1, PHASE2, PHASE3, DEAD }
+var state: State = State.PHASE1
 
-var direction := 1
-var shooting_timer: Timer
-var radial_timer: Timer
+@export var max_health: int = 320
+@export var total_lives: int = 9
 
-# --- HUD Heart Control ---
-func bosslivesone():
-	$"../../HUD/Bossheartsone".visible = false
-func bosslivestwo():
-	$"../../HUD/Bossheartstwo".visible = false
-func bosslivesthree():
-	$"../../HUD/Bossheartsthree".visible = false
-func bosslivesfour():
-	$"../../HUD/Bossheartsfour".visible = false
+@export var phase1_delay: float = 1.6
+@export var phase2_delay: float = 1.2
+@export var phase3_delay: float = 0.9
 
-# --- Setup ---
+var health: int
+var current_life: int = 1
+var finishing := false
+var can_shoot := true
+
+var flash_enabled := false
+var flash_timer := 0.0
+var flash_state := false
+const FLASH_RATE := 0.12
+
+var explosion_running := false
+
+const SPIKE = preload("res://Scenes/Boss/Bosstwospikeballone.tscn")
+const EXPLODE = preload("res://Scenes/Boss/Explosion.tscn")
+
+@onready var sprite_node: AnimatedSprite2D = $Sprite
+@onready var hit_area: Area2D = $Bossthree
+@onready var ground_node: Node2D = get_node_or_null("ground")
+
+
+# ---------------- READY ----------------
 func _ready():
-	$Sprite.play("default")
-	$Explosion1.stop()
-	$Sprite2D.visible = false
-	left_boundary = position.x - 500
-	right_boundary = position.x + 500
-	start_shooting()
+	health = max_health
+	add_to_group("Boss")
 
-func _physics_process(delta):
-	position.x += direction * move_speed * delta
-	if position.x <= left_boundary:
-		direction = 1
-		$Sprite.flip_h = true
-	elif position.x >= right_boundary:
-		direction = -1
-		$Sprite.flip_h = false
+	hit_area.area_entered.connect(_on_area_entered)
 
-# --- Damage Handling ---
+	sprite_node.play("default")
+
+	call_deferred("start_attack_loop")
+
+
+# ---------------- FLASH ----------------
+func _process(delta):
+	if finishing or not flash_enabled:
+		return
+
+	flash_timer += delta
+	if flash_timer >= FLASH_RATE:
+		flash_timer = 0.0
+		flash_state = !flash_state
+		sprite_node.modulate = Color(1, 0.3, 0.3) if flash_state else Color(1, 1, 1)
+
+
+# ---------------- ATTACK LOOP ----------------
+func start_attack_loop():
+	while not finishing:
+
+		if can_shoot:
+			can_shoot = false
+
+			play_attack_animation()
+			shoot()
+
+			await get_tree().create_timer(get_attack_delay()).timeout
+
+			can_shoot = true
+		else:
+			await get_tree().process_frame
+
+
+# ---------------- SHOOT SYSTEM ----------------
+func shoot():
+	if finishing:
+		return
+
+	var player = get_tree().get_first_node_in_group("player")
+	if player == null:
+		return
+
+	var dir = (player.global_position - global_position).normalized()
+
+	# 🔵 LIFE 1–3: HOMING SHOTS
+	if current_life <= 3:
+		var spike = SPIKE.instantiate()
+		spike.global_position = global_position
+		spike.target = player
+		get_tree().current_scene.add_child(spike)
+
+	# 🟡 LIFE 4–6: RADIAL BURST
+	elif current_life <= 6:
+		var burst = 8
+		var base = randf_range(0, TAU)
+
+		for i in range(burst):
+			var angle = base + (TAU / burst) * i
+
+			var spike = SPIKE.instantiate()
+			spike.global_position = global_position + Vector2(randf_range(-260, 60), randf_range(-260, 60))
+			spike.direction = Vector2.RIGHT.rotated(angle)
+
+			get_tree().current_scene.add_child(spike)
+
+	# 💀 LIFE 7: SCREEN INVASION (CAMERA)
+	elif current_life == 7:
+		var camera = get_viewport().get_camera_2d()
+		var screen_size = get_viewport().get_visible_rect().size
+		var top_left = camera.global_position - screen_size / 2
+
+		for i in range(14):
+			var spike = SPIKE.instantiate()
+
+			spike.global_position = Vector2(
+				randf_range(top_left.x, top_left.x + screen_size.x),
+				randf_range(top_left.y, top_left.y + screen_size.y)
+			)
+
+			spike.target = player
+			get_tree().current_scene.add_child(spike)
+
+	# 🌋 LIFE 8: GROUND ERUPTION (ground CHILD nodes)
+	elif current_life == 8:
+		var ground_points = get_tree().get_nodes_in_group("ground_spawns")
+
+		for p in ground_points:
+			if p is Node2D:
+				var spike = SPIKE.instantiate()
+				spike.global_position = p.global_position
+				spike.target = player
+				get_tree().current_scene.add_child(spike)
+
+	# ☠️ LIFE 9: BOSSTHREE GROUND CORE RING (LOCKED)
+	else:
+		if ground_node == null:
+			return
+
+		var origin = ground_node.global_position
+
+		var burst = 18
+		var base = randf_range(0, TAU)
+
+		for i in range(burst):
+			var angle = base + (TAU / burst) * i
+
+			var spike = SPIKE.instantiate()
+
+			# 🔒 locked ground-centered burst (no floating)
+			spike.global_position = origin + Vector2(randf_range(-8, 8), 0)
+
+			spike.direction = Vector2.RIGHT.rotated(angle)
+			spike.target = player
+
+			get_tree().current_scene.add_child(spike)
+
+
+# ---------------- ANIMATION ----------------
+func play_attack_animation():
+	if state == State.PHASE3:
+		sprite_node.play("panicattack")
+	else:
+		sprite_node.play("attackleft" if randi() % 2 == 0 else "attackright")
+
+
+# ---------------- SPEED ----------------
+func get_attack_delay() -> float:
+	match state:
+		State.PHASE1:
+			return phase1_delay
+		State.PHASE2:
+			return phase2_delay
+		State.PHASE3:
+			return phase3_delay
+	return 1.0
+
+
+# ---------------- DAMAGE ----------------
 func _on_area_entered(area):
+	if finishing:
+		return
+
 	if area.is_in_group("Bullet"):
+		area.queue_free()
 		take_damage(1)
 
+
 func take_damage(amount: int):
-	health -= amount
-	print("Bossthree took damage! Health now: ", health)
-
-	if health <= 100:
-		bosslivesfour()
-	if health <= 75:
-		bosslivesthree()
-		start_radial_shooting()
-	if health <= 50:
-		bosslivestwo()
-	if health <= 0:
-		bosslivesone()
-		_die_sequence()
-
-# --- Death Sequence ---
-func _die_sequence():
-	emit_signal("Die")
-	print("Bossthree has died.")
-	
-	if shooting_timer:
-		shooting_timer.stop()
-	if radial_timer:
-		radial_timer.stop()
-
-	# shrink down
-	var shrink_tween = create_tween()
-	shrink_tween.tween_property(self, "scale", Vector2(0,0), 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	shrink_tween.finished.connect(_on_shrink_finished)
-
-func _on_shrink_finished():
-	print("Boss scaled to 0 -> explosions triggered")
-	$Sprite2D.visible = false
-	$Sprite.play("explode")
-	spawn_explosions()
-	radial_bullet_burst()
-
-	# wait for explosions, then change scene
-	var timer = Timer.new()
-	timer.wait_time = 3.0
-	timer.one_shot = true
-	timer.timeout.connect(Callable(self, "_finish_boss"))
-	get_tree().root.add_child(timer)
-	timer.start()
-
-func _finish_boss():
-	print("Boss finish triggered -> free + change scene")
-	queue_free()
-	call_deferred("_change_scene")
-
-func _change_scene():
-	get_tree().change_scene_to_file("res://Scenes/Levels/lvl_04.tscn")
-
-# --- Regular Shooting ---
-func shoot_bullet():
-	var bullet = BULLET_SCENE.instantiate()
-	bullet.global_position = global_position + Vector2(0, -10)
-	var duke_candidates = get_tree().get_nodes_in_group("player")
-	if duke_candidates.size() > 0:
-		bullet.target = duke_candidates[0]
-	get_tree().current_scene.add_child(bullet)
-
-func start_shooting():
-	shooting_timer = Timer.new()
-	shooting_timer.wait_time = shoot_interval
-	shooting_timer.autostart = true
-	shooting_timer.one_shot = false
-	shooting_timer.timeout.connect(shoot_bullet)
-	add_child(shooting_timer)
-
-# --- Radial Shooting ---
-func start_radial_shooting():
-	if radial_timer:
+	if finishing:
 		return
-	radial_timer = Timer.new()
-	radial_timer.wait_time = 3.0
-	radial_timer.autostart = true
-	radial_timer.one_shot = false
-	radial_timer.timeout.connect(radial_bullet_burst)
-	add_child(radial_timer)
 
-func radial_bullet_burst():
-	var center_pos = global_position
-	var bullet_count = 16
-	var radius = 400
+	health -= amount
+	health = max(health, 0)
 
-	for i in range(bullet_count):
-		var angle = TAU * i / bullet_count
-		var direction = Vector2(cos(angle), sin(angle)).normalized()
+	health_changed.emit(health)
 
-		var drone = DRONE_SCENE.instantiate()
-		drone.global_position = center_pos
-		drone.scale = Vector2(0, 0)
-		get_tree().current_scene.add_child(drone)
+	update_phase()
 
-		var final_pos = center_pos + direction * radius
-		var tween = drone.create_tween()
-		tween.tween_property(drone, "scale", Vector2(1,1), 0.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		tween.tween_property(drone, "global_position", final_pos, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		tween.finished.connect(Callable(drone, "queue_free"))
+	if health <= 0:
+		call_deferred("next_life")
 
-# --- Explosion Sequence ---
-func spawn_explosions():
-	$Explosion1.play()
-	var center_pos = global_position
-	var distance = 500
-	var num_images_per_direction = 3
-	var delay_between_directions = 0.2
 
-	var directions = [
-		Vector2(-1, 0),
-		Vector2(0, -1),
-		Vector2(1, 0),
-		Vector2(0, 1)
-	]
+# ---------------- PHASE ----------------
+func update_phase():
+	if current_life >= total_lives * 0.7:
+		state = State.PHASE1
+	elif current_life >= total_lives * 0.4:
+		state = State.PHASE2
+	else:
+		state = State.PHASE3
 
-	for dir_index in range(directions.size()):
-		var dir = directions[dir_index]
-		var timer = Timer.new()
-		timer.wait_time = dir_index * delay_between_directions
-		timer.one_shot = true
-		timer.autostart = true
-		timer.timeout.connect(Callable(self, "_spawn_direction").bind(dir, center_pos, distance, num_images_per_direction))
-		add_child(timer)
 
-func _spawn_direction(dir: Vector2, center_pos: Vector2, distance: float, num_images: int):
-	for i in range(num_images):
-		var offset = Vector2(randf_range(-50,50), randf_range(-50,50))
-		var pos = center_pos + offset
+# ---------------- LIFE ----------------
+func next_life():
+	if finishing:
+		return
 
-		var drone = DRONE_SCENE.instantiate()
-		drone.global_position = pos
-		drone.scale = Vector2(0.5,0.5)
-		get_tree().current_scene.add_child(drone)
-		$Sprite2D.visible = false
+	if current_life < total_lives:
+		current_life += 1
+		health = max_health
 
-		var final_pos = pos + dir * randf_range(distance*0.5, distance) + Vector2(randf_range(-50,50), randf_range(-50,50))
+		if current_life >= 7:
+			flash_enabled = true
+	else:
+		call_deferred("die")
 
-		var tween = drone.create_tween()
-		tween.tween_property(drone, "scale", Vector2(1.0,1.0), 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		tween.tween_property(drone, "global_position", final_pos, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		tween.finished.connect(Callable(drone, "queue_free"))
+
+# ---------------- DEATH ----------------
+func die():
+	if finishing:
+		return
+
+	finishing = true
+	state = State.DEAD
+	can_shoot = false
+	flash_enabled = false
+
+	var tween = get_tree().create_tween()
+	tween.tween_property(sprite_node, "scale", Vector2.ZERO, 0.6)
+
+	await tween.finished
+	await explosion_storm()
+	queue_free()
+
+
+# ---------------- EXPLOSION STORM ----------------
+func explosion_storm():
+	if explosion_running:
+		return
+
+	explosion_running = true
+
+	var camera = get_viewport().get_camera_2d()
+	var screen_size = get_viewport().get_visible_rect().size
+
+	var timer := 0.0
+	var duration := 4.0
+
+	while timer < duration:
+
+		var explode = EXPLODE.instantiate()
+
+		var random_pos = Vector2(
+			randf_range(0, screen_size.x),
+			randf_range(0, screen_size.y)
+		)
+
+		explode.global_position = random_pos + camera.global_position - screen_size / 2
+
+		get_tree().current_scene.add_child(explode)
+
+		await get_tree().create_timer(0.08).timeout
+		timer += 0.08
