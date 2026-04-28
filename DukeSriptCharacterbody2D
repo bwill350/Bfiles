@@ -13,22 +13,23 @@ const GRAVITY = 5000
 enum State { IDLE, RUN, JUMP, CLIMB }
 var state: State = State.IDLE
 
-var health: int = 500
+var health: int = 5500
 var last_facing_dir = -1
 
-var aim_vector := Vector2.ZERO
 var _mouse_pos := Vector2.ZERO
-
-@onready var health_label = $HealthLabel
-@onready var anim: AnimatedSprite2D = $Sprite
-@onready var marker: Marker2D = $Marker2D
-@onready var marker2: Marker2D = $Marker2D
-@onready var hitbox: Area2D = $HitBox
-@onready var hit_sound = $HitSound
 
 signal Die
 signal health_changed(health)
 
+@onready var health_label = $HealthLabel
+@onready var anim: AnimatedSprite2D = $Sprite
+@onready var marker: Marker2D = $MarkerShoot
+@onready var marker2: Marker2D = $MarkerAim
+@onready var hitbox: Area2D = $HitBox
+@onready var hit_sound = $HitSound
+
+
+# ---------------- READY ----------------
 func _ready():
 	add_to_group("player")
 	add_to_group("Duke")
@@ -39,37 +40,38 @@ func _ready():
 	_mouse_pos = get_viewport().get_mouse_position()
 
 
+# ---------------- AIM ----------------
 func _process(delta):
+
+	var stick_input = Vector2(
+		Input.get_joy_axis(0, JOY_AXIS_RIGHT_X),
+		Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+	)
+
 	if enable_mouse_aim:
-		var stick_input = Vector2(
-			Input.get_joy_axis(0, JOY_AXIS_RIGHT_X),
-			Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
-		)
-
-		if stick_input.length() < stick_deadzone:
-			stick_input = Vector2.ZERO
-		else:
+		if stick_input.length() >= stick_deadzone:
 			stick_input = stick_input.normalized()
+			_mouse_pos += stick_input * stick_sensitivity * delta
+			_mouse_pos.x = clamp(_mouse_pos.x, 0, get_viewport().size.x)
+			_mouse_pos.y = clamp(_mouse_pos.y, 0, get_viewport().size.y)
 
-		_mouse_pos += stick_input * stick_sensitivity * delta
-		_mouse_pos.x = clamp(_mouse_pos.x, 0, get_viewport().get_visible_rect().size.x)
-		_mouse_pos.y = clamp(_mouse_pos.y, 0, get_viewport().get_visible_rect().size.y)
+	var aim_target: Vector2
 
-	marker.look_at(get_global_mouse_position())
+	if stick_input.length() >= stick_deadzone:
+		aim_target = get_viewport().get_canvas_transform().affine_inverse() * _mouse_pos
+	else:
+		aim_target = get_global_mouse_position()
+
+	marker2.look_at(aim_target)
 
 
+# ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
-	# ------------------------
-	# INPUT
-	# ------------------------
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
 	var on_wall = is_on_wall()
 
-	# ------------------------
-	# STATE DECISION
-	# ------------------------
 	if climb_pressed and not is_on_floor() and on_wall:
 		state = State.CLIMB
 	elif not is_on_floor():
@@ -79,27 +81,17 @@ func _physics_process(delta):
 	else:
 		state = State.IDLE
 
-	# ------------------------
-	# STATE BEHAVIOUR
-	# ------------------------
 	match state:
 
 		State.CLIMB:
 			velocity.y = -CLIMB_SPEED
 			velocity.x = input_dir * SPEED
-
-			if input_dir != 0:
-				last_facing_dir = sign(input_dir)
-
 			anim.play("climb")
-			anim.flip_h = last_facing_dir == -1
 
 		State.JUMP:
 			velocity.y += GRAVITY * delta
 			velocity.x = input_dir * SPEED
-
 			anim.play("jump")
-			anim.flip_h = last_facing_dir == -1
 
 		State.RUN:
 			velocity.y += GRAVITY * delta
@@ -107,31 +99,21 @@ func _physics_process(delta):
 
 			if input_dir == 1:
 				anim.play("move_right")
-				anim.flip_h = false
 				last_facing_dir = 1
-
 			elif input_dir == -1:
 				anim.play("move_left")
-				anim.flip_h = false
 				last_facing_dir = -1
 
 		State.IDLE:
 			velocity.y += GRAVITY * delta
 			velocity.x = 0
-
 			anim.play("Idle")
-			anim.flip_h = last_facing_dir == -1
 
-	# ------------------------
-	# JUMP INPUT
-	# ------------------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 		state = State.JUMP
 
-	# ------------------------
-	# SHOOTING (UNCHANGED)
-	# ------------------------
+	# ---------------- SHOOT ----------------
 	if Input.is_action_pressed("shoot"):
 		shoot()
 
@@ -147,94 +129,91 @@ func _physics_process(delta):
 	if Input.is_action_just_pressed("shootaroundleft"):
 		shootaroundleft()
 
+	if Input.is_action_just_pressed("shootburst"):
+		shootburst()
+
 	move_and_slide()
 
 
-# ------------------------
-# SHOOTING (UNCHANGED)
-# ------------------------
+# ---------------- SHOOTS ----------------
 func shoot():
-	var bullet_scene = preload("res://Scenes/Bullet.tscn")
-	var bullet = bullet_scene.instantiate()
+	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
 	bullet.global_position = marker.global_position
-	var direction = (marker2.global_position.direction_to(get_global_mouse_position())).normalized()
-	bullet.velocity = direction * bullet.speed
-	bullet.look_at(bullet.global_position + bullet.velocity)
-	get_tree().current_scene.add_child(bullet)
 
+	var dir = marker2.global_transform.x.normalized()
+	bullet.velocity = dir * bullet.speed
 
-func shootup():
-	var bullet_scene = preload("res://Scenes/Bullet.tscn")
-	var bullet = bullet_scene.instantiate()
-	bullet.global_position = marker.global_position
-	bullet.velocity = Vector2(0, -1) * bullet.speed
 	get_tree().current_scene.add_child(bullet)
 
 
 func shootright():
-	var bullet_scene = preload("res://Scenes/Bullet.tscn")
-	var bullet = bullet_scene.instantiate()
+	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
 	bullet.global_position = marker.global_position
-	bullet.velocity = Vector2(1, 0) * bullet.speed
+	bullet.velocity = Vector2.RIGHT * bullet.speed
 	get_tree().current_scene.add_child(bullet)
 
 
 func shootleft():
-	var bullet_scene = preload("res://Scenes/Bullet.tscn")
-	var bullet = bullet_scene.instantiate()
+	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
 	bullet.global_position = marker.global_position
-	bullet.velocity = Vector2(-1, 0) * bullet.speed
+	bullet.velocity = Vector2.LEFT * bullet.speed
 	get_tree().current_scene.add_child(bullet)
 
 
 func shootaroundright():
-	var bullet_scene = preload("res://Scenes/Bullet.tscn")
-	var bullet = bullet_scene.instantiate()
+	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
 	bullet.global_position = marker.global_position
 	bullet.velocity = Vector2(4, -6) * bullet.speed
 	get_tree().current_scene.add_child(bullet)
 
 
 func shootaroundleft():
-	var bullet_scene = preload("res://Scenes/Bullet.tscn")
-	var bullet = bullet_scene.instantiate()
+	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
 	bullet.global_position = marker.global_position
 	bullet.velocity = Vector2(-4, -6) * bullet.speed
 	get_tree().current_scene.add_child(bullet)
 
 
-# ------------------------
-# DAMAGE SYSTEM
-# ------------------------
-func _on_HitBox_area_entered(area: Area2D) -> void:
-	take_damage(1)
+func shootburst():
+	var burst = 8
+	var base = randf_range(0, TAU)
 
+	for i in range(burst):
+		var angle = base + (TAU / burst) * i
+
+		var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
+		bullet.global_position = global_position + Vector2(
+			randf_range(-260, 60),
+			randf_range(-260, 60)
+		)
+
+		bullet.velocity = Vector2.RIGHT.rotated(angle) * bullet.speed
+		get_tree().current_scene.add_child(bullet)
+
+
+# ---------------- DAMAGE ----------------
+func _on_HitBox_area_entered(area: Area2D):
 	if area.is_in_group("Bossonebullet"):
-		take_damage(1)
+		health -= 2
+	else:
+		health -= 1
 
-
-func take_damage(amount: int):
-	health -= amount
+	health = max(health, 0)
 	emit_signal("health_changed", health)
 
-	if hit_sound:
-		hit_sound.play()
-
-	flash_red()
+	flash_red() # <-- ADDED
 
 	if health <= 0:
-		get_tree().change_scene_to_file("res://Scenes/GameOver.tscn")
-
-
-func flash_red():
-	anim.modulate = Color(1, 0.2, 0.2)
-	await get_tree().create_timer(0.1).timeout
-	anim.modulate = Color(1, 1, 1)
+		die()
 
 
 func die():
-	print("died")
+	get_tree().change_scene_to_file("res://Scenes/GameOver.tscn")
 
 
-func _on_health_changed(value):
-	health_label.text = str(value)
+# ---------------- FLASH RED (ADDED) ----------------
+func flash_red():
+	modulate = Color(1, 0.3, 0.3)
+
+	var t = create_tween()
+	t.tween_property(self, "modulate", Color(1, 1, 1), 0.25)
