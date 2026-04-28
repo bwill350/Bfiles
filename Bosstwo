@@ -3,15 +3,21 @@ class_name Bosstwo
 
 signal health_changed(health)
 
-enum State { MOVE, PANIC, DEAD }
-var state: State = State.MOVE
+enum State { PHASE1, PHASE2, PHASE3, DEAD }
+var state: State = State.PHASE1
 
 @export var max_health: int = 250
 @export var total_lives: int = 7
+
 @export var move_speed: float = 120.0
 @export var gravity: float = 900.0
-@export var attack_delay: float = 1.5
-@export var panic_speed_multiplier: float = 1.6
+
+# Phase speeds
+@export var phase1_delay: float = 1.5
+@export var phase2_delay: float = 0.8
+@export var phase3_delay: float = 0.4
+
+@export var panic_speed_multiplier: float = 1.8
 
 var health: int
 var current_life: int = 1
@@ -21,14 +27,12 @@ var left_boundary: float
 var right_boundary: float
 
 var finishing := false
-var panic := false
 
-# SPIKES
-const SPIKE_ONE = preload("res://Scenes/Boss/BosstwoSpikeBallone.tscn")
-const SPIKE_TWO = preload("res://Scenes/Boss/BosstwoSpikeBalltwo.tscn")
+const SPIKE_ONE = preload("res://Scenes/Boss/Bosstwospikeballone.tscn")
+const SPIKE_TWO = preload("res://Scenes/Boss/Bosstwospikeballtwo.tscn")
 
 @onready var sprite_node: AnimatedSprite2D = $Sprite
-@onready var hit_area: Area2D = $Area2D   # ✅ THIS IS YOUR HIT DETECTOR
+@onready var hit_area: Area2D = $Area2D
 
 
 # ---------------- READY ----------------
@@ -39,41 +43,54 @@ func _ready():
 	left_boundary = position.x - 650
 	right_boundary = position.x + 650
 
-	# IMPORTANT: connect Area2D
 	hit_area.area_entered.connect(_on_area_entered)
 
-	start_attack_loop()
+	# IMPORTANT: start AFTER tree is ready
+	call_deferred("start_attack_loop")
 
 
 # ---------------- ATTACK LOOP ----------------
 func start_attack_loop():
 	while not finishing:
 
+		var delay = get_attack_delay()
+
 		shoot_one()
-		await get_tree().create_timer(attack_delay if not panic else 0.7).timeout
+		await get_tree().create_timer(delay).timeout
 
 		shoot_two()
-		await get_tree().create_timer(attack_delay if not panic else 0.7).timeout
+		await get_tree().create_timer(delay).timeout
 
 
-# ---------------- SPIKE 1 ----------------
+# ---------------- PHASE SPEED CONTROL ----------------
+func get_attack_delay() -> float:
+	match state:
+		State.PHASE1:
+			return phase1_delay
+		State.PHASE2:
+			return phase2_delay
+		State.PHASE3:
+			return phase3_delay
+	return 1.0
+
+
+# ---------------- SPIKES ----------------
 func shoot_one():
 	if finishing:
 		return
 
 	var spike = SPIKE_ONE.instantiate()
 	spike.global_position = global_position
-	get_tree().current_scene.add_child(spike)
+	get_tree().current_scene.call_deferred("add_child", spike)
 
 
-# ---------------- SPIKE 2 ----------------
 func shoot_two():
 	if finishing:
 		return
 
 	var spike = SPIKE_TWO.instantiate()
 	spike.global_position = global_position
-	get_tree().current_scene.add_child(spike)
+	get_tree().current_scene.call_deferred("add_child", spike)
 
 
 # ---------------- MOVEMENT ----------------
@@ -81,7 +98,11 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	var speed = move_speed * (panic_speed_multiplier if panic else 1.0)
+	var speed = move_speed
+
+	# Phase 3 = rage speed boost
+	if state == State.PHASE3:
+		speed *= panic_speed_multiplier
 
 	if not is_on_floor():
 		velocity.y += gravity * delta
@@ -116,13 +137,23 @@ func take_damage(amount: int):
 
 	health_changed.emit(health)
 
-	# PANIC MODE ON LAST LIFE
-	if current_life == total_lives - 1:
-		panic = true
-		state = State.PANIC
+	update_phase()
 
 	if health <= 0:
 		call_deferred("next_life")
+
+
+# ---------------- PHASE SYSTEM ----------------
+func update_phase():
+
+	if current_life >= total_lives * 0.7:
+		state = State.PHASE1
+
+	elif current_life >= total_lives * 0.4:
+		state = State.PHASE2
+
+	else:
+		state = State.PHASE3   # final rage
 
 
 # ---------------- LIFE SYSTEM ----------------
@@ -144,19 +175,16 @@ func die():
 
 	finishing = true
 	state = State.DEAD
-	panic = false
 
 	await final_flash()
 
 	queue_free()
 
 
-# ---------------- FINAL FLASH (GUARANTEED) ----------------
+# ---------------- FINAL FLASH ----------------
 func final_flash():
 	sprite_node.modulate = Color(1, 0.2, 0.2)
-
 	await get_tree().create_timer(0.25).timeout
 
 	sprite_node.modulate = Color(1, 1, 1)
-
 	await get_tree().create_timer(0.1).timeout
