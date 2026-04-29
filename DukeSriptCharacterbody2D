@@ -20,6 +20,20 @@ var _mouse_pos := Vector2.ZERO
 
 signal Die
 signal health_changed(health)
+signal combo_used(combo_name: String)
+
+# ---------------- COMBO SYSTEM ----------------
+var combo := []
+var combo_timer := 0.0
+@export var combo_reset_time := 0.6
+
+const FIRE_COMBO = ["down", "right", "shoot"]
+const ICE_COMBO = ["left", "left", "shoot"]
+const ELECTRIC_COMBO = ["up", "down", "shoot"]
+
+# 🎨 CURRENT STATUS COLOR STATE
+var locked_color := Color(1, 1, 1)
+var color_locked := false
 
 @onready var health_label = $HealthLabel
 @onready var anim: AnimatedSprite2D = $Sprite
@@ -35,6 +49,7 @@ func _ready():
 	add_to_group("Duke")
 
 	hitbox.area_entered.connect(_on_HitBox_area_entered)
+	combo_used.connect(_on_combo_used)
 
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_mouse_pos = get_viewport().get_mouse_position()
@@ -42,6 +57,8 @@ func _ready():
 
 # ---------------- AIM ----------------
 func _process(delta):
+
+	handle_combo(delta)
 
 	var stick_input = Vector2(
 		Input.get_joy_axis(0, JOY_AXIS_RIGHT_X),
@@ -65,12 +82,75 @@ func _process(delta):
 	marker2.look_at(aim_target)
 
 
+# ---------------- COMBO ----------------
+func handle_combo(delta):
+	combo_timer += delta
+
+	if combo_timer > combo_reset_time:
+		combo.clear()
+
+
+func register_input(input: String):
+	combo.append(input)
+	combo_timer = 0.0
+	check_combos()
+
+
+func check_combos():
+
+	if combo == FIRE_COMBO:
+		combo_used.emit("fire")
+		combo.clear()
+
+	elif combo == ICE_COMBO:
+		combo_used.emit("ice")
+		combo.clear()
+
+	elif combo == ELECTRIC_COMBO:
+		combo_used.emit("electric")
+		combo.clear()
+
+
+# ---------------- COLOR LOCK ----------------
+func _on_combo_used(combo_name: String):
+
+	color_locked = true
+
+	match combo_name:
+		"fire":
+			locked_color = Color(1, 0.3, 0.3) # red
+
+		"ice":
+			locked_color = Color(0.3, 0.6, 1.0) # blue
+
+		"electric":
+			locked_color = Color(1, 1, 1) # white
+
+	modulate = locked_color
+
+
+# ---------------- CLEAR COLOR ON INPUT ----------------
+func clear_color_lock():
+	if color_locked:
+		color_locked = false
+		modulate = Color(1, 1, 1)
+
+
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
 	var on_wall = is_on_wall()
+
+	# 🎮 CLEAR COLOR WHEN MOVING OR JUMPING
+	if Input.is_action_just_pressed("left") \
+	or Input.is_action_just_pressed("right") \
+	or Input.is_action_just_pressed("jump"):
+		clear_color_lock()
+
+	if input_dir != 0:
+		last_facing_dir = input_dir
 
 	if climb_pressed and not is_on_floor() and on_wall:
 		state = State.CLIMB
@@ -97,21 +177,24 @@ func _physics_process(delta):
 			velocity.y += GRAVITY * delta
 			velocity.x = input_dir * SPEED
 
-			if input_dir == 1:
+			if input_dir > 0:
 				anim.play("move_right")
-				last_facing_dir = 1
-			elif input_dir == -1:
-				anim.play("move_left")
-				last_facing_dir = -1
+				anim.flip_h = false
+			elif input_dir < 0:
+				anim.play("move_right")
+				anim.flip_h = true
 
 		State.IDLE:
 			velocity.y += GRAVITY * delta
 			velocity.x = 0
+
 			anim.play("Idle")
+			anim.flip_h = last_facing_dir == -1
 
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 		state = State.JUMP
+		clear_color_lock()
 
 	# ---------------- SHOOT ----------------
 	if Input.is_action_pressed("shoot"):
@@ -135,7 +218,21 @@ func _physics_process(delta):
 	move_and_slide()
 
 
-# ---------------- SHOOTS ----------------
+# ---------------- INPUT HOOK ----------------
+func _unhandled_input(event):
+	if event.is_action_pressed("up"):
+		register_input("up")
+	elif event.is_action_pressed("down"):
+		register_input("down")
+	elif event.is_action_pressed("left"):
+		register_input("left")
+	elif event.is_action_pressed("right"):
+		register_input("right")
+	elif event.is_action_pressed("shoot"):
+		register_input("shoot")
+
+
+# ---------------- SHOOT ----------------
 func shoot():
 	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
 	bullet.global_position = marker.global_position
@@ -201,19 +298,9 @@ func _on_HitBox_area_entered(area: Area2D):
 	health = max(health, 0)
 	emit_signal("health_changed", health)
 
-	flash_red() # <-- ADDED
-
 	if health <= 0:
 		die()
 
 
 func die():
 	get_tree().change_scene_to_file("res://Scenes/GameOver.tscn")
-
-
-# ---------------- FLASH RED (ADDED) ----------------
-func flash_red():
-	modulate = Color(1, 0.3, 0.3)
-
-	var t = create_tween()
-	t.tween_property(self, "modulate", Color(1, 1, 1), 0.25)
