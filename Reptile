@@ -1,0 +1,281 @@
+extends CharacterBody2D
+class_name Reptile
+
+signal health_changed(health)
+
+enum State { PATROL, AGGRESSIVE, DEAD }
+enum DeathType { NORMAL, FIRE, ICE, ELECTRIC, FATALITY_1, FATALITY_2, FATALITY_3 }
+
+var state: State = State.PATROL
+
+@export var max_health: int = 300
+@export var move_speed: float = 80.0
+@export var aggressive_speed: float = 160.0
+@export var shoot_interval: float = 2.0
+@export var phase_interval: float = 5.0
+
+var health: int
+var direction := -1
+
+const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
+
+# 💀 Death scenes
+const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
+const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
+const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
+
+const FATALITY_1 = preload("res://Deaths/Fatality1.tscn")
+const FATALITY_2 = preload("res://Deaths/Fatality2.tscn")
+const FATALITY_3 = preload("res://Deaths/Fatality3.tscn")
+
+@onready var sprite: AnimatedSprite2D = $Sprite
+@onready var hit_sound: AudioStreamPlayer2D = $Hit
+@onready var hit_box: Area2D = $HitBox
+@onready var shoot_timer: Timer = $ShootTimer
+@onready var phase_timer: Timer = $PhaseTimer
+@onready var flash_timer: Timer = $HitFlashTimer
+@onready var shoot_marker: Marker2D = $Reptileshoot
+
+var left_boundary: float
+var right_boundary: float
+
+# ---------------- COMBO SYSTEM ----------------
+var combo := []
+var combo_timer := 0.0
+@export var combo_reset_time: float = 0.6
+
+const FIRE_COMBO = ["down", "right", "shoot"]
+const ICE_COMBO = ["left", "left", "shoot"]
+const ELECTRIC_COMBO = ["up", "down", "shoot"]
+
+
+# ---------------- READY ----------------
+func _ready():
+	add_to_group("enemy")
+
+	health = max_health
+	sprite.play("idle")
+
+	left_boundary = global_position.x - 300
+	right_boundary = global_position.x + 300
+
+	hit_box.area_entered.connect(_on_hit_box_area_entered)
+
+	shoot_timer.wait_time = shoot_interval
+	shoot_timer.timeout.connect(shoot_player)
+	shoot_timer.start()
+
+	phase_timer.wait_time = phase_interval
+	phase_timer.timeout.connect(change_state)
+	phase_timer.start()
+
+	flash_timer.timeout.connect(_end_flash)
+
+
+# ---------------- UPDATE ----------------
+func _process(delta):
+	handle_combo(delta)
+
+
+# ---------------- MOVEMENT ----------------
+func _physics_process(delta):
+	if state == State.DEAD:
+		return
+
+	var speed = move_speed if state == State.PATROL else aggressive_speed
+
+	velocity.x = direction * speed
+	move_and_slide()
+
+	_update_animation()
+
+	if global_position.x < left_boundary:
+		direction = 1
+		sprite.flip_h = false
+	elif global_position.x > right_boundary:
+		direction = -1
+		sprite.flip_h = true
+
+
+# ---------------- ANIMATION ----------------
+func _update_animation():
+	if state == State.DEAD:
+		return
+
+	if abs(velocity.x) > 1:
+		sprite.play("walk")
+	else:
+		sprite.play("idle")
+
+
+# ---------------- STATE ----------------
+func change_state():
+	if state == State.DEAD:
+		return
+
+	state = State.AGGRESSIVE if state == State.PATROL else State.PATROL
+
+
+# ---------------- SHOOT (MARKER AIM) ----------------
+func shoot_player():
+	if state == State.DEAD:
+		return
+
+	var players = get_tree().get_nodes_in_group("player")
+	if players.is_empty():
+		return
+
+	var player = players[0]
+
+	var dir = (player.global_position - shoot_marker.global_position).normalized()
+
+	var bullet = BULLET_SCENE.instantiate()
+	bullet.global_position = shoot_marker.global_position
+
+	if "velocity" in bullet:
+		bullet.velocity = dir * bullet.speed
+
+	bullet.rotation = dir.angle()
+
+	get_tree().current_scene.add_child(bullet)
+
+
+# ---------------- DAMAGE ----------------
+func _on_hit_box_area_entered(area):
+	if area == null:
+		return
+
+	if area.is_in_group("Bullet"):
+		area.queue_free()
+		take_damage(10)
+
+
+func take_damage(amount: int):
+	if state == State.DEAD:
+		return
+
+	hit_sound.play()
+	sprite.play("hurt")
+
+	health -= amount
+	health = max(health, 0)
+
+	health_changed.emit(health)
+
+	sprite.modulate = Color(1, 0, 0)
+	flash_timer.start(0.12)
+
+	if health <= 0:
+		die()
+
+
+func _end_flash():
+	sprite.modulate = Color(1, 1, 1)
+
+
+# ---------------- DEATH ----------------
+func die():
+	if state == State.DEAD:
+		return
+
+	state = State.DEAD
+	shoot_timer.stop()
+	phase_timer.stop()
+
+	velocity = Vector2.ZERO
+
+	play_death(get_random_death())
+
+
+func get_random_death() -> DeathType:
+	var roll = randi() % 100
+
+	if roll < 40:
+		return DeathType.NORMAL
+	elif roll < 60:
+		return DeathType.FIRE
+	elif roll < 75:
+		return DeathType.ICE
+	elif roll < 85:
+		return DeathType.ELECTRIC
+	elif roll < 92:
+		return DeathType.FATALITY_1
+	elif roll < 97:
+		return DeathType.FATALITY_2
+	else:
+		return DeathType.FATALITY_3
+
+
+func play_death(type: DeathType):
+	var death_instance
+
+	match type:
+		DeathType.NORMAL:
+			queue_free()
+			return
+
+		DeathType.FIRE:
+			death_instance = FIRE_DEATH.instantiate()
+
+		DeathType.ICE:
+			death_instance = ICE_DEATH.instantiate()
+
+		DeathType.ELECTRIC:
+			death_instance = ELECTRIC_DEATH.instantiate()
+
+		DeathType.FATALITY_1:
+			death_instance = FATALITY_1.instantiate()
+
+		DeathType.FATALITY_2:
+			death_instance = FATALITY_2.instantiate()
+
+		DeathType.FATALITY_3:
+			death_instance = FATALITY_3.instantiate()
+
+	if death_instance:
+		death_instance.global_position = global_position
+		get_tree().current_scene.add_child(death_instance)
+
+	queue_free()
+
+
+# ---------------- COMBO SYSTEM ----------------
+func handle_combo(delta):
+	combo_timer += delta
+
+	if combo_timer > combo_reset_time:
+		combo.clear()
+
+
+func register_input(input: String):
+	combo.append(input)
+	combo_timer = 0.0
+
+	check_combos()
+
+
+func check_combos():
+
+	if combo == FIRE_COMBO:
+		trigger_fire_combo()
+		combo.clear()
+
+	elif combo == ICE_COMBO:
+		trigger_ice_combo()
+		combo.clear()
+
+	elif combo == ELECTRIC_COMBO:
+		trigger_electric_combo()
+		combo.clear()
+
+
+func trigger_fire_combo():
+	print("FIRE COMBO")
+
+
+func trigger_ice_combo():
+	print("ICE COMBO")
+
+
+func trigger_electric_combo():
+	print("ELECTRIC COMBO")
