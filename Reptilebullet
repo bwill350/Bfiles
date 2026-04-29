@@ -1,0 +1,35 @@
+extends Area2D
+class_name Reptilebullet
+
+@export var speed: float = 600.0
+
+var velocity: Vector2 = Vector2.LEFT * 600.0  # 🔥 always fires left
+
+
+func _ready():
+	$Timer.start()
+
+	# force left direction no matter what is set
+	velocity = Vector2.LEFT * speed
+
+	rotation = velocity.angle()
+
+
+func _physics_process(delta):
+	global_position += velocity * delta
+
+
+# ---------------- HIT ----------------
+func _on_area_entered(area: Area2D) -> void:
+	if area == null:
+		return
+
+	# hit enemy
+	if area.is_in_group("enemy"):
+		velocity = Vector2.ZERO
+		$Timer.start()
+
+
+# ---------------- CLEANUP ----------------
+func _on_timer_timeout() -> void:
+	queue_free()
