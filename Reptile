@@ -48,7 +48,6 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
-
 # ---------------- READY ----------------
 func _ready():
 	add_to_group("enemy")
@@ -56,8 +55,8 @@ func _ready():
 	health = max_health
 	sprite.play("idle")
 
-	left_boundary = global_position.x - 300
-	right_boundary = global_position.x + 300
+	left_boundary = global_position.x - 0
+	right_boundary = global_position.x + 0
 
 	hit_box.area_entered.connect(_on_hit_box_area_entered)
 
@@ -71,42 +70,27 @@ func _ready():
 
 	flash_timer.timeout.connect(_end_flash)
 
-
 # ---------------- UPDATE ----------------
 func _process(delta):
 	handle_combo(delta)
 
-
-# ---------------- MOVEMENT ----------------
+# ---------------- MOVEMENT (FIXED: NO MOVEMENT) ----------------
 func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	var speed = move_speed if state == State.PATROL else aggressive_speed
-
-	velocity.x = direction * speed
+	# ❌ Reptile does NOT move anymore
+	velocity = Vector2.ZERO
 	move_and_slide()
 
 	_update_animation()
-
-	if global_position.x < left_boundary:
-		direction = 1
-		sprite.flip_h = false
-	elif global_position.x > right_boundary:
-		direction = -1
-		sprite.flip_h = true
-
 
 # ---------------- ANIMATION ----------------
 func _update_animation():
 	if state == State.DEAD:
 		return
 
-	if abs(velocity.x) > 1:
-		sprite.play("walk")
-	else:
-		sprite.play("idle")
-
+	sprite.play("idle")
 
 # ---------------- STATE ----------------
 func change_state():
@@ -114,7 +98,6 @@ func change_state():
 		return
 
 	state = State.AGGRESSIVE if state == State.PATROL else State.PATROL
-
 
 # ---------------- SHOOT (MARKER AIM) ----------------
 func shoot_player():
@@ -139,7 +122,6 @@ func shoot_player():
 
 	get_tree().current_scene.add_child(bullet)
 
-
 # ---------------- DAMAGE ----------------
 func _on_hit_box_area_entered(area):
 	if area == null:
@@ -148,7 +130,6 @@ func _on_hit_box_area_entered(area):
 	if area.is_in_group("Bullet"):
 		area.queue_free()
 		take_damage(10)
-
 
 func take_damage(amount: int):
 	if state == State.DEAD:
@@ -168,10 +149,8 @@ func take_damage(amount: int):
 	if health <= 0:
 		die()
 
-
 func _end_flash():
 	sprite.modulate = Color(1, 1, 1)
-
 
 # ---------------- DEATH ----------------
 func die():
@@ -185,7 +164,6 @@ func die():
 	velocity = Vector2.ZERO
 
 	play_death(get_random_death())
-
 
 func get_random_death() -> DeathType:
 	var roll = randi() % 100
@@ -204,7 +182,6 @@ func get_random_death() -> DeathType:
 		return DeathType.FATALITY_2
 	else:
 		return DeathType.FATALITY_3
-
 
 func play_death(type: DeathType):
 	var death_instance
@@ -238,7 +215,6 @@ func play_death(type: DeathType):
 
 	queue_free()
 
-
 # ---------------- COMBO SYSTEM ----------------
 func handle_combo(delta):
 	combo_timer += delta
@@ -246,16 +222,12 @@ func handle_combo(delta):
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
-
 func register_input(input: String):
 	combo.append(input)
 	combo_timer = 0.0
-
 	check_combos()
 
-
 func check_combos():
-
 	if combo == FIRE_COMBO:
 		trigger_fire_combo()
 		combo.clear()
@@ -268,14 +240,11 @@ func check_combos():
 		trigger_electric_combo()
 		combo.clear()
 
-
 func trigger_fire_combo():
 	print("FIRE COMBO")
 
-
 func trigger_ice_combo():
 	print("ICE COMBO")
-
 
 func trigger_electric_combo():
 	print("ELECTRIC COMBO")
