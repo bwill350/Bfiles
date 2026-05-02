@@ -19,7 +19,6 @@ var direction := -1
 
 const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
 
-# 💀 Death scenes
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
@@ -39,7 +38,6 @@ const FATALITY_3 = preload("res://Deaths/Fatality3.tscn")
 var left_boundary: float
 var right_boundary: float
 
-# ---------------- COMBO SYSTEM ----------------
 var combo := []
 var combo_timer := 0.0
 @export var combo_reset_time: float = 0.6
@@ -48,15 +46,14 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
-# ---------------- READY ----------------
 func _ready():
+	sprite.play("idle")
 	add_to_group("enemy")
 
 	health = max_health
-	sprite.play("idle")
 
-	left_boundary = global_position.x - 0
-	right_boundary = global_position.x + 0
+	left_boundary = global_position.x
+	right_boundary = global_position.x
 
 	hit_box.area_entered.connect(_on_hit_box_area_entered)
 
@@ -70,39 +67,30 @@ func _ready():
 
 	flash_timer.timeout.connect(_end_flash)
 
-# ---------------- UPDATE ----------------
 func _process(delta):
 	handle_combo(delta)
 
-# ---------------- MOVEMENT (FIXED: NO MOVEMENT) ----------------
-func _physics_process(delta):
+func _physics_process(_delta):
 	if state == State.DEAD:
 		return
 
-	# ❌ Reptile does NOT move anymore
 	velocity = Vector2.ZERO
 	move_and_slide()
 
-	_update_animation()
-
-# ---------------- ANIMATION ----------------
-func _update_animation():
-	if state == State.DEAD:
-		return
-
 	sprite.play("idle")
 
-# ---------------- STATE ----------------
 func change_state():
 	if state == State.DEAD:
 		return
 
 	state = State.AGGRESSIVE if state == State.PATROL else State.PATROL
 
-# ---------------- SHOOT (MARKER AIM) ----------------
+# ---------------- SHOOT (GREEN BULLETS) ----------------
 func shoot_player():
 	if state == State.DEAD:
 		return
+
+	sprite.play("shoot")
 
 	var players = get_tree().get_nodes_in_group("player")
 	if players.is_empty():
@@ -115,6 +103,10 @@ func shoot_player():
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = shoot_marker.global_position
 
+	# 🔥 GREEN BULLET FIX
+	if "modulate" in bullet:
+		bullet.modulate = Color(0.2, 1, 0.2)
+
 	if "velocity" in bullet:
 		bullet.velocity = dir * bullet.speed
 
@@ -122,32 +114,35 @@ func shoot_player():
 
 	get_tree().current_scene.add_child(bullet)
 
-# ---------------- DAMAGE ----------------
 func _on_hit_box_area_entered(area):
-	if area == null:
-		return
-
-	if area.is_in_group("Bullet"):
+	if area and area.is_in_group("Bullet"):
+		$Sprite.play("hurt")
 		area.queue_free()
 		take_damage(10)
 
+# ---------------- DAMAGE SYSTEM ----------------
 func take_damage(amount: int):
 	if state == State.DEAD:
 		return
 
 	hit_sound.play()
-	sprite.play("hurt")
 
 	health -= amount
 	health = max(health, 0)
-
 	health_changed.emit(health)
+
+	sprite.play("hurt")
 
 	sprite.modulate = Color(1, 0, 0)
 	flash_timer.start(0.12)
 
+	await get_tree().create_timer(0.15).timeout
+
 	if health <= 0:
 		die()
+		return
+
+	sprite.play("idle")
 
 func _end_flash():
 	sprite.modulate = Color(1, 1, 1)
@@ -231,11 +226,9 @@ func check_combos():
 	if combo == FIRE_COMBO:
 		trigger_fire_combo()
 		combo.clear()
-
 	elif combo == ICE_COMBO:
 		trigger_ice_combo()
 		combo.clear()
-
 	elif combo == ELECTRIC_COMBO:
 		trigger_electric_combo()
 		combo.clear()
