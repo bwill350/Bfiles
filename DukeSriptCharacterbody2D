@@ -31,9 +31,12 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
-# 🎨 CURRENT STATUS COLOR STATE
 var locked_color := Color(1, 1, 1)
 var color_locked := false
+
+# 🔴 FLASH SYSTEM (ONLY ADDITION)
+var flashing := false
+var original_modulate := Color.WHITE
 
 @onready var health_label = $HealthLabel
 @onready var anim: AnimatedSprite2D = $Sprite
@@ -85,7 +88,6 @@ func _process(delta):
 # ---------------- COMBO ----------------
 func handle_combo(delta):
 	combo_timer += delta
-
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
@@ -97,15 +99,12 @@ func register_input(input: String):
 
 
 func check_combos():
-
 	if combo == FIRE_COMBO:
 		combo_used.emit("fire")
 		combo.clear()
-
 	elif combo == ICE_COMBO:
 		combo_used.emit("ice")
 		combo.clear()
-
 	elif combo == ELECTRIC_COMBO:
 		combo_used.emit("electric")
 		combo.clear()
@@ -113,27 +112,39 @@ func check_combos():
 
 # ---------------- COLOR LOCK ----------------
 func _on_combo_used(combo_name: String):
-
 	color_locked = true
 
 	match combo_name:
 		"fire":
-			locked_color = Color(1, 0.3, 0.3) # red
-
+			locked_color = Color(1, 0.3, 0.3)
 		"ice":
-			locked_color = Color(0.3, 0.6, 1.0) # blue
-
+			locked_color = Color(0.3, 0.6, 1.0)
 		"electric":
-			locked_color = Color(1, 1, 1) # white
+			locked_color = Color(1, 1, 1)
 
 	modulate = locked_color
 
 
-# ---------------- CLEAR COLOR ON INPUT ----------------
 func clear_color_lock():
 	if color_locked:
 		color_locked = false
 		modulate = Color(1, 1, 1)
+
+
+# ---------------- 🔴 FLASH RED (ADDED ONLY) ----------------
+func flash_red():
+	if flashing:
+		return
+
+	flashing = true
+	original_modulate = modulate
+
+	modulate = Color(1, 0, 0)
+
+	await get_tree().create_timer(0.08).timeout
+
+	modulate = original_modulate
+	flashing = false
 
 
 # ---------------- PHYSICS ----------------
@@ -143,7 +154,6 @@ func _physics_process(delta):
 	var climb_pressed = Input.is_action_pressed("climb")
 	var on_wall = is_on_wall()
 
-	# 🎮 CLEAR COLOR WHEN MOVING OR JUMPING
 	if Input.is_action_just_pressed("left") \
 	or Input.is_action_just_pressed("right") \
 	or Input.is_action_just_pressed("jump"):
@@ -162,7 +172,6 @@ func _physics_process(delta):
 		state = State.IDLE
 
 	match state:
-
 		State.CLIMB:
 			velocity.y = -CLIMB_SPEED
 			velocity.x = input_dir * SPEED
@@ -187,7 +196,6 @@ func _physics_process(delta):
 		State.IDLE:
 			velocity.y += GRAVITY * delta
 			velocity.x = 0
-
 			anim.play("Idle")
 			anim.flip_h = last_facing_dir == -1
 
@@ -196,7 +204,7 @@ func _physics_process(delta):
 		state = State.JUMP
 		clear_color_lock()
 
-	# ---------------- SHOOT ----------------
+	# ---------------- SHOOT (ALL KEPT) ----------------
 	if Input.is_action_pressed("shoot"):
 		shoot()
 
@@ -232,7 +240,7 @@ func _unhandled_input(event):
 		register_input("shoot")
 
 
-# ---------------- SHOOT ----------------
+# ---------------- SHOOT FUNCTIONS (UNCHANGED) ----------------
 func shoot():
 	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
 	bullet.global_position = marker.global_position
@@ -290,6 +298,9 @@ func shootburst():
 
 # ---------------- DAMAGE ----------------
 func _on_HitBox_area_entered(area: Area2D):
+
+	flash_red() # 🔴 ADDED ONLY
+
 	if area.is_in_group("Bossonebullet"):
 		health -= 2
 	else:
