@@ -11,8 +11,7 @@ var is_shooting := false
 var can_shoot := false
 
 var current_anim := ""
-
-var facing := -1 # 🔥 -1 left, 1 right
+var facing := -1 # -1 left, 1 right
 
 @export var max_health: int = 300
 @export var move_speed: float = 140.0
@@ -28,6 +27,10 @@ const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
 @onready var shoot_timer: Timer = $ShootTimer
 @onready var flash_timer: Timer = $HitFlashTimer
 @onready var shoot_marker: Marker2D = $Reptileshoot
+
+# ---------------- DAMAGE COOLDOWN FIX ----------------
+var damage_cooldown := 0.0
+@export var damage_cooldown_time := 0.25
 
 
 # ---------------- READY ----------------
@@ -47,10 +50,14 @@ func _ready():
 	flash_timer.timeout.connect(_end_flash)
 
 
-# ---------------- CHASE ----------------
-func _physics_process(_delta):
+# ---------------- PHYSICS (CHASE DUKE) ----------------
+func _physics_process(delta):
 	if state == State.DEAD:
 		return
+
+	# cooldown timer
+	if damage_cooldown > 0:
+		damage_cooldown -= delta
 
 	var players = get_tree().get_nodes_in_group("player")
 	if players.is_empty():
@@ -63,16 +70,16 @@ func _physics_process(_delta):
 	velocity = dir * move_speed
 	move_and_slide()
 
-	# 🔥 UPDATE FACING
+	# facing fix
 	if dir.x != 0:
 		facing = 1 if dir.x > 0 else -1
-		sprite.flip_h = facing == 1   # OPPOSITE LOOK FIX (your style kept)
+		sprite.flip_h = facing == 1
 
 	if not is_hurting and not is_shooting:
 		play_anim("walk")
 
 
-# ---------------- SHOOT (SYNCED) ----------------
+# ---------------- SHOOT SYSTEM ----------------
 func shoot_player():
 	if state == State.DEAD:
 		return
@@ -86,11 +93,21 @@ func shoot_player():
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = shoot_marker.global_position
 
-	# 🔥 FIXED SHOOT DIRECTION (matches facing)
-	var dir = Vector2(facing, 0)
+	# direction toward Duke
+	var players = get_tree().get_nodes_in_group("player")
+	if players.is_empty():
+		return
 
+	var player = players[0]
+	var dir = (player.global_position - shoot_marker.global_position).normalized()
+
+	# keep your bullet system intact
 	if "velocity" in bullet:
 		bullet.velocity = dir * bullet.speed
+
+	# GREEN BULLET FIX
+	if "modulate" in bullet:
+		bullet.modulate = Color(0.2, 1, 0.2)
 
 	bullet.rotation = dir.angle()
 
@@ -117,10 +134,16 @@ func _on_hit_box_area_entered(area):
 		take_damage(10)
 
 
-# ---------------- DAMAGE ----------------
+# ---------------- DAMAGE (FIXED - NO STUCK STATE) ----------------
 func take_damage(amount: int):
 	if state == State.DEAD:
 		return
+
+	# cooldown prevents spam but NEVER breaks detection
+	if damage_cooldown > 0:
+		return
+
+	damage_cooldown = damage_cooldown_time
 
 	hit_sound.play()
 
@@ -151,6 +174,9 @@ func _end_flash():
 
 # ---------------- DEATH ----------------
 func die():
+	if state == State.DEAD:
+		return
+
 	state = State.DEAD
 	shoot_timer.stop()
 	velocity = Vector2.ZERO
