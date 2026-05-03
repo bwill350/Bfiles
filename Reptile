@@ -4,57 +4,39 @@ class_name Reptile
 signal health_changed(health)
 
 enum State { PATROL, AGGRESSIVE, DEAD }
-enum DeathType { NORMAL, FIRE, ICE, ELECTRIC, FATALITY_1, FATALITY_2, FATALITY_3 }
 
 var state: State = State.PATROL
 var is_hurting := false
 var is_shooting := false
 var can_shoot := false
 
+var current_anim := ""
+
+var facing := -1 # 🔥 -1 left, 1 right
+
 @export var max_health: int = 300
-@export var move_speed: float = 80.0
-@export var aggressive_speed: float = 160.0
+@export var move_speed: float = 140.0
 @export var shoot_interval: float = 2.0
-@export var phase_interval: float = 5.0
 
 var health: int
-var direction := -1
 
 const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
-
-const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
-const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
-const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
-
-const FATALITY_1 = preload("res://Deaths/Fatality1.tscn")
-const FATALITY_2 = preload("res://Deaths/Fatality2.tscn")
-const FATALITY_3 = preload("res://Deaths/Fatality3.tscn")
 
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hit_box: Area2D = $HitBox
 @onready var shoot_timer: Timer = $ShootTimer
-@onready var phase_timer: Timer = $PhaseTimer
 @onready var flash_timer: Timer = $HitFlashTimer
 @onready var shoot_marker: Marker2D = $Reptileshoot
-
-var combo := []
-var combo_timer := 0.0
-@export var combo_reset_time: float = 0.6
-
-const FIRE_COMBO = ["down", "right", "shoot"]
-const ICE_COMBO = ["left", "left", "shoot"]
-const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
 
 # ---------------- READY ----------------
 func _ready():
-	sprite.play("idle")
 	add_to_group("enemy")
 
 	health = max_health
+	play_anim("idle")
 
-	# ✅ FIXED SIGNALS (IMPORTANT)
 	hit_box.area_entered.connect(_on_hit_box_area_entered)
 	hit_box.body_entered.connect(_on_hit_box_body_entered)
 
@@ -62,36 +44,35 @@ func _ready():
 	shoot_timer.timeout.connect(shoot_player)
 	shoot_timer.start()
 
-	phase_timer.wait_time = phase_interval
-	phase_timer.timeout.connect(change_state)
-	phase_timer.start()
-
 	flash_timer.timeout.connect(_end_flash)
 
 
-func _process(delta):
-	handle_combo(delta)
-
-
+# ---------------- CHASE ----------------
 func _physics_process(_delta):
 	if state == State.DEAD:
 		return
 
-	velocity = Vector2.ZERO
-	move_and_slide()
-
-	if not is_hurting and not is_shooting:
-		sprite.play("idle")
-
-
-func change_state():
-	if state == State.DEAD:
+	var players = get_tree().get_nodes_in_group("player")
+	if players.is_empty():
 		return
 
-	state = State.AGGRESSIVE if state == State.PATROL else State.PATROL
+	var player = players[0]
+
+	var dir = (player.global_position - global_position).normalized()
+
+	velocity = dir * move_speed
+	move_and_slide()
+
+	# 🔥 UPDATE FACING
+	if dir.x != 0:
+		facing = 1 if dir.x > 0 else -1
+		sprite.flip_h = facing == 1   # OPPOSITE LOOK FIX (your style kept)
+
+	if not is_hurting and not is_shooting:
+		play_anim("walk")
 
 
-# ---------------- SHOOT ----------------
+# ---------------- SHOOT (SYNCED) ----------------
 func shoot_player():
 	if state == State.DEAD:
 		return
@@ -100,18 +81,13 @@ func shoot_player():
 		return
 
 	is_shooting = true
-	sprite.play("shoot")
-
-	var players = get_tree().get_nodes_in_group("player")
-	if players.is_empty():
-		return
-
-	var player = players[0]
-
-	var dir = (player.global_position - shoot_marker.global_position).normalized()
+	play_anim("shoot")
 
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = shoot_marker.global_position
+
+	# 🔥 FIXED SHOOT DIRECTION (matches facing)
+	var dir = Vector2(facing, 0)
 
 	if "velocity" in bullet:
 		bullet.velocity = dir * bullet.speed
@@ -125,29 +101,20 @@ func shoot_player():
 	is_shooting = false
 
 	if state != State.DEAD and not is_hurting:
-		sprite.play("idle")
+		play_anim("idle")
 
 
-# ---------------- HITBOX (AREA = BULLETS ETC) ----------------
-func _on_hit_box_area_entered(area):
-	if area == null:
-		return
-
-	if area.is_in_group("Bullet"):
-		area.queue_free()
-		take_damage(10)
-
-
-# ---------------- HITBOX (BODY = DUKE FIX) ----------------
+# ---------------- DETECTION ----------------
 func _on_hit_box_body_entered(body):
-	if body == null:
-		return
-
-	# ✅ DUKE DETECTION FIX
 	if body.is_in_group("player"):
 		can_shoot = true
 		shoot_player()
-		return
+
+
+func _on_hit_box_area_entered(area):
+	if area.is_in_group("Bullet"):
+		area.queue_free()
+		take_damage(10)
 
 
 # ---------------- DAMAGE ----------------
@@ -162,7 +129,7 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 
 	is_hurting = true
-	sprite.play("hurt")
+	play_anim("hurt")
 
 	sprite.modulate = Color(1, 0, 0)
 	flash_timer.start(0.12)
@@ -175,7 +142,7 @@ func take_damage(amount: int):
 		die()
 		return
 
-	sprite.play("idle")
+	play_anim("idle")
 
 
 func _end_flash():
@@ -184,94 +151,16 @@ func _end_flash():
 
 # ---------------- DEATH ----------------
 func die():
-	if state == State.DEAD:
-		return
-
 	state = State.DEAD
 	shoot_timer.stop()
-	phase_timer.stop()
-
 	velocity = Vector2.ZERO
-
-	play_death(get_random_death())
-
-
-func get_random_death() -> DeathType:
-	var roll = randi() % 100
-
-	if roll < 40:
-		return DeathType.NORMAL
-	elif roll < 60:
-		return DeathType.FIRE
-	elif roll < 75:
-		return DeathType.ICE
-	elif roll < 85:
-		return DeathType.ELECTRIC
-	elif roll < 92:
-		return DeathType.FATALITY_1
-	elif roll < 97:
-		return DeathType.FATALITY_2
-	else:
-		return DeathType.FATALITY_3
-
-
-func play_death(type: DeathType):
-	var death_instance
-
-	match type:
-		DeathType.NORMAL:
-			queue_free()
-			return
-		DeathType.FIRE:
-			death_instance = FIRE_DEATH.instantiate()
-		DeathType.ICE:
-			death_instance = ICE_DEATH.instantiate()
-		DeathType.ELECTRIC:
-			death_instance = ELECTRIC_DEATH.instantiate()
-		DeathType.FATALITY_1:
-			death_instance = FATALITY_1.instantiate()
-		DeathType.FATALITY_2:
-			death_instance = FATALITY_2.instantiate()
-		DeathType.FATALITY_3:
-			death_instance = FATALITY_3.instantiate()
-
-	if death_instance:
-		death_instance.global_position = global_position
-		get_tree().current_scene.add_child(death_instance)
-
 	queue_free()
 
 
-# ---------------- COMBO ----------------
-func handle_combo(delta):
-	combo_timer += delta
-	if combo_timer > combo_reset_time:
-		combo.clear()
+# ---------------- ANIMATION ----------------
+func play_anim(anim_name: String):
+	if current_anim == anim_name:
+		return
 
-
-func register_input(input: String):
-	combo.append(input)
-	combo_timer = 0.0
-	check_combos()
-
-
-func check_combos():
-	if combo == FIRE_COMBO:
-		trigger_fire_combo()
-		combo.clear()
-	elif combo == ICE_COMBO:
-		trigger_ice_combo()
-		combo.clear()
-	elif combo == ELECTRIC_COMBO:
-		trigger_electric_combo()
-		combo.clear()
-
-
-func trigger_fire_combo():
-	print("FIRE COMBO")
-
-func trigger_ice_combo():
-	print("ICE COMBO")
-
-func trigger_electric_combo():
-	print("ELECTRIC COMBO")
+	current_anim = anim_name
+	sprite.play(anim_name)
