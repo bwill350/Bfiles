@@ -44,12 +44,10 @@ const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
 @onready var flash_timer: Timer = $HitFlashTimer
 @onready var shoot_marker: Marker2D = $Reptileshoot
 
-# ---------------- COMBO SYSTEM ----------------
 var queued_death: DeathType = DeathType.NONE
 var waiting_finisher := false
 
 
-# ---------------- READY ----------------
 func _ready():
 	add_to_group("enemy")
 
@@ -71,7 +69,6 @@ func _ready():
 		dukes[0].combo_used.connect(_on_duke_combo_used)
 
 
-# ---------------- DUKE COMBO ----------------
 func _on_duke_combo_used(combo_name: String):
 	match combo_name:
 		"fire":
@@ -84,7 +81,6 @@ func _on_duke_combo_used(combo_name: String):
 	waiting_finisher = true
 
 
-# ---------------- UPDATE ----------------
 func _physics_process(_delta):
 	if state == State.DEAD:
 		return
@@ -107,7 +103,7 @@ func _physics_process(_delta):
 		play_anim("walk")
 
 
-# ---------------- SHOOT ----------------
+# ---------------- FIXED SHOOT ----------------
 func shoot_player():
 	if state == State.DEAD:
 		return
@@ -120,26 +116,30 @@ func shoot_player():
 	play_anim("shoot")
 
 	var bullet = BULLET_SCENE.instantiate()
+	get_tree().current_scene.add_child(bullet)
+
 	bullet.global_position = shoot_marker.global_position
 
+	# 🔥 always aim at Duke
 	var dir = Vector2(facing, 0)
+	var dukes = get_tree().get_nodes_in_group("Duke")
 
-	if bullet.has_method("set_velocity") or "velocity" in bullet:
+	if not dukes.is_empty():
+		dir = (dukes[0].global_position - global_position).normalized()
+
+	if "velocity" in bullet:
 		bullet.velocity = dir * bullet.speed
 
 	bullet.rotation = dir.angle()
 
-	get_tree().current_scene.add_child(bullet)
-
-	await sprite.animation_finished
-
+	# 🔥 FIX: release shoot lock immediately so next shot works
+	await get_tree().process_frame
 	is_shooting = false
 
 	if state != State.DEAD and not is_hurting:
 		play_anim("idle")
 
 
-# ---------------- HIT ----------------
 func _on_hit_box_body_entered(body):
 	if body.is_in_group("player"):
 		can_shoot = true
@@ -161,7 +161,6 @@ func _on_hit_box_area_entered(area):
 		take_damage(10)
 
 
-# ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 	if state == State.DEAD:
 		return
@@ -195,12 +194,10 @@ func take_damage(amount: int):
 	play_anim("idle")
 
 
-# ---------------- FLASH RESET ----------------
 func _end_flash():
 	sprite.modulate = Color(1, 1, 1)
 
 
-# ---------------- DEATH ----------------
 func die():
 	if state == State.DEAD:
 		return
@@ -215,7 +212,6 @@ func die():
 	play_death(DeathType.BRUTALITY)
 
 
-# ---------------- FINISHER ----------------
 func _process(_delta):
 	if Input.is_action_just_pressed("finisher") and waiting_finisher:
 		execute_finisher()
@@ -226,11 +222,7 @@ func execute_finisher():
 	play_death(queued_death)
 
 
-# ---------------- DEATH EXECUTION ----------------
 func play_death(type: DeathType):
-	if state == State.DEAD and not waiting_finisher:
-		pass
-
 	var death_instance
 
 	match type:
@@ -258,7 +250,6 @@ func play_death(type: DeathType):
 	queue_free()
 
 
-# ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
 	if current_anim == anim_name:
 		return
