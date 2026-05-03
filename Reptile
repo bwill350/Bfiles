@@ -55,7 +55,6 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	# cooldown timer
 	if damage_cooldown > 0:
 		damage_cooldown -= delta
 
@@ -70,7 +69,6 @@ func _physics_process(delta):
 	velocity = dir * move_speed
 	move_and_slide()
 
-	# facing fix
 	if dir.x != 0:
 		facing = 1 if dir.x > 0 else -1
 		sprite.flip_h = facing == 1
@@ -93,7 +91,6 @@ func shoot_player():
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = shoot_marker.global_position
 
-	# direction toward Duke
 	var players = get_tree().get_nodes_in_group("player")
 	if players.is_empty():
 		return
@@ -101,11 +98,9 @@ func shoot_player():
 	var player = players[0]
 	var dir = (player.global_position - shoot_marker.global_position).normalized()
 
-	# keep your bullet system intact
 	if "velocity" in bullet:
 		bullet.velocity = dir * bullet.speed
 
-	# GREEN BULLET FIX
 	if "modulate" in bullet:
 		bullet.modulate = Color(0.2, 1, 0.2)
 
@@ -134,12 +129,11 @@ func _on_hit_box_area_entered(area):
 		take_damage(10)
 
 
-# ---------------- DAMAGE (FIXED - NO STUCK STATE) ----------------
+# ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 	if state == State.DEAD:
 		return
 
-	# cooldown prevents spam but NEVER breaks detection
 	if damage_cooldown > 0:
 		return
 
