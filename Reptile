@@ -4,20 +4,36 @@ class_name Reptile
 signal health_changed(health)
 
 enum State { PATROL, AGGRESSIVE, DEAD }
+enum DeathType { NONE, FIRE, ICE, ELECTRIC, BRUTALITY, FATALITY_1, FATALITY_2, FATALITY_3 }
 
 var state: State = State.PATROL
+
 var is_hurting := false
 var is_shooting := false
 var can_shoot := false
 
+var facing := -1
 var current_anim := ""
-var facing := -1 # -1 left, 1 right
+
+var health: int
+
+# 🔒 DAMAGE LOCK FIX
+var can_take_damage := true
+var already_hit := false
 
 @export var max_health: int = 300
 @export var move_speed: float = 140.0
 @export var shoot_interval: float = 2.0
 
-var health: int
+# 💀 DEATH SCENES
+const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
+const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
+const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
+const BRUTALITY_DEATH = preload("res://Deaths/FireDeath.tscn")
+
+const FATALITY_1 = preload("res://Deaths/Fatality1.tscn")
+const FATALITY_2 = preload("res://Deaths/Fatality2.tscn")
+const FATALITY_3 = preload("res://Deaths/Fatality3.tscn")
 
 const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
 
@@ -28,9 +44,9 @@ const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
 @onready var flash_timer: Timer = $HitFlashTimer
 @onready var shoot_marker: Marker2D = $Reptileshoot
 
-# ---------------- DAMAGE COOLDOWN FIX ----------------
-var damage_cooldown := 0.0
-@export var damage_cooldown_time := 0.25
+# ---------------- COMBO SYSTEM ----------------
+var queued_death: DeathType = DeathType.NONE
+var waiting_finisher := false
 
 
 # ---------------- READY ----------------
@@ -42,6 +58,7 @@ func _ready():
 
 	hit_box.area_entered.connect(_on_hit_box_area_entered)
 	hit_box.body_entered.connect(_on_hit_box_body_entered)
+	hit_box.body_exited.connect(_on_hit_box_body_exited)
 
 	shoot_timer.wait_time = shoot_interval
 	shoot_timer.timeout.connect(shoot_player)
@@ -49,21 +66,34 @@ func _ready():
 
 	flash_timer.timeout.connect(_end_flash)
 
+	var dukes = get_tree().get_nodes_in_group("Duke")
+	if not dukes.is_empty():
+		dukes[0].combo_used.connect(_on_duke_combo_used)
 
-# ---------------- PHYSICS (CHASE DUKE) ----------------
-func _physics_process(delta):
+
+# ---------------- DUKE COMBO ----------------
+func _on_duke_combo_used(combo_name: String):
+	match combo_name:
+		"fire":
+			queued_death = DeathType.FIRE
+		"ice":
+			queued_death = DeathType.ICE
+		"electric":
+			queued_death = DeathType.ELECTRIC
+
+	waiting_finisher = true
+
+
+# ---------------- UPDATE ----------------
+func _physics_process(_delta):
 	if state == State.DEAD:
 		return
-
-	if damage_cooldown > 0:
-		damage_cooldown -= delta
 
 	var players = get_tree().get_nodes_in_group("player")
 	if players.is_empty():
 		return
 
 	var player = players[0]
-
 	var dir = (player.global_position - global_position).normalized()
 
 	velocity = dir * move_speed
@@ -77,12 +107,13 @@ func _physics_process(delta):
 		play_anim("walk")
 
 
-# ---------------- SHOOT SYSTEM ----------------
+# ---------------- SHOOT ----------------
 func shoot_player():
 	if state == State.DEAD:
 		return
-
 	if not can_shoot:
+		return
+	if is_shooting:
 		return
 
 	is_shooting = true
@@ -91,18 +122,10 @@ func shoot_player():
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = shoot_marker.global_position
 
-	var players = get_tree().get_nodes_in_group("player")
-	if players.is_empty():
-		return
+	var dir = Vector2(facing, 0)
 
-	var player = players[0]
-	var dir = (player.global_position - shoot_marker.global_position).normalized()
-
-	if "velocity" in bullet:
+	if bullet.has_method("set_velocity") or "velocity" in bullet:
 		bullet.velocity = dir * bullet.speed
-
-	if "modulate" in bullet:
-		bullet.modulate = Color(0.2, 1, 0.2)
 
 	bullet.rotation = dir.angle()
 
@@ -116,15 +139,24 @@ func shoot_player():
 		play_anim("idle")
 
 
-# ---------------- DETECTION ----------------
+# ---------------- HIT ----------------
 func _on_hit_box_body_entered(body):
 	if body.is_in_group("player"):
 		can_shoot = true
 		shoot_player()
 
 
+func _on_hit_box_body_exited(body):
+	if body.is_in_group("player"):
+		can_shoot = false
+
+
 func _on_hit_box_area_entered(area):
+	if already_hit:
+		return
+
 	if area.is_in_group("Bullet"):
+		already_hit = true
 		area.queue_free()
 		take_damage(10)
 
@@ -133,11 +165,11 @@ func _on_hit_box_area_entered(area):
 func take_damage(amount: int):
 	if state == State.DEAD:
 		return
-
-	if damage_cooldown > 0:
+	if not can_take_damage:
 		return
 
-	damage_cooldown = damage_cooldown_time
+	can_take_damage = false
+	is_hurting = true
 
 	hit_sound.play()
 
@@ -145,7 +177,6 @@ func take_damage(amount: int):
 	health = max(health, 0)
 	health_changed.emit(health)
 
-	is_hurting = true
 	play_anim("hurt")
 
 	sprite.modulate = Color(1, 0, 0)
@@ -154,6 +185,8 @@ func take_damage(amount: int):
 	await sprite.animation_finished
 
 	is_hurting = false
+	can_take_damage = true
+	already_hit = false
 
 	if health <= 0:
 		die()
@@ -162,6 +195,7 @@ func take_damage(amount: int):
 	play_anim("idle")
 
 
+# ---------------- FLASH RESET ----------------
 func _end_flash():
 	sprite.modulate = Color(1, 1, 1)
 
@@ -174,6 +208,53 @@ func die():
 	state = State.DEAD
 	shoot_timer.stop()
 	velocity = Vector2.ZERO
+
+	if waiting_finisher:
+		return
+
+	play_death(DeathType.BRUTALITY)
+
+
+# ---------------- FINISHER ----------------
+func _process(_delta):
+	if Input.is_action_just_pressed("finisher") and waiting_finisher:
+		execute_finisher()
+
+
+func execute_finisher():
+	waiting_finisher = false
+	play_death(queued_death)
+
+
+# ---------------- DEATH EXECUTION ----------------
+func play_death(type: DeathType):
+	if state == State.DEAD and not waiting_finisher:
+		pass
+
+	var death_instance
+
+	match type:
+		DeathType.FIRE:
+			death_instance = FIRE_DEATH.instantiate()
+		DeathType.ICE:
+			death_instance = ICE_DEATH.instantiate()
+		DeathType.ELECTRIC:
+			death_instance = ELECTRIC_DEATH.instantiate()
+		DeathType.BRUTALITY:
+			death_instance = BRUTALITY_DEATH.instantiate()
+		DeathType.FATALITY_1:
+			death_instance = FATALITY_1.instantiate()
+		DeathType.FATALITY_2:
+			death_instance = FATALITY_2.instantiate()
+		DeathType.FATALITY_3:
+			death_instance = FATALITY_3.instantiate()
+		_:
+			queue_free()
+			return
+
+	death_instance.global_position = global_position
+	get_tree().current_scene.add_child(death_instance)
+
 	queue_free()
 
 
