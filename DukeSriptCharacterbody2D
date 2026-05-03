@@ -59,7 +59,6 @@ func _ready():
 
 # ---------------- AIM ----------------
 func _process(delta):
-
 	handle_combo(delta)
 
 	var stick_input = Vector2(
@@ -297,7 +296,6 @@ func shootburst():
 
 # ---------------- DAMAGE ----------------
 func _on_HitBox_area_entered(area: Area2D):
-
 	flash_red()
 
 	if area.is_in_group("ReptilesHitBox"):
