@@ -2,30 +2,34 @@ extends CharacterBody2D
 class_name Reptile
 
 signal health_changed(health)
+signal combo_used(combo_name: String)
 
-enum State { PATROL, AGGRESSIVE, DEAD }
-enum DeathType { NONE, FIRE, ICE, ELECTRIC, BRUTALITY, FATALITY_1, FATALITY_2, FATALITY_3 }
+enum State { IDLE, JRUN, JJUMP, JJUMPKICK, JBLOCK, JPUNCH, JCLIMB, DEAD }
 
-var state: State = State.PATROL
+var state: State = State.IDLE
 
 var is_hurting := false
 var is_shooting := false
 var can_shoot := false
+var action_locked := false
+var hurt_locked := false
 
 var facing := -1
+var last_facing_dir := -1
 var current_anim := ""
 
 var health: int
-
-# 🔒 DAMAGE LOCK FIX
 var can_take_damage := true
 var already_hit := false
 
-@export var max_health: int = 300
-@export var move_speed: float = 140.0
-@export var shoot_interval: float = 2.0
+const GRAVITY = 5000
 
-# 💀 DEATH SCENES
+@export var SPEED = 900.0
+@export var JCLIMB_SPEED = 250.0
+@export var max_health: int = 300
+@export var jjump_velocity = -1800.0
+@export var combo_reset_time := 0.6
+
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
@@ -40,116 +44,177 @@ const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hit_box: Area2D = $HitBox
-@onready var shoot_timer: Timer = $ShootTimer
-@onready var flash_timer: Timer = $HitFlashTimer
 @onready var shoot_marker: Marker2D = $Reptileshoot
 
-var queued_death: DeathType = DeathType.NONE
-var waiting_finisher := false
+# ---------------- COMBO SYSTEM ----------------
+var combo := []
+var combo_timer := 0.0
 
+const FIRE_COMBO = ["jdown", "jright", "jshoot"]
+const ICE_COMBO = ["jleft", "jleft", "jshoot"]
+const ELECTRIC_COMBO = ["jup", "jdown", "jshoot"]
 
+# ---------------- READY ----------------
 func _ready():
 	add_to_group("enemy")
-
 	health = max_health
-	play_anim("idle")
+	play_anim("jidle")
 
 	hit_box.area_entered.connect(_on_hit_box_area_entered)
 	hit_box.body_entered.connect(_on_hit_box_body_entered)
 	hit_box.body_exited.connect(_on_hit_box_body_exited)
 
-	shoot_timer.wait_time = shoot_interval
-	shoot_timer.timeout.connect(shoot_player)
-	shoot_timer.start()
+# ---------------- INPUT (COMBOS ONLY) ----------------
+func _unhandled_input(event):
+	if event.is_action_pressed("jup"):
+		register_input("jup")
+	elif event.is_action_pressed("jdown"):
+		register_input("jdown")
+	elif event.is_action_pressed("jleft"):
+		$Sprite.play("jwalk")
+		register_input("jleft")
+	elif event.is_action_pressed("jright"):
+		$Sprite.play("jwalk")
+		register_input("jright")
+	elif event.is_action_pressed("jshoot"):
+		register_input("jshoot")
 
-	flash_timer.timeout.connect(_end_flash)
+# ---------------- PHYSICS ----------------
+func _physics_process(delta):
 
-	var dukes = get_tree().get_nodes_in_group("Duke")
-	if not dukes.is_empty():
-		dukes[0].combo_used.connect(_on_duke_combo_used)
-
-
-func _on_duke_combo_used(combo_name: String):
-	match combo_name:
-		"fire":
-			queued_death = DeathType.FIRE
-		"ice":
-			queued_death = DeathType.ICE
-		"electric":
-			queued_death = DeathType.ELECTRIC
-
-	waiting_finisher = true
-
-
-func _physics_process(_delta):
-	if state == State.DEAD:
+	# STOP EVERYTHING IF HURT OR ACTION LOCKED
+	if action_locked or hurt_locked:
+		move_and_slide()
 		return
 
-	var players = get_tree().get_nodes_in_group("player")
-	if players.is_empty():
-		return
+	var input_dir = Input.get_axis("jleft", "jright")
+	var jclimb_pressed = Input.is_action_pressed("jclimb")
+	var on_wall = is_on_wall()
 
-	var player = players[0]
-	var dir = (player.global_position - global_position).normalized()
+	velocity.y += GRAVITY * delta
 
-	velocity = dir * move_speed
+	# ---------------- FACING ----------------
+	if input_dir != 0:
+		facing = input_dir
+		last_facing_dir = input_dir
+
+	velocity.x = input_dir * SPEED
+	sprite.flip_h = facing > 0
+
+	# ---------------- STATE ----------------
+	if jclimb_pressed and not is_on_floor() and on_wall:
+		state = State.JCLIMB
+	elif not is_on_floor():
+		state = State.JJUMP
+	elif input_dir != 0:
+		state = State.JRUN
+	else:
+		state = State.IDLE
+
+	# ---------------- ANIMATIONS ----------------
+	match state:
+		State.JCLIMB:
+			velocity.y = -JCLIMB_SPEED
+			play_anim("jclimb")
+
+		State.JJUMP:
+			play_anim("jjump")
+
+		State.JRUN:
+			play_anim("jright")
+
+		State.IDLE:
+			play_anim("jidle")
+
+	# ---------------- ACTIONS ----------------
+	if Input.is_action_just_pressed("jjump") and is_on_floor():
+		velocity.y = jjump_velocity
+
+	if Input.is_action_just_pressed("jjumpkick"):
+		do_action("jjumpkick")
+
+	elif Input.is_action_pressed("jblock"):
+		do_action("jblock")
+
+	elif Input.is_action_just_pressed("jpunch"):
+		do_action("jpunch")
+
+	elif Input.is_action_just_pressed("jshoot"):
+		shoot_player()
+
 	move_and_slide()
 
-	if dir.x != 0:
-		facing = 1 if dir.x > 0 else -1
-		sprite.flip_h = facing == 1
+# ---------------- ACTION HANDLER ----------------
+func do_action(anim_name: String):
+	action_locked = true
+	play_anim(anim_name)
+	await sprite.animation_finished
+	action_locked = false
+	state = State.IDLE
+	play_anim("jidle")
 
-	if not is_hurting and not is_shooting:
-		play_anim("walk")
-
-
-# ---------------- FIXED SHOOT ----------------
+# ---------------- SHOOT ----------------
 func shoot_player():
-	if state == State.DEAD:
-		return
-	if not can_shoot:
-		return
-	if is_shooting:
+	if state == State.DEAD or is_shooting:
 		return
 
 	is_shooting = true
-	play_anim("shoot")
+	play_anim("jshoot")
 
 	var bullet = BULLET_SCENE.instantiate()
 	get_tree().current_scene.add_child(bullet)
-
 	bullet.global_position = shoot_marker.global_position
 
-	# 🔥 always aim at Duke
 	var dir = Vector2(facing, 0)
-	var dukes = get_tree().get_nodes_in_group("Duke")
-
-	if not dukes.is_empty():
-		dir = (dukes[0].global_position - global_position).normalized()
-
 	if "velocity" in bullet:
 		bullet.velocity = dir * bullet.speed
 
-	bullet.rotation = dir.angle()
-
-	# 🔥 FIX: release shoot lock immediately so next shot works
-	await get_tree().process_frame
+	await sprite.animation_finished
 	is_shooting = false
+	play_anim("jidle")
 
-	if state != State.DEAD and not is_hurting:
-		play_anim("idle")
+# ---------------- DAMAGE ----------------
+func take_damage(amount: int):
+	if state == State.DEAD or not can_take_damage:
+		return
 
+	can_take_damage = false
+	is_hurting = true
+	hurt_locked = true
 
+	hit_sound.play()
+
+	health -= amount
+	health = max(health, 0)
+	health_changed.emit(health)
+
+	state = State.IDLE
+	play_anim("jhurt")
+
+	sprite.modulate = Color(1, 0, 0)
+
+	await sprite.animation_finished
+
+	sprite.modulate = Color.WHITE
+	is_hurting = false
+	can_take_damage = true
+	already_hit = false
+	hurt_locked = false
+
+	if health <= 0:
+		die()
+	else:
+		state = State.IDLE
+		play_anim("jidle")
+
+# ---------------- HITBOX ----------------
 func _on_hit_box_body_entered(body):
 	if body.is_in_group("player"):
 		can_shoot = true
-		shoot_player()
-
 
 func _on_hit_box_body_exited(body):
 	if body.is_in_group("player"):
 		can_shoot = false
-
 
 func _on_hit_box_area_entered(area):
 	if already_hit:
@@ -160,99 +225,37 @@ func _on_hit_box_area_entered(area):
 		area.queue_free()
 		take_damage(10)
 
-
-func take_damage(amount: int):
-	if state == State.DEAD:
-		return
-	if not can_take_damage:
-		return
-
-	can_take_damage = false
-	is_hurting = true
-
-	hit_sound.play()
-
-	health -= amount
-	health = max(health, 0)
-	health_changed.emit(health)
-
-	play_anim("hurt")
-
-	sprite.modulate = Color(1, 0, 0)
-	flash_timer.start(0.12)
-
-	await sprite.animation_finished
-
-	is_hurting = false
-	can_take_damage = true
-	already_hit = false
-
-	if health <= 0:
-		die()
-		return
-
-	play_anim("idle")
-
-
-func _end_flash():
-	sprite.modulate = Color(1, 1, 1)
-
-
+# ---------------- DEATH ----------------
 func die():
-	if state == State.DEAD:
-		return
-
 	state = State.DEAD
-	shoot_timer.stop()
 	velocity = Vector2.ZERO
 
-	if waiting_finisher:
-		return
-
-	play_death(DeathType.BRUTALITY)
-
-
-func _process(_delta):
-	if Input.is_action_just_pressed("finisher") and waiting_finisher:
-		execute_finisher()
-
-
-func execute_finisher():
-	waiting_finisher = false
-	play_death(queued_death)
-
-
-func play_death(type: DeathType):
-	var death_instance
-
-	match type:
-		DeathType.FIRE:
-			death_instance = FIRE_DEATH.instantiate()
-		DeathType.ICE:
-			death_instance = ICE_DEATH.instantiate()
-		DeathType.ELECTRIC:
-			death_instance = ELECTRIC_DEATH.instantiate()
-		DeathType.BRUTALITY:
-			death_instance = BRUTALITY_DEATH.instantiate()
-		DeathType.FATALITY_1:
-			death_instance = FATALITY_1.instantiate()
-		DeathType.FATALITY_2:
-			death_instance = FATALITY_2.instantiate()
-		DeathType.FATALITY_3:
-			death_instance = FATALITY_3.instantiate()
-		_:
-			queue_free()
-			return
-
+	var death_instance = BRUTALITY_DEATH.instantiate()
 	death_instance.global_position = global_position
 	get_tree().current_scene.add_child(death_instance)
 
 	queue_free()
 
-
+# ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
 	if current_anim == anim_name:
 		return
-
 	current_anim = anim_name
 	sprite.play(anim_name)
+
+# ---------------- COMBOS ----------------
+func register_input(input: String):
+	combo.append(input)
+	combo_timer = 0.0
+	check_combos()
+
+func check_combos():
+	if combo == FIRE_COMBO:
+		combo_used.emit("fire")
+		combo.clear()
+	elif combo == ICE_COMBO:
+		combo_used.emit("ice")
+		combo.clear()
+	elif combo == ELECTRIC_COMBO:
+		combo_used.emit("electric")
+		combo.clear()
