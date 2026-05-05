@@ -10,6 +10,7 @@ var state: State = State.IDLE
 
 var is_hurting := false
 var is_shooting := false
+var is_attacking := false
 var can_shoot := false
 var action_locked := false
 var hurt_locked := false
@@ -57,12 +58,11 @@ const ELECTRIC_COMBO = ["jup", "jdown", "jshoot"]
 # ---------------- READY ----------------
 func _ready():
 	add_to_group("enemy")
+	add_to_group("Reptile")
+
 	health = max_health
 	play_anim("jidle")
 
-	hit_box.area_entered.connect(_on_hit_box_area_entered)
-	hit_box.body_entered.connect(_on_hit_box_body_entered)
-	hit_box.body_exited.connect(_on_hit_box_body_exited)
 
 # ---------------- INPUT (COMBOS ONLY) ----------------
 func _unhandled_input(event):
@@ -79,10 +79,10 @@ func _unhandled_input(event):
 	elif event.is_action_pressed("jshoot"):
 		register_input("jshoot")
 
+
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
-	# STOP EVERYTHING IF HURT OR ACTION LOCKED
 	if action_locked or hurt_locked:
 		move_and_slide()
 		return
@@ -93,7 +93,6 @@ func _physics_process(delta):
 
 	velocity.y += GRAVITY * delta
 
-	# ---------------- FACING ----------------
 	if input_dir != 0:
 		facing = input_dir
 		last_facing_dir = input_dir
@@ -101,7 +100,6 @@ func _physics_process(delta):
 	velocity.x = input_dir * SPEED
 	sprite.flip_h = facing > 0
 
-	# ---------------- STATE ----------------
 	if jclimb_pressed and not is_on_floor() and on_wall:
 		state = State.JCLIMB
 	elif not is_on_floor():
@@ -111,7 +109,6 @@ func _physics_process(delta):
 	else:
 		state = State.IDLE
 
-	# ---------------- ANIMATIONS ----------------
 	match state:
 		State.JCLIMB:
 			velocity.y = -JCLIMB_SPEED
@@ -126,7 +123,6 @@ func _physics_process(delta):
 		State.IDLE:
 			play_anim("jidle")
 
-	# ---------------- ACTIONS ----------------
 	if Input.is_action_just_pressed("jjump") and is_on_floor():
 		velocity.y = jjump_velocity
 
@@ -142,16 +138,43 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("jshoot"):
 		shoot_player()
 
+	elif Input.is_action_pressed("jroundhousekick"):
+		do_action("jroundhousekick")
+
+	elif Input.is_action_pressed("jkick"):
+		do_action("jkick")
+
+	elif Input.is_action_pressed("juppercut"):
+		do_action("juppercut")
+
 	move_and_slide()
+
+
+func spawn_attack():
+	var attack = REPTILE_ATTACK.instantiate()
+
+	attack.global_position = attack_marker.global_position
+
+	get_tree().current_scene.add_child(attack)
 
 # ---------------- ACTION HANDLER ----------------
 func do_action(anim_name: String):
 	action_locked = true
+	is_attacking = true
+
 	play_anim(anim_name)
+
+	# spawn hitbox ONLY on attack moves
+	if anim_name in ["jpunch", "jkick", "jroundhousekick", "juppercut"]:
+		spawn_attack()
+
 	await sprite.animation_finished
+
+	is_attacking = false
 	action_locked = false
-	state = State.IDLE
+
 	play_anim("jidle")
+
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -159,6 +182,8 @@ func shoot_player():
 		return
 
 	is_shooting = true
+	is_attacking = true
+
 	play_anim("jshoot")
 
 	var bullet = BULLET_SCENE.instantiate()
@@ -170,8 +195,12 @@ func shoot_player():
 		bullet.velocity = dir * bullet.speed
 
 	await sprite.animation_finished
+
 	is_shooting = false
+	is_attacking = false
+
 	play_anim("jidle")
+
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
@@ -190,7 +219,6 @@ func take_damage(amount: int):
 
 	state = State.IDLE
 	play_anim("jhurt")
-
 	sprite.modulate = Color(1, 0, 0)
 
 	await sprite.animation_finished
@@ -207,15 +235,12 @@ func take_damage(amount: int):
 		state = State.IDLE
 		play_anim("jidle")
 
+
+const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
+
+@onready var attack_marker: Marker2D = $AttackMarker
+
 # ---------------- HITBOX ----------------
-func _on_hit_box_body_entered(body):
-	if body.is_in_group("player"):
-		can_shoot = true
-
-func _on_hit_box_body_exited(body):
-	if body.is_in_group("player"):
-		can_shoot = false
-
 func _on_hit_box_area_entered(area):
 	if already_hit:
 		return
@@ -224,6 +249,17 @@ func _on_hit_box_area_entered(area):
 		already_hit = true
 		area.queue_free()
 		take_damage(10)
+
+
+func _on_hit_box_body_entered(body):
+	if body.is_in_group("player"):
+		can_shoot = true
+
+
+func _on_hit_box_body_exited(body):
+	if body.is_in_group("player"):
+		can_shoot = false
+
 
 # ---------------- DEATH ----------------
 func die():
@@ -236,6 +272,7 @@ func die():
 
 	queue_free()
 
+
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
 	if current_anim == anim_name:
@@ -243,11 +280,13 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 	sprite.play(anim_name)
 
+
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 	combo.append(input)
 	combo_timer = 0.0
 	check_combos()
+
 
 func check_combos():
 	if combo == FIRE_COMBO:
