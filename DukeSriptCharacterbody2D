@@ -13,8 +13,9 @@ const GRAVITY = 5000
 enum State { IDLE, RUN, JUMP, CLIMB }
 var state: State = State.IDLE
 
-var health: int = 5000
-var last_facing_dir = 0
+var health: int = 300
+var max_health: int = 300
+var last_facing_dir = 1
 
 var _mouse_pos := Vector2.ZERO
 
@@ -37,30 +38,36 @@ var color_locked := false
 var flashing := false
 var original_modulate := Color.WHITE
 
+var can_shoot := true
+@export var shoot_cooldown := 0.12
+
+# ---------------- NODES ----------------
 @onready var health_label = $HealthLabel
 @onready var anim: AnimatedSprite2D = $Sprite
 @onready var marker: Marker2D = $MarkerShoot
 @onready var marker2: Marker2D = $MarkerAim
 @onready var hitbox: Area2D = $HitBox
 @onready var punch_kick_box: Area2D = $PunchKickBox
-@onready var hit_sound = $HitSound
-
+@onready var hit_sound: AudioStreamPlayer2D = $HitSound
 
 # ---------------- READY ----------------
 func _ready():
 	add_to_group("player")
 	add_to_group("Duke")
 
+	health_changed.emit(health)
+
 	hitbox.area_entered.connect(_on_HitBox_area_entered)
 	punch_kick_box.area_entered.connect(_on_punch_kick_box_area_entered)
 
 	combo_used.connect(_on_combo_used)
+	health_changed.connect(update_health_ui)
 
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_mouse_pos = get_viewport().get_mouse_position()
 
 
-# ---------------- AIM ----------------
+# ---------------- PROCESS ----------------
 func _process(delta):
 	handle_combo(delta)
 
@@ -73,8 +80,18 @@ func _process(delta):
 		if stick_input.length() >= stick_deadzone:
 			stick_input = stick_input.normalized()
 			_mouse_pos += stick_input * stick_sensitivity * delta
-			_mouse_pos.x = clamp(_mouse_pos.x, 0, get_viewport().size.x)
-			_mouse_pos.y = clamp(_mouse_pos.y, 0, get_viewport().size.y)
+
+			_mouse_pos.x = clamp(
+				_mouse_pos.x,
+				0,
+				get_viewport().size.x
+			)
+
+			_mouse_pos.y = clamp(
+				_mouse_pos.y,
+				0,
+				get_viewport().size.y
+			)
 
 	var aim_target: Vector2
 
@@ -89,6 +106,7 @@ func _process(delta):
 # ---------------- COMBO ----------------
 func handle_combo(delta):
 	combo_timer += delta
+
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
@@ -100,26 +118,37 @@ func register_input(input: String):
 
 
 func check_combos():
+
 	if combo == FIRE_COMBO:
 		combo_used.emit("fire")
+		shootburst()
 		combo.clear()
+
 	elif combo == ICE_COMBO:
 		combo_used.emit("ice")
+		shootaroundleft()
+		shootaroundright()
 		combo.clear()
+
 	elif combo == ELECTRIC_COMBO:
 		combo_used.emit("electric")
+		electric_burst()
 		combo.clear()
 
 
 # ---------------- COLOR LOCK ----------------
 func _on_combo_used(combo_name: String):
+
 	color_locked = true
 
 	match combo_name:
+
 		"fire":
 			locked_color = Color(1, 0.3, 0.3)
+
 		"ice":
 			locked_color = Color(0.3, 0.6, 1.0)
+
 		"electric":
 			locked_color = Color(1, 1, 1)
 
@@ -127,24 +156,31 @@ func _on_combo_used(combo_name: String):
 
 
 func clear_color_lock():
+
 	if color_locked:
 		color_locked = false
-		modulate = Color(1, 1, 1)
+		modulate = Color.WHITE
 
 
 # ---------------- FLASH ----------------
 func flash_red():
+
 	if flashing:
 		return
 
 	flashing = true
+
 	original_modulate = modulate
 
 	modulate = Color(1, 0, 0)
 
 	await get_tree().create_timer(0.08).timeout
 
-	modulate = original_modulate
+	if color_locked:
+		modulate = locked_color
+	else:
+		modulate = original_modulate
+
 	flashing = false
 
 
@@ -155,24 +191,45 @@ func _physics_process(delta):
 	var climb_pressed = Input.is_action_pressed("climb")
 	var on_wall = is_on_wall()
 
-	if Input.is_action_just_pressed("left") \
-	or Input.is_action_just_pressed("right") \
-	or Input.is_action_just_pressed("jump"):
+	# ---------------- COMBO INPUTS ----------------
+	if Input.is_action_just_pressed("left"):
+		register_input("left")
+
+	if Input.is_action_just_pressed("right"):
+		register_input("right")
+
+	if Input.is_action_just_pressed("up"):
+		register_input("up")
+
+	if Input.is_action_just_pressed("down"):
+		register_input("down")
+
+	if Input.is_action_just_pressed("shoot"):
+		register_input("shoot")
+
+	# ---------------- CLEAR COLOR ----------------
+	if Input.is_action_just_pressed("jump"):
 		clear_color_lock()
 
 	if input_dir != 0:
 		last_facing_dir = input_dir
 
+	# ---------------- STATES ----------------
 	if climb_pressed and not is_on_floor() and on_wall:
 		state = State.CLIMB
+
 	elif not is_on_floor():
 		state = State.JUMP
+
 	elif input_dir != 0:
 		state = State.RUN
+
 	else:
 		state = State.IDLE
 
+	# ---------------- STATE LOGIC ----------------
 	match state:
+
 		State.CLIMB:
 			velocity.y = -CLIMB_SPEED
 			velocity.x = input_dir * SPEED
@@ -181,31 +238,36 @@ func _physics_process(delta):
 		State.JUMP:
 			velocity.y += GRAVITY * delta
 			velocity.x = input_dir * SPEED
+
 			anim.play("jump")
+			anim.flip_h = last_facing_dir == -1
 
 		State.RUN:
+
 			velocity.y += GRAVITY * delta
 			velocity.x = input_dir * SPEED
 
 			if input_dir > 0:
 				anim.play("move_right")
 				anim.flip_h = false
+
 			elif input_dir < 0:
 				anim.play("move_right")
 				anim.flip_h = true
 
 		State.IDLE:
+
 			velocity.y += GRAVITY * delta
 			velocity.x = 0
+
 			anim.play("Idle")
 			anim.flip_h = last_facing_dir == -1
 
+	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
+
 		velocity.y = JUMP_VELOCITY
 		state = State.JUMP
-		clear_color_lock()
-
-	move_and_slide()
 
 	# ---------------- SHOOT ----------------
 	if Input.is_action_pressed("shoot"):
@@ -229,82 +291,99 @@ func _physics_process(delta):
 	move_and_slide()
 
 
-# ---------------- SHOOT FUNCTIONS ----------------
-func shoot():
-	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
-	bullet.global_position = marker.global_position
+# ---------------- CREATE BULLET ----------------
+func create_bullet(direction: Vector2):
 
-	var dir = marker2.global_transform.x.normalized()
-	bullet.velocity = dir * bullet.speed
+	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
+
+	bullet.global_position = marker.global_position
+	bullet.velocity = direction.normalized() * bullet.speed
 
 	get_tree().current_scene.add_child(bullet)
+
+	return bullet
+
+
+# ---------------- SHOOT ----------------
+func shoot():
+
+	if not can_shoot:
+		return
+
+	can_shoot = false
+
+	var dir = marker2.global_transform.x.normalized()
+
+	create_bullet(dir)
+
+	await get_tree().create_timer(shoot_cooldown).timeout
+
+	can_shoot = true
 
 
 func shootright():
-	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
-	bullet.global_position = marker.global_position
-	bullet.velocity = Vector2.RIGHT * bullet.speed
-	get_tree().current_scene.add_child(bullet)
+	create_bullet(Vector2.RIGHT)
 
 
 func shootleft():
-	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
-	bullet.global_position = marker.global_position
-	bullet.velocity = Vector2.LEFT * bullet.speed
-	get_tree().current_scene.add_child(bullet)
+	create_bullet(Vector2.LEFT)
 
 
 func shootaroundright():
-	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
-	bullet.global_position = marker.global_position
-	bullet.velocity = Vector2(4, -6) * bullet.speed
-	get_tree().current_scene.add_child(bullet)
+	create_bullet(Vector2(4, -6))
 
 
 func shootaroundleft():
-	var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
-	bullet.global_position = marker.global_position
-	bullet.velocity = Vector2(-4, -6) * bullet.speed
-	get_tree().current_scene.add_child(bullet)
+	create_bullet(Vector2(-4, -6))
 
 
 func shootburst():
+
 	var burst = 8
 	var base = randf_range(0, TAU)
 
 	for i in range(burst):
+
 		var angle = base + (TAU / burst) * i
 
 		var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
+
 		bullet.global_position = global_position + Vector2(
-			randf_range(-260, 60),
-			randf_range(-260, 60)
+			randf_range(-60, 60),
+			randf_range(-60, 60)
 		)
 
 		bullet.velocity = Vector2.RIGHT.rotated(angle) * bullet.speed
+
 		get_tree().current_scene.add_child(bullet)
 
 
-# ---------------- DAMAGE FROM REPTILE ----------------
-func _on_punch_kick_box_area_entered(area: Area2D):
-	if area.is_in_group("ReptileAttack"):
-		take_damage(1)
-		return
-	if is_in_group("ReptileBullet"):
-		take_damage(1)
-	var reptile = area.get_parent()
+func electric_burst():
 
-	if reptile and reptile.is_in_group("Reptile") and reptile.is_attacking:
-		take_damage(1)
+	for i in range(12):
+
+		var angle = (TAU / 12.0) * i
+
+		var bullet = preload("res://Projectiles/Bullet.tscn").instantiate()
+
+		bullet.global_position = global_position
+		bullet.velocity = Vector2.RIGHT.rotated(angle) * bullet.speed * 1.5
+
+		get_tree().current_scene.add_child(bullet)
 
 
-# ---------------- ORIGINAL TAKE DAMAGE (RESTORED) ----------------
+# ---------------- DAMAGE ----------------
 func take_damage(amount: int):
+
 	flash_red()
 
 	health -= amount
-	health = max(health, 0)
+	health = clamp(health, 0, max_health)
+
 	health_changed.emit(health)
+
+	if hit_sound:
+		hit_sound.play()
 
 	if health <= 0:
 		die()
@@ -312,22 +391,55 @@ func take_damage(amount: int):
 
 # ---------------- HITBOX ----------------
 func _on_HitBox_area_entered(area: Area2D):
-	if is_in_group("ReptileAttack"):
+
+	if area.is_in_group("ReptileAttack"):
 		take_damage(1)
-	flash_red()
 
-	if area.is_in_group("ReptilesHitBox"):
-		health -= 2
-	else:
-		health -= 1
+	elif area.is_in_group("ReptileBullet"):
+		take_damage(2)
 
-	health = max(health, 0)
+	elif area.is_in_group("EnemyExplosion"):
+		take_damage(5)
+
+
+func _on_punch_kick_box_area_entered(area: Area2D):
+
+	if area.is_in_group("ReptileAttack"):
+		take_damage(1)
+		return
+
+	var reptile = area.get_parent()
+
+	if reptile \
+	and reptile.is_in_group("Reptile") \
+	and reptile.has_method("is_attacking"):
+
+		take_damage(1)
+
+
+# ---------------- HEAL ----------------
+func heal(amount: int):
+
+	health += amount
+	health = clamp(health, 0, max_health)
+
 	health_changed.emit(health)
 
-	if health <= 0:
-		die()
+
+# ---------------- HUD ----------------
+func update_health_ui(hp):
+
+	if health_label:
+		health_label.text = "Player Health: %d / %d" % [hp, max_health]
 
 
 # ---------------- DEATH ----------------
 func die():
-	get_tree().change_scene_to_file("res://Scenes/GameOver.tscn")
+
+	Die.emit()
+
+	queue_free()
+
+	get_tree().change_scene_to_file(
+		"res://Scenes/GameOver.tscn"
+	)
