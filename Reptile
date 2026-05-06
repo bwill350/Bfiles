@@ -4,6 +4,7 @@ class_name Reptile
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
+# ---------------- STATE ----------------
 enum State { IDLE, JRUN, JJUMP, JJUMPKICK, JBLOCK, JPUNCH, JCLIMB, DEAD }
 
 var state: State = State.IDLE
@@ -11,25 +12,29 @@ var state: State = State.IDLE
 var is_hurting := false
 var is_shooting := false
 var is_attacking := false
-var can_shoot := false
 var action_locked := false
 var hurt_locked := false
 
 var facing := -1
-var last_facing_dir := -1
 var current_anim := ""
 
 var health: int
 var can_take_damage := true
 var already_hit := false
+var can_shoot := false
 
 const GRAVITY = 5000
 
+# ---------------- EXPORTS ----------------
 @export var SPEED = 900.0
 @export var JCLIMB_SPEED = 250.0
 @export var max_health: int = 300
 @export var jjump_velocity = -1800.0
 @export var combo_reset_time := 0.6
+
+# ---------------- PRELOADS ----------------
+const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
+const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
@@ -40,14 +45,14 @@ const FATALITY_1 = preload("res://Deaths/Fatality1.tscn")
 const FATALITY_2 = preload("res://Deaths/Fatality2.tscn")
 const FATALITY_3 = preload("res://Deaths/Fatality3.tscn")
 
-const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
-
+# ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hit_box: Area2D = $HitBox
 @onready var shoot_marker: Marker2D = $Reptileshoot
+@onready var attack_marker: Marker2D = $AttackMarker
 
-# ---------------- COMBO SYSTEM ----------------
+# ---------------- COMBOS ----------------
 var combo := []
 var combo_timer := 0.0
 
@@ -61,27 +66,28 @@ func _ready():
 	add_to_group("Reptile")
 
 	health = max_health
+	health_changed.emit(health)
+
 	play_anim("jidle")
 
-
-# ---------------- INPUT (COMBOS ONLY) ----------------
+# ---------------- INPUT ----------------
 func _unhandled_input(event):
 	if event.is_action_pressed("jup"):
 		register_input("jup")
 	elif event.is_action_pressed("jdown"):
 		register_input("jdown")
 	elif event.is_action_pressed("jleft"):
-		$Sprite.play("jwalk")
 		register_input("jleft")
 	elif event.is_action_pressed("jright"):
-		$Sprite.play("jwalk")
 		register_input("jright")
 	elif event.is_action_pressed("jshoot"):
 		register_input("jshoot")
 
-
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+
+	if state == State.DEAD:
+		return
 
 	if action_locked or hurt_locked:
 		move_and_slide()
@@ -95,11 +101,11 @@ func _physics_process(delta):
 
 	if input_dir != 0:
 		facing = input_dir
-		last_facing_dir = input_dir
 
 	velocity.x = input_dir * SPEED
 	sprite.flip_h = facing > 0
 
+	# ---------------- STATE ----------------
 	if jclimb_pressed and not is_on_floor() and on_wall:
 		state = State.JCLIMB
 	elif not is_on_floor():
@@ -123,6 +129,7 @@ func _physics_process(delta):
 		State.IDLE:
 			play_anim("jidle")
 
+	# ---------------- ACTION INPUTS ----------------
 	if Input.is_action_just_pressed("jjump") and is_on_floor():
 		velocity.y = jjump_velocity
 
@@ -135,9 +142,6 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("jpunch"):
 		do_action("jpunch")
 
-	elif Input.is_action_just_pressed("jshoot"):
-		shoot_player()
-
 	elif Input.is_action_pressed("jroundhousekick"):
 		do_action("jroundhousekick")
 
@@ -147,24 +151,24 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("juppercut"):
 		do_action("juppercut")
 
+	elif Input.is_action_just_pressed("jshoot"):
+		shoot_player()
+
 	move_and_slide()
 
-
+# ---------------- ATTACK SPAWN ----------------
 func spawn_attack():
 	var attack = REPTILE_ATTACK.instantiate()
-
 	attack.global_position = attack_marker.global_position
-
 	get_tree().current_scene.add_child(attack)
 
-# ---------------- ACTION HANDLER ----------------
+# ---------------- ACTIONS ----------------
 func do_action(anim_name: String):
 	action_locked = true
 	is_attacking = true
 
 	play_anim(anim_name)
 
-	# spawn hitbox ONLY on attack moves
 	if anim_name in ["jpunch", "jkick", "jroundhousekick", "juppercut"]:
 		spawn_attack()
 
@@ -172,13 +176,11 @@ func do_action(anim_name: String):
 
 	is_attacking = false
 	action_locked = false
-
 	play_anim("jidle")
-
 
 # ---------------- SHOOT ----------------
 func shoot_player():
-	if state == State.DEAD or is_shooting:
+	if is_shooting:
 		return
 
 	is_shooting = true
@@ -198,9 +200,7 @@ func shoot_player():
 
 	is_shooting = false
 	is_attacking = false
-
 	play_anim("jidle")
-
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
@@ -211,13 +211,12 @@ func take_damage(amount: int):
 	is_hurting = true
 	hurt_locked = true
 
-	hit_sound.play()
-
 	health -= amount
 	health = max(health, 0)
 	health_changed.emit(health)
 
-	state = State.IDLE
+	hit_sound.play()
+
 	play_anim("jhurt")
 	sprite.modulate = Color(1, 0, 0)
 
@@ -225,22 +224,16 @@ func take_damage(amount: int):
 
 	sprite.modulate = Color.WHITE
 	is_hurting = false
+	hurt_locked = false
 	can_take_damage = true
 	already_hit = false
-	hurt_locked = false
 
 	if health <= 0:
 		die()
 	else:
-		state = State.IDLE
 		play_anim("jidle")
 
-
-const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
-
-@onready var attack_marker: Marker2D = $AttackMarker
-
-# ---------------- HITBOX ----------------
+# ---------------- HIT DETECTION ----------------
 func _on_hit_box_area_entered(area):
 	if already_hit:
 		return
@@ -250,16 +243,16 @@ func _on_hit_box_area_entered(area):
 		area.queue_free()
 		take_damage(10)
 
+	if area.is_in_group("ReptileAttack") or area.is_in_group("ReptileBullet"):
+		take_damage(1)
 
 func _on_hit_box_body_entered(body):
 	if body.is_in_group("player"):
 		can_shoot = true
 
-
 func _on_hit_box_body_exited(body):
 	if body.is_in_group("player"):
 		can_shoot = false
-
 
 # ---------------- DEATH ----------------
 func die():
@@ -272,7 +265,6 @@ func die():
 
 	queue_free()
 
-
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
 	if current_anim == anim_name:
@@ -280,13 +272,11 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 	sprite.play(anim_name)
 
-
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 	combo.append(input)
 	combo_timer = 0.0
 	check_combos()
-
 
 func check_combos():
 	if combo == FIRE_COMBO:
