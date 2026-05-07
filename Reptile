@@ -39,7 +39,7 @@ const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
-const BRUTALITY_DEATH = preload("res://Deaths/FireDeath.tscn")
+const BRUTALITY_DEATH = preload("res://Deaths/BrutalityDeath.tscn")
 
 const FATALITY_1 = preload("res://Deaths/Fatality1.tscn")
 const FATALITY_2 = preload("res://Deaths/Fatality2.tscn")
