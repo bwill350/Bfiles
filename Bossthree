@@ -6,7 +6,7 @@ signal health_changed(health)
 enum State { PHASE1, PHASE2, PHASE3, DEAD }
 var state: State = State.PHASE1
 
-@export var max_health: int = 320
+@export var max_health: int = 32
 @export var total_lives: int = 9
 
 @export var phase1_delay: float = 1.6
@@ -16,7 +16,6 @@ var state: State = State.PHASE1
 var health: int
 var current_life: int = 1
 var finishing := false
-var can_shoot := true
 
 var flash_enabled := false
 var flash_timer := 0.0
@@ -61,17 +60,10 @@ func _process(delta):
 func start_attack_loop():
 	while not finishing:
 
-		if can_shoot:
-			can_shoot = false
+		play_attack_animation()
+		shoot()
 
-			play_attack_animation()
-			shoot()
-
-			await get_tree().create_timer(get_attack_delay()).timeout
-
-			can_shoot = true
-		else:
-			await get_tree().process_frame
+		await get_tree().create_timer(get_attack_delay()).timeout
 
 
 # ---------------- SHOOT SYSTEM ----------------
@@ -83,16 +75,14 @@ func shoot():
 	if player == null:
 		return
 
-	var dir = (player.global_position - global_position).normalized()
-
-	# 🔵 LIFE 1–3: HOMING SHOTS
+	# 🔵 LIFE 1–3: HOMING
 	if current_life <= 3:
 		var spike = SPIKE.instantiate()
 		spike.global_position = global_position
 		spike.target = player
 		get_tree().current_scene.add_child(spike)
 
-	# 🟡 LIFE 4–6: RADIAL BURST
+	# 🟡 LIFE 4–6: RADIAL
 	elif current_life <= 6:
 		var burst = 8
 		var base = randf_range(0, TAU)
@@ -101,12 +91,12 @@ func shoot():
 			var angle = base + (TAU / burst) * i
 
 			var spike = SPIKE.instantiate()
-			spike.global_position = global_position + Vector2(randf_range(-260, 60), randf_range(-260, 60))
+			spike.global_position = global_position + Vector2(randf_range(-60, 60), randf_range(-60, 60))
 			spike.direction = Vector2.RIGHT.rotated(angle)
 
 			get_tree().current_scene.add_child(spike)
 
-	# 💀 LIFE 7: SCREEN INVASION (CAMERA)
+	# 💀 LIFE 7: SCREEN INVASION
 	elif current_life == 7:
 		var camera = get_viewport().get_camera_2d()
 		var screen_size = get_viewport().get_visible_rect().size
@@ -123,7 +113,7 @@ func shoot():
 			spike.target = player
 			get_tree().current_scene.add_child(spike)
 
-	# 🌋 LIFE 8: GROUND ERUPTION (ground CHILD nodes)
+	# 🌋 LIFE 8: GROUND SPAWNS
 	elif current_life == 8:
 		var ground_points = get_tree().get_nodes_in_group("ground_spawns")
 
@@ -134,7 +124,7 @@ func shoot():
 				spike.target = player
 				get_tree().current_scene.add_child(spike)
 
-	# ☠️ LIFE 9: BOSSTHREE GROUND CORE RING (LOCKED)
+	# ☠️ LIFE 9: CORE RING
 	else:
 		if ground_node == null:
 			return
@@ -148,10 +138,7 @@ func shoot():
 			var angle = base + (TAU / burst) * i
 
 			var spike = SPIKE.instantiate()
-
-			# 🔒 locked ground-centered burst (no floating)
 			spike.global_position = origin + Vector2(randf_range(-8, 8), 0)
-
 			spike.direction = Vector2.RIGHT.rotated(angle)
 			spike.target = player
 
@@ -203,11 +190,13 @@ func take_damage(amount: int):
 		call_deferred("next_life")
 
 
-# ---------------- PHASE ----------------
+# ---------------- PHASE FIXED ----------------
 func update_phase():
-	if current_life >= total_lives * 0.7:
+	var percent = float(health) / float(max_health)
+
+	if percent > 0.7:
 		state = State.PHASE1
-	elif current_life >= total_lives * 0.4:
+	elif percent > 0.4:
 		state = State.PHASE2
 	else:
 		state = State.PHASE3
@@ -235,7 +224,6 @@ func die():
 
 	finishing = true
 	state = State.DEAD
-	can_shoot = false
 	flash_enabled = false
 
 	var tween = get_tree().create_tween()
@@ -243,10 +231,11 @@ func die():
 
 	await tween.finished
 	await explosion_storm()
-	queue_free()
+
+	get_tree().change_scene_to_file("res://Scenes/GameOver.tscn")
 
 
-# ---------------- EXPLOSION STORM ----------------
+# ---------------- EXPLOSION STORM FIXED ----------------
 func explosion_storm():
 	if explosion_running:
 		return
@@ -274,3 +263,5 @@ func explosion_storm():
 
 		await get_tree().create_timer(0.08).timeout
 		timer += 0.08
+
+	explosion_running = false
