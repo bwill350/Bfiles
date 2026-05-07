@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-@onready var health_label = $HealthLabel
+@onready var health_label = $DukeLabel
 @onready var boss_label = $BossoneHealthLabel
 @onready var flower_label = $FlowerLabel
 @onready var drone2_label = $Drone2HealthLabel
@@ -70,7 +70,24 @@ func _process(_delta):
 # ---------------- PLAYER ----------------
 func _on_duke_health_changed(health):
 	if health_label:
-		health_label.text = "Player Health: %d" % health
+		health_label.text = "Duke: %d" % health
+
+	if duke_bar:
+		duke_bar.value = health
+
+		var max_hp = duke_bar.max_value
+		if max_hp <= 0:
+			get_tree().change_scene_to_file(
+		"res://Scenes/GameOver.tscn"
+	)
+			return
+
+		var percent = float(health) / float(max_hp)
+
+		seg8.visible = percent > 0.75
+		seg7.visible = percent > 0.50
+		seg6.visible = percent > 0.25
+		seg5.visible = percent > 0.0
 
 
 # ---------------- BOSSONE ----------------
@@ -103,6 +120,11 @@ func _on_drone2_health_changed(health):
 @onready var seg3: TextureRect = $Seg3
 @onready var seg4: TextureRect = $Seg4
 
+@onready var duke_bar: TextureProgressBar = $DukeHealthBar
+@onready var seg8: TextureRect = $Seg8
+@onready var seg7: TextureRect = $Seg7
+@onready var seg6: TextureRect = $Seg6
+@onready var seg5: TextureRect = $Seg5
 
 # ---------------- REPTILE ----------------
 func _on_reptile_health_changed(health):
