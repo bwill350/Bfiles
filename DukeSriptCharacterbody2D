@@ -13,7 +13,7 @@ const GRAVITY = 5000
 enum State { IDLE, RUN, JUMP, CLIMB, DEAD }
 var state: State = State.IDLE
 
-var health: int = 100
+var health: int = 1
 var max_health: int = 300
 var last_facing_dir = 1
 
@@ -51,6 +51,8 @@ var can_shoot := true
 @onready var hit_sound: AudioStreamPlayer2D = $HitSound
 
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
+const BRUTALITY_DEATH = preload("res://Deaths/BrutalityDeath.tscn")
+const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 
 # ---------------- READY ----------------
 func _ready():
@@ -410,7 +412,7 @@ func die():
 	state = State.DEAD
 	velocity = Vector2.ZERO
 
-	var death_instance = ICE_DEATH.instantiate()
+	var death_instance = BLOOD_DEATH.instantiate()
 	death_instance.global_position = global_position
 	get_tree().current_scene.add_child(death_instance)
 
