@@ -32,11 +32,11 @@ const GRAVITY = 5000
 # ---------------- EXPORTS ----------------
 @export var SPEED = 850.0
 @export var CLIMB_SPEED = 220.0
-@export var max_health: int = 300
+@export var max_health: int = 20
 @export var jump_velocity = -1700.0
 
 # ---------------- PRELOADS ----------------
-const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
+const BULLET_SCENE = preload("res://Projectiles/Subzerobullet.tscn")
 const ICE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 
@@ -178,16 +178,18 @@ func take_damage(amount: int):
 
 	await sprite.animation_finished
 
-	sprite.modulate = original_color
 	is_hurting = false
 	hurt_locked = false
 	can_take_damage = true
 	already_hit = false
 
+	# 🔥 FIX: stop color reset if dead
 	if health <= 0:
 		die()
-	else:
-		play_anim("sidle")
+		return
+
+	sprite.modulate = original_color
+	play_anim("sidle")
 
 # ---------------- HIT ----------------
 func _on_hit_box_area_entered(area):
@@ -197,6 +199,10 @@ func _on_hit_box_area_entered(area):
 
 	if already_hit:
 		return
+
+	if area.is_in_group("ReptileBullet"):
+		already_hit = true
+		take_damage(1)
 
 	if area.is_in_group("Bullet"):
 		already_hit = true
@@ -247,7 +253,7 @@ func flash_red():
 
 	flashing = false
 
-# ---------------- DEATH (REPTILE STYLE FIXED) ----------------
+# ---------------- DEATH ----------------
 func die():
 
 	if state == State.SDEAD:
@@ -265,7 +271,8 @@ func die():
 	velocity = Vector2.ZERO
 	set_physics_process(false)
 
-	sprite.modulate = Color.WHITE
+	# 🔥 keep death color locked (NO green reset)
+	sprite.modulate = Color(0.7, 0.7, 0.7)
 
 	var death_instance = ICE_DEATH.instantiate()
 	death_instance.global_position = global_position
