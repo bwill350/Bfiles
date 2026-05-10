@@ -1,0 +1,73 @@
+extends Node2D
+
+# ---------------- SPAWN POSITIONS ----------------
+const P1_SPAWN := Vector2(603, 496)
+const P2_SPAWN := Vector2(840, 500)
+
+var p1
+var p2
+
+func _ready():
+	spawn_players()
+
+
+func spawn_players():
+	spawn_p1()
+	spawn_p2()
+
+	# ---------------- CPU SETUP ----------------
+	if Game.vs_cpu:
+
+		# P2 is CPU
+		if p2:
+			p2.is_cpu = true
+			p2.target = p1
+
+		# P1 always player
+		if p1:
+			p1.is_cpu = false
+			p1.target = p2
+
+	else:
+		# PvP mode
+		if p1 and p2:
+			p1.target = p2
+			p2.target = p1
+
+
+# ---------------- PLAYER 1 ----------------
+func spawn_p1():
+
+	match Game.p1_character:
+
+		"Duke":
+			p1 = preload("res://Scenes/Player/Duke.tscn").instantiate()
+
+		"Reptile":
+			p1 = preload("res://Scenes/Boss/Reptile.tscn").instantiate()
+
+		"SubZero":
+			p1 = preload("res://Scenes/Boss/SubZero.tscn").instantiate()
+
+	if p1:
+		p1.position = P1_SPAWN
+		add_child(p1)
+
+
+# ---------------- PLAYER 2 ----------------
+func spawn_p2():
+
+	match Game.p2_character:
+
+		"Duke":
+			p2 = preload("res://Scenes/Player/Duke.tscn").instantiate()
+
+		"Reptile":
+			p2 = preload("res://Scenes/Boss/Reptile.tscn").instantiate()
+
+		"SubZero":
+			p2 = preload("res://Scenes/Boss/SubZero.tscn").instantiate()
+
+	if p2:
+		p2.position = P2_SPAWN
+		add_child(p2)
