@@ -1,0 +1,59 @@
+extends Area2D
+class_name SubzeroBullet
+
+@export var speed: float = 600.0
+@export var turn_speed: float = 6.0
+@export var freeze_time: float = 0.25
+
+var velocity: Vector2 = Vector2.ZERO
+var target: Node2D = null
+
+# ---------------- READY ----------------
+func _ready():
+
+	if has_node("Timer"):
+		$Timer.start()
+
+	var players = get_tree().get_nodes_in_group("player")
+	if players.size() > 0:
+		target = players[0]
+
+
+# ---------------- MOVEMENT ----------------
+func _physics_process(delta):
+
+	if target == null or not is_instance_valid(target):
+		global_position += velocity * delta
+		return
+
+	var dir = (target.global_position - global_position).normalized()
+
+	# smooth homing (ice drift feel)
+	velocity = velocity.lerp(dir * speed, turn_speed * delta)
+
+	global_position += velocity * delta
+
+	rotation = velocity.angle()
+
+
+# ---------------- HIT ----------------
+func _on_area_entered(area: Area2D) -> void:
+
+	if area == null:
+		return
+
+	if area.is_in_group("player"):
+
+		velocity = Vector2.ZERO
+
+		# optional: freeze effect hook if player has it
+		if area.has_method("apply_freeze"):
+			area.apply_freeze(freeze_time)
+
+		if has_node("Timer"):
+			$Timer.start()
+
+
+# ---------------- CLEANUP ----------------
+func _on_timer_timeout() -> void:
+	queue_free()
