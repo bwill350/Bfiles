@@ -34,14 +34,13 @@ const GRAVITY = 5000
 # ---------------- EXPORTS ----------------
 @export var SPEED = 900.0
 @export var JCLIMB_SPEED = 250.0
-@export var max_health: int = 300
+@export var max_health: int = 10
 @export var jjump_velocity = -1800.0
 @export var combo_reset_time := 0.6
 
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
-
 const BRUTALITY_DEATH = preload("res://Deaths/BrutalityDeath.tscn")
 
 # ---------------- NODES ----------------
@@ -111,7 +110,6 @@ func _physics_process(delta):
 	velocity.x = input_dir * SPEED
 	sprite.flip_h = facing > 0
 
-	# ---------------- STATES ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.JCLIMB
 	elif not is_on_floor():
@@ -125,44 +123,34 @@ func _physics_process(delta):
 		State.JCLIMB:
 			velocity.y = -JCLIMB_SPEED
 			play_anim("jclimb")
-
 		State.JJUMP:
 			play_anim("jjump")
-
 		State.JRUN:
 			play_anim("jright")
-
 		State.IDLE:
 			play_anim("jidle")
 
-	# ---------------- ACTIONS ----------------
 	if Input.is_action_just_pressed("jjump") and is_on_floor():
 		velocity.y = jjump_velocity
 
 	if Input.is_action_just_pressed("jjumpkick"):
 		do_action("jjumpkick")
-
 	elif Input.is_action_pressed("jblock"):
 		do_action("jblock")
-
 	elif Input.is_action_just_pressed("jpunch"):
 		do_action("jpunch")
-
 	elif Input.is_action_pressed("jroundhousekick"):
 		do_action("jroundhousekick")
-
 	elif Input.is_action_pressed("jkick"):
 		do_action("jkick")
-
 	elif Input.is_action_pressed("juppercut"):
 		do_action("juppercut")
-
 	elif Input.is_action_just_pressed("jshoot"):
 		shoot_player()
 
 	move_and_slide()
 
-# ---------------- CPU AI (FIXED) ----------------
+# ---------------- CPU AI ----------------
 func cpu_logic(delta):
 
 	if target == null:
@@ -179,36 +167,27 @@ func cpu_logic(delta):
 
 	velocity.y += GRAVITY * delta
 
-	# ---------------- MOVE ----------------
 	if abs_dist > 220:
 		velocity.x = dir * SPEED * 0.8
-		play_anim("jright")
 	else:
 		velocity.x = 0
 
-	# ---------------- BLOCK ----------------
 	if target.has_method("is_attacking") and target.is_attacking and abs_dist < 180:
 		do_action("jblock")
 		return
 
-	# ---------------- WAIT TIMER ----------------
 	if ai_timer > 0:
 		return
 
 	ai_timer = randf_range(0.4, 0.8)
 
-	# ---------------- SINGLE DECISION ----------------
 	var r = randi() % 5
 
 	match r:
-		0:
-			do_action("jpunch")
-		1:
-			do_action("jkick")
-		2:
-			do_action("juppercut")
-		3:
-			do_action("jroundhousekick")
+		0: do_action("jpunch")
+		1: do_action("jkick")
+		2: do_action("juppercut")
+		3: do_action("jroundhousekick")
 		4:
 			if randf() < 0.3:
 				shoot_player()
@@ -236,7 +215,7 @@ func do_action(anim_name: String):
 	action_locked = false
 	play_anim("jidle")
 
-# ---------------- ATTACK SPAWN ----------------
+# ---------------- ATTACK ----------------
 func spawn_attack():
 	var attack = REPTILE_ATTACK.instantiate()
 	attack.global_position = attack_marker.global_position
@@ -299,15 +278,10 @@ func take_damage(amount: int):
 
 # ---------------- HIT ----------------
 func _on_hit_box_area_entered(area):
-	take_damage(1)
 
 	if already_hit:
 		return
 
-	if area.is_in_group("Bullet"):
-		already_hit = true
-		take_damage(1)
-		
 	if area.is_in_group("Subzerobullet"):
 		already_hit = true
 		take_damage(1)
@@ -315,7 +289,6 @@ func _on_hit_box_area_entered(area):
 	if area.is_in_group("Subzero"):
 		already_hit = true
 		take_damage(1)
-		
 
 	if area.is_in_group("SubzeroAttack"):
 		already_hit = true
@@ -334,10 +307,8 @@ func die():
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
-
 	if current_anim == anim_name:
 		return
-
 	current_anim = anim_name
 	sprite.play(anim_name)
 
