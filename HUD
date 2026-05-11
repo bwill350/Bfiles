@@ -1,151 +1,114 @@
 extends CanvasLayer
 
-@onready var health_label = $DukeLabel
-@onready var boss_label = $BossoneHealthLabel
-@onready var flower_label = $FlowerLabel
-@onready var drone2_label = $Drone2HealthLabel
+@onready var duke_label = $DukeLabel
+@onready var reptile_label = $ReptileLabel
+@onready var subzero_label = $SubzeroLabel
 @onready var points_label = $Points
-@onready var spawn_label = $SpawnLabel
-@onready var reptile_label = $ReptileHealthLabel
 
-var boss
-var spawn
+@onready var duke_bar: TextureProgressBar = $DukeHealthBar
+@onready var reptile_bar: TextureProgressBar = $ReptileHealthBar
+@onready var subzero_bar: TextureProgressBar = $SubzeroHealthBar
+# Duke Segs (1–8)
+@onready var seg5 = $Seg5
+@onready var seg6 = $Seg6
+@onready var seg7 = $Seg7
+@onready var seg8 = $Seg8
+
+# Reptile Segs (1–4)
+@onready var seg1 = $Seg1
+@onready var seg2 = $Seg2
+@onready var seg3 = $Seg3
+@onready var seg4 = $Seg4
+
+# Subzero Segs (9–12)
+@onready var seg9 = $Seg9
+@onready var seg10 = $Seg10
+@onready var seg11 = $Seg11
+@onready var seg12 = $Seg12
+
 var reptile
+var subzero
+var duke
 
 
-# ---------------- READY ----------------
 func _ready():
 
-	# PLAYER
-	var duke = get_tree().get_first_node_in_group("player")
+	Game.points_changed.connect(_on_points_changed)
+
+	duke = get_tree().get_first_node_in_group("player")
 	if duke:
 		duke.health_changed.connect(_on_duke_health_changed)
 
-	# FLOWER
-	var flower = get_tree().get_first_node_in_group("DeadlyFlower")
-	if flower:
-		flower.health_changed.connect(_on_flower_health_changed)
-
-	# DRONE2
-	var drone2 = get_tree().get_first_node_in_group("Drone2")
-	if drone2:
-		drone2.health_changed.connect(_on_drone2_health_changed)
-
-	# BOSSONE (may spawn later)
-	boss = get_tree().get_first_node_in_group("Bossone")
-	if boss and boss.has_signal("health_changed"):
-		boss.health_changed.connect(_on_boss_health_changed)
-
-	# REPTILE (may spawn later)
-	reptile = get_tree().get_first_node_in_group("enemy")
-	if reptile and reptile.has_signal("health_changed"):
+	reptile = get_tree().get_first_node_in_group("Reptile")
+	if reptile:
 		reptile.health_changed.connect(_on_reptile_health_changed)
 
-	# POINTS
-	Game.points_changed.connect(_on_points_changed)
+	subzero = get_tree().get_first_node_in_group("Subzero")
+	if subzero:
+		subzero.health_changed.connect(_on_subzero_health_changed)
 
 
-# ---------------- PROCESS (late spawns safe) ----------------
 func _process(_delta):
 
-	# BOSSONE
-	if boss == null:
-		boss = get_tree().get_first_node_in_group("Bossone")
-		if boss and boss.has_signal("health_changed") and not boss.is_connected("health_changed", Callable(self, "_on_boss_health_changed")):
-			boss.health_changed.connect(_on_boss_health_changed)
-
-	# SPAWN
-	if spawn == null:
-		spawn = get_tree().get_first_node_in_group("Spawn")
-		if spawn and spawn.has_signal("health_changed") and not spawn.is_connected("health_changed", Callable(self, "_on_spawn_health_changed")):
-			spawn.health_changed.connect(_on_spawn_health_changed)
-
-	# REPTILE
 	if reptile == null:
-		reptile = get_tree().get_first_node_in_group("enemy")
-		if reptile and reptile.has_signal("health_changed") and not reptile.is_connected("health_changed", Callable(self, "_on_reptile_health_changed")):
+		reptile = get_tree().get_first_node_in_group("Reptile")
+		if reptile and reptile.has_signal("health_changed"):
 			reptile.health_changed.connect(_on_reptile_health_changed)
 
+	if subzero == null:
+		subzero = get_tree().get_first_node_in_group("Subzero")
+		if subzero and subzero.has_signal("health_changed"):
+			subzero.health_changed.connect(_on_subzero_health_changed)
 
-# ---------------- PLAYER ----------------
+
+
+
+
+
+# ---------------- DUKE ----------------
 func _on_duke_health_changed(health):
-	if health_label:
-		health_label.text = "Duke: %d" % health
 
-	if duke_bar:
-		duke_bar.value = health
-
-		var max_hp = duke_bar.max_value
-		if max_hp <= 0:
-			get_tree().change_scene_to_file(
-		"res://Scenes/GameOver.tscn"
-	)
-			return
-
-		var percent = float(health) / float(max_hp)
-
-		seg8.visible = percent > 0.75
-		seg7.visible = percent > 0.50
-		seg6.visible = percent > 0.25
-		seg5.visible = percent > 0.0
+	duke_label.text = "Duke: %d" % health
+	duke_bar.value = health
 
 
-# ---------------- BOSSONE ----------------
-func _on_boss_health_changed(health):
-	if boss_label:
-		boss_label.text = "Bossone Health: %d" % health
-
-
-# ---------------- SPAWN ----------------
-func _on_spawn_health_changed(health):
-	if spawn_label:
-		spawn_label.text = "Spawn HP: %d" % health
-
-
-# ---------------- FLOWER ----------------
-func _on_flower_health_changed(health):
-	if flower_label:
-		flower_label.text = "Flower: %d" % health
-
-
-# ---------------- DRONE2 ----------------
-func _on_drone2_health_changed(health):
-	if drone2_label:
-		drone2_label.text = "Drone2: %d" % health
-
-
-@onready var reptile_bar: TextureProgressBar = $ReptileHealthBar
-@onready var seg1: TextureRect = $Seg1
-@onready var seg2: TextureRect = $Seg2
-@onready var seg3: TextureRect = $Seg3
-@onready var seg4: TextureRect = $Seg4
-
-@onready var duke_bar: TextureProgressBar = $DukeHealthBar
-@onready var seg8: TextureRect = $Seg8
-@onready var seg7: TextureRect = $Seg7
-@onready var seg6: TextureRect = $Seg6
-@onready var seg5: TextureRect = $Seg5
-
-# ---------------- REPTILE ----------------
+# ---------------- REPTILE (Seg1–4) ----------------
 func _on_reptile_health_changed(health):
-	if reptile_label:
-		reptile_label.text = "Reptile: %d" % health
 
-	if reptile_bar:
-		reptile_bar.value = health
+	reptile_label.text = "Reptile: %d" % health
+	reptile_bar.value = health
 
-		var max_hp = reptile_bar.max_value
-		if max_hp <= 0:
-			return
+	var max_hp = reptile_bar.max_value
+	if max_hp <= 0:
+		return
 
-		var percent = float(health) / float(max_hp)
+	var percent = float(health) / float(max_hp)
 
-		seg4.visible = percent > 0.75
-		seg3.visible = percent > 0.50
-		seg2.visible = percent > 0.25
-		seg1.visible = percent > 0.0
+	seg1.visible = percent > 0.00
+	seg2.visible = percent > 0.25
+	seg3.visible = percent > 0.50
+	seg4.visible = percent > 0.75
+
+
+# ---------------- SUBZERO (Seg9–12) ----------------
+func _on_subzero_health_changed(health):
+
+	subzero_label.text = "Subzero: %d" % health
+	# hide Duke/Reptile bar if needed (optional safe swap behavior)
+	subzero_bar.visible = health
+
+	var max_hp = subzero_bar.max_value
+	if max_hp <= 0:
+		return
+
+	var percent = float(health) / float(max_hp)
+
+	seg9.visible = percent > 0.00
+	seg10.visible = percent > 0.25
+	seg11.visible = percent > 0.50
+	seg12.visible = percent > 0.75
+
 
 # ---------------- POINTS ----------------
 func _on_points_changed(points):
-	if points_label:
-		points_label.text = "Points: %d" % points
+	points_label.text = "Points: %d" % points
