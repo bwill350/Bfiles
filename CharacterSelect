@@ -1,0 +1,125 @@
+extends Control
+
+@onready var duke_btn = $Panel/MarginContainer/VBoxContainer/CharactersPanel/HBoxContainer/DukeButton
+@onready var reptile_btn = $Panel/MarginContainer/VBoxContainer/CharactersPanel/HBoxContainer/ReptileButton
+@onready var subzero_btn = $Panel/MarginContainer/VBoxContainer/CharactersPanel/HBoxContainer/SubzeroButton
+
+@onready var mode_button = $Panel/MarginContainer/VBoxContainer/ModePanel/ModeButton
+@onready var start_button = $Panel/StartButton
+
+@onready var p1_label = $Panel/MarginContainer/VBoxContainer/InfoPanel/P1Label
+@onready var p2_label = $Panel/MarginContainer/VBoxContainer/InfoPanel/P2Label
+@onready var cpu_label = $Panel/MarginContainer/VBoxContainer/InfoPanel/CPULabel
+
+
+func _ready():
+	duke_btn.pressed.connect(func(): _select_character("Duke"))
+	reptile_btn.pressed.connect(func(): _select_character("Reptile"))
+	subzero_btn.pressed.connect(func(): _select_character("SubZero"))
+
+	mode_button.pressed.connect(_toggle_mode)
+	start_button.pressed.connect(_start_game)
+
+	_update_mode_text()
+	_update_labels()
+
+
+func _select_character(char_name: String):
+
+	# Player 1 selection
+	if Game.p1_character == "":
+		Game.p1_character = char_name
+		p1_label.text = "P1: " + char_name
+
+		# CPU mode auto-assign real character
+		if Game.vs_cpu:
+			Game.p2_character = _get_random_cpu()
+			cpu_label.text = "CPU: " + Game.p2_character
+
+		return
+
+	# Player 2 selection (only PvP mode)
+	if not Game.vs_cpu:
+		if Game.p2_character == "":
+			Game.p2_character = char_name
+			p2_label.text = "P2: " + char_name
+			return
+
+
+func _get_random_cpu() -> String:
+	var options = ["Duke", "Reptile", "SubZero"]
+
+	if Game.p1_character in options:
+		options.erase(Game.p1_character)
+
+	return options[randi() % options.size()]
+
+
+func _toggle_mode():
+	Game.vs_cpu = !Game.vs_cpu
+
+	Game.p1_character = ""
+	Game.p2_character = ""
+
+	p1_label.text = "P1: Not Selected"
+	p2_label.text = "P2: Not Selected"
+	cpu_label.text = "CPU: Not Selected"
+
+	_update_mode_text()
+	_update_labels()
+
+
+func _update_mode_text():
+	if Game.vs_cpu:
+		mode_button.text = "Player 1 vs CPU"
+	else:
+		mode_button.text = "Player 1 vs Player 2"
+
+
+func _update_labels():
+	p2_label.visible = not Game.vs_cpu
+	cpu_label.visible = Game.vs_cpu
+
+
+func _start_game():
+
+	if Game.p1_character == "":
+		print("Player 1 must pick a character")
+		return
+
+	if not Game.vs_cpu and Game.p2_character == "":
+		print("Player 2 must pick a character")
+		return
+
+	get_tree().change_scene_to_file("res://Scenes/Levels/Level1.tscn")
+
+func get_character_scene(char_name: String) -> PackedScene:
+	match char_name:
+		"Duke":
+			return preload("res://Scenes/Player/Duke.tscn")
+		"Subzero":
+			return preload("res://Scenes/Boss/Subzero.tscn")
+		"Reptile":
+			return preload("res://Scenes/Boss/Reptile.tscn")
+		_:
+			return null
+
+func _on_start_button_pressed():
+
+
+	var p1_scene = get_character_scene(Game.p1_character)
+	var p2_scene = get_character_scene(Game.p2_character)
+
+	var p1 = p1_scene.instantiate()
+	var p2 = p2_scene.instantiate()
+
+	get_tree().current_scene.add_child(p1)
+	get_tree().current_scene.add_child(p2)
+
+	p1.global_position = Vector2(300, 400)
+	p2.global_position = Vector2(900, 400)
+
+	# CPU assignment
+	if Game.vs_cpu:
+		p2.is_cpu = true
+		p2.target = p1
