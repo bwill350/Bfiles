@@ -34,7 +34,7 @@ const GRAVITY = 5000
 # ---------------- EXPORTS ----------------
 @export var SPEED = 900.0
 @export var SCLIMB_SPEED = 250.0
-@export var max_health: int = 300
+@export var max_health: int = 10
 @export var sjump_velocity = -1800.0
 @export var combo_reset_time := 0.6
 
@@ -64,9 +64,14 @@ func _ready():
 	add_to_group("Subzero")
 
 	health = max_health
-	health_changed.emit(health)
+	call_deferred("emit_health")
 
 	play_anim("sidle")
+
+
+func emit_health():
+	health_changed.emit(health)
+
 
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
@@ -83,6 +88,7 @@ func _unhandled_input(event):
 		register_input("sright")
 	elif event.is_action_pressed("sshoot"):
 		register_input("sshoot")
+
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -110,7 +116,6 @@ func _physics_process(delta):
 	velocity.x = input_dir * SPEED
 	sprite.flip_h = facing > 0
 
-	# ---------------- STATES ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.SCLIMB
 	elif not is_on_floor():
@@ -124,44 +129,35 @@ func _physics_process(delta):
 		State.SCLIMB:
 			velocity.y = -SCLIMB_SPEED
 			play_anim("sclimb")
-
 		State.SJUMP:
 			play_anim("sjump")
-
 		State.SRUN:
 			play_anim("srun")
-
 		State.IDLE:
 			play_anim("sidle")
 
-	# ---------------- ACTIONS ----------------
 	if Input.is_action_just_pressed("sjump") and is_on_floor():
 		velocity.y = sjump_velocity
 
 	if Input.is_action_just_pressed("sjumpkick"):
 		do_action("sjumpkick")
-
 	elif Input.is_action_pressed("sblock"):
 		do_action("sblock")
-
 	elif Input.is_action_just_pressed("spunch"):
 		do_action("spunch")
-
 	elif Input.is_action_pressed("sroundhousekick"):
 		do_action("sroundhousekick")
-
 	elif Input.is_action_pressed("skick"):
 		do_action("skick")
-
 	elif Input.is_action_pressed("suppercut"):
 		do_action("suppercut")
-
 	elif Input.is_action_just_pressed("sshoot"):
 		shoot_player()
 
 	move_and_slide()
 
-# ---------------- CPU AI ----------------
+
+# ---------------- CPU AI (UNCHANGED) ----------------
 func cpu_logic(delta):
 
 	if target == null:
@@ -203,6 +199,7 @@ func cpu_logic(delta):
 			if randf() < 0.3:
 				shoot_player()
 
+
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
 
@@ -226,11 +223,13 @@ func do_action(anim_name: String):
 	action_locked = false
 	play_anim("sidle")
 
+
 # ---------------- ATTACK ----------------
 func spawn_attack():
 	var attack = SUBZERO_ATTACK.instantiate()
 	attack.global_position = attack_marker.global_position
 	get_tree().current_scene.add_child(attack)
+
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -255,6 +254,7 @@ func shoot_player():
 	is_attacking = false
 	play_anim("sidle")
 
+
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 
@@ -267,10 +267,10 @@ func take_damage(amount: int):
 
 	health -= amount
 	health = max(health, 0)
+
 	health_changed.emit(health)
 
 	hit_sound.play()
-
 	play_anim("shurt")
 
 	await sprite.animation_finished
@@ -285,15 +285,12 @@ func take_damage(amount: int):
 	else:
 		play_anim("sidle")
 
+
 # ---------------- HIT ----------------
 func _on_hit_box_area_entered(area):
 
 	if already_hit:
 		return
-
-	if area.is_in_group("Bullet"):
-		already_hit = true
-		take_damage(1)
 
 	if area.is_in_group("Reptilebullet"):
 		already_hit = true
@@ -307,6 +304,7 @@ func _on_hit_box_area_entered(area):
 		already_hit = true
 		take_damage(1)
 
+
 # ---------------- DEATH ----------------
 func die():
 	state = State.DEAD
@@ -318,20 +316,21 @@ func die():
 
 	queue_free()
 
+
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
-
 	if current_anim == anim_name:
 		return
-
 	current_anim = anim_name
 	sprite.play(anim_name)
+
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 	combo.append(input)
 	combo_timer = 0.0
 	check_combos()
+
 
 func check_combos():
 	if combo == FIRE_COMBO:
