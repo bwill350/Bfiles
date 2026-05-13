@@ -126,7 +126,7 @@ func _physics_process(delta):
 		State.JJUMP:
 			play_anim("jjump")
 		State.JRUN:
-			play_anim("jright")
+			play_anim("jwalk")
 		State.IDLE:
 			play_anim("jidle")
 
