@@ -68,9 +68,6 @@ func _ready():
 
 	play_anim("sidle")
 
-func emit_health():
-	health_changed.emit(health)
-
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
 	if is_cpu:
@@ -113,6 +110,7 @@ func _physics_process(delta):
 	velocity.x = input_dir * SPEED
 	sprite.flip_h = facing > 0
 
+	# state handling
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.SCLIMB
 	elif not is_on_floor():
@@ -153,7 +151,7 @@ func _physics_process(delta):
 
 	move_and_slide()
 
-# ---------------- CPU AI (FIXED SAME WAY AS REPTILE) ----------------
+# ---------------- CPU AI (FIXED WALK SYNC LIKE REPTILE) ----------------
 func cpu_logic(delta):
 
 	if target == null:
@@ -192,9 +190,7 @@ func cpu_logic(delta):
 
 	ai_timer = randf_range(0.4, 0.8)
 
-	var r = randi() % 5
-
-	match r:
+	match randi() % 5:
 		0: do_action("spunch")
 		1: do_action("skick")
 		2: do_action("suppercut")
@@ -208,7 +204,6 @@ func do_action(anim_name: String):
 
 	if state == State.DEAD:
 		return
-
 	if action_locked:
 		return
 
@@ -295,13 +290,15 @@ func _on_hit_box_area_entered(area):
 		already_hit = true
 		take_damage(1)
 
-	if area.is_in_group("Reptile"):
+	elif area.is_in_group("Reptile"):
 		already_hit = true
 		take_damage(1)
 
-	if area.is_in_group("ReptileAttack"):
+	elif area.is_in_group("ReptileAttack"):
 		already_hit = true
 		take_damage(1)
+
+
 
 # ---------------- DEATH ----------------
 func die():
