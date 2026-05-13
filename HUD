@@ -85,9 +85,9 @@ func _on_reptile_health_changed(health):
 	var percent = float(health) / float(max_hp)
 
 	seg1.visible = percent > 0.00
-	seg2.visible = percent > 0.25
-	seg3.visible = percent > 0.50
-	seg4.visible = percent > 0.75
+	seg2.visible = percent > 0.01
+	seg3.visible = percent > 0.02
+	seg4.visible = percent > 0.03
 
 
 # ---------------- SUBZERO (Seg9–12) ----------------
@@ -104,9 +104,9 @@ func _on_subzero_health_changed(health):
 	var percent = float(health) / float(max_hp)
 
 	seg9.visible = percent > 0.00
-	seg10.visible = percent > 0.25
-	seg11.visible = percent > 0.50
-	seg12.visible = percent > 0.75
+	seg10.visible = percent > 0.01
+	seg11.visible = percent > 0.02
+	seg12.visible = percent > 0.03
 
 
 # ---------------- POINTS ----------------
