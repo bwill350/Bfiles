@@ -64,14 +64,12 @@ func _ready():
 	add_to_group("Subzero")
 
 	health = max_health
-	call_deferred("emit_health")
+	health_changed.emit(health)
 
 	play_anim("sidle")
 
-
 func emit_health():
 	health_changed.emit(health)
-
 
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
@@ -88,7 +86,6 @@ func _unhandled_input(event):
 		register_input("sright")
 	elif event.is_action_pressed("sshoot"):
 		register_input("sshoot")
-
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -156,8 +153,7 @@ func _physics_process(delta):
 
 	move_and_slide()
 
-
-# ---------------- CPU AI (UNCHANGED) ----------------
+# ---------------- CPU AI (FIXED SAME WAY AS REPTILE) ----------------
 func cpu_logic(delta):
 
 	if target == null:
@@ -176,8 +172,16 @@ func cpu_logic(delta):
 
 	if abs_dist > 220:
 		velocity.x = dir * SPEED * 0.8
+
+		if state != State.SRUN:
+			state = State.SRUN
+			play_anim("swalk")
 	else:
 		velocity.x = 0
+
+		if state != State.IDLE:
+			state = State.IDLE
+			play_anim("sidle")
 
 	if target.has_method("is_attacking") and target.is_attacking and abs_dist < 180:
 		do_action("sblock")
@@ -198,7 +202,6 @@ func cpu_logic(delta):
 		4:
 			if randf() < 0.3:
 				shoot_player()
-
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -223,13 +226,11 @@ func do_action(anim_name: String):
 	action_locked = false
 	play_anim("sidle")
 
-
 # ---------------- ATTACK ----------------
 func spawn_attack():
 	var attack = SUBZERO_ATTACK.instantiate()
 	attack.global_position = attack_marker.global_position
 	get_tree().current_scene.add_child(attack)
-
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -253,7 +254,6 @@ func shoot_player():
 	is_shooting = false
 	is_attacking = false
 	play_anim("sidle")
-
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
@@ -285,7 +285,6 @@ func take_damage(amount: int):
 	else:
 		play_anim("sidle")
 
-
 # ---------------- HIT ----------------
 func _on_hit_box_area_entered(area):
 
@@ -304,7 +303,6 @@ func _on_hit_box_area_entered(area):
 		already_hit = true
 		take_damage(1)
 
-
 # ---------------- DEATH ----------------
 func die():
 	state = State.DEAD
@@ -316,7 +314,6 @@ func die():
 
 	queue_free()
 
-
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
 	if current_anim == anim_name:
@@ -324,13 +321,11 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 	sprite.play(anim_name)
 
-
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 	combo.append(input)
 	combo_timer = 0.0
 	check_combos()
-
 
 func check_combos():
 	if combo == FIRE_COMBO:
