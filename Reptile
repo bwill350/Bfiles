@@ -150,7 +150,7 @@ func _physics_process(delta):
 
 	move_and_slide()
 
-# ---------------- CPU AI ----------------
+# ---------------- CPU AI (FIXED ANIMATION SYNC) ----------------
 func cpu_logic(delta):
 
 	if target == null:
@@ -169,8 +169,16 @@ func cpu_logic(delta):
 
 	if abs_dist > 220:
 		velocity.x = dir * SPEED * 0.8
+
+		if state != State.JRUN:
+			state = State.JRUN
+			play_anim("jwalk")
 	else:
 		velocity.x = 0
+
+		if state != State.IDLE:
+			state = State.IDLE
+			play_anim("jidle")
 
 	if target.has_method("is_attacking") and target.is_attacking and abs_dist < 180:
 		do_action("jblock")
@@ -256,16 +264,14 @@ func take_damage(amount: int):
 
 	health -= amount
 	health = max(health, 0)
+
 	health_changed.emit(health)
 
 	hit_sound.play()
-
 	play_anim("jhurt")
-	sprite.modulate = Color(1, 0, 0)
 
 	await sprite.animation_finished
 
-	sprite.modulate = Color.WHITE
 	is_hurting = false
 	hurt_locked = false
 	can_take_damage = true
@@ -278,7 +284,6 @@ func take_damage(amount: int):
 
 # ---------------- HIT ----------------
 func _on_hit_box_area_entered(area):
-
 	if already_hit:
 		return
 
