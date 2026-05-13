@@ -2,21 +2,39 @@ extends Area2D
 class_name Reptilebullet
 
 @export var speed: float = 600.0
+@export var turn_speed: float = 6.0
+@export var lifetime: float = 3.0
 
-var velocity: Vector2 = Vector2.LEFT * 600.0  # 🔥 always fires left
+var velocity: Vector2 = Vector2.ZERO
+var target: Node2D = null
 
 
+# ---------------- READY ----------------
 func _ready():
-	$Timer.start()
+	area_entered.connect(_on_area_entered)
 
-	# force left direction no matter what is set
-	velocity = Vector2.LEFT * speed
+	await get_tree().create_timer(lifetime).timeout
+	queue_free()
 
-	rotation = velocity.angle()
+	# find Subzero (opposite side target)
+	var enemies = get_tree().get_nodes_in_group("Subzero")
+	if enemies.size() > 0:
+		target = enemies[0]
 
 
+# ---------------- MOVEMENT ----------------
 func _physics_process(delta):
+
+	if target == null or not is_instance_valid(target):
+		global_position += velocity * delta
+		return
+
+	var dir = (target.global_position - global_position).normalized()
+
+	velocity = velocity.lerp(dir * speed, turn_speed * delta)
+
 	global_position += velocity * delta
+	rotation = velocity.angle()
 
 
 # ---------------- HIT ----------------
@@ -24,12 +42,11 @@ func _on_area_entered(area: Area2D) -> void:
 	if area == null:
 		return
 
-	# hit enemy
-	if area.is_in_group("enemy"):
-		velocity = Vector2.ZERO
-		$Timer.start()
+	# ONLY hit Subzero HitBox
+	if area.is_in_group("HitBox"):
+		var subzero = area.get_parent()
 
+		if subzero and subzero.is_in_group("Subzero") and subzero.has_method("take_damage"):
+			subzero.take_damage(1)
 
-# ---------------- CLEANUP ----------------
-func _on_timer_timeout() -> void:
-	queue_free()
+		queue_free()
