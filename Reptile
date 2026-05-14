@@ -149,6 +149,23 @@ func _physics_process(delta):
 		shoot_player()
 
 	move_and_slide()
+func separate_from_other_fighter():
+	var other = get_tree().get_first_node_in_group("Reptile")
+	if other == self:
+		other = get_tree().get_first_node_in_group("Subzero")
+
+	if other == null:
+		return
+
+	var dist = global_position.distance_to(other.global_position)
+
+	var min_dist = 60.0  # width of a fighter
+
+	if dist < min_dist:
+		var push_dir = (global_position - other.global_position).normalized()
+		global_position += push_dir * (min_dist - dist) * 0.5
+		move_and_slide()
+		separate_from_other_fighter()
 
 # ---------------- CPU AI (FIXED ANIMATION SYNC) ----------------
 func cpu_logic(delta):
