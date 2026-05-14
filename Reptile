@@ -42,6 +42,7 @@ const GRAVITY = 5000
 const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 const BRUTALITY_DEATH = preload("res://Deaths/BrutalityDeath.tscn")
+const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
@@ -300,18 +301,36 @@ func take_damage(amount: int):
 		play_anim("jidle")
 
 # ---------------- HIT ----------------
-func _on_hit_box_area_entered(area):
+func _on_hit_box_area_entered(area: Area2D) -> void:
+	if area == null:
+		return
 
-	if area.is_in_group("HitBox"):
-		area.take_damage(1)
-
+	# ---------------------------------------
+	# 1) Got hit by Subzero's bullet
+	# ---------------------------------------
 	if area.is_in_group("Subzerobullet"):
 		take_damage(1)
+		return
 
-	if area.is_in_group("Subzero"):
-		area.take_damage(1)
-
+	# ---------------------------------------
+	# 2) Got hit by Subzero's attack hitbox
+	# ---------------------------------------
 	if area.is_in_group("SubzeroAttack"):
+		take_damage(1)
+		return
+
+
+
+	# ---------------------------------------
+	# 4) Ignore your own Reptile hitbox
+	# ---------------------------------------
+	if area.is_in_group("Reptile"):
+		return
+
+	# ---------------------------------------
+	# 5) This is Subzero's HitBox (melee contact)
+	# ---------------------------------------
+	if area.has_method("take_damage"):
 		area.take_damage(1)
 
 # ---------------- DEATH ----------------
@@ -319,7 +338,7 @@ func die():
 	state = State.DEAD
 	velocity = Vector2.ZERO
 
-	var death = BRUTALITY_DEATH.instantiate()
+	var death = BLOOD_DEATH.instantiate()
 	death.global_position = global_position
 	get_tree().current_scene.add_child(death)
 
