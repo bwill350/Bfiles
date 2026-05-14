@@ -301,23 +301,17 @@ func take_damage(amount: int):
 
 # ---------------- HIT ----------------
 func _on_hit_box_area_entered(area):
-	if already_hit:
-		return
 
 	if area.is_in_group("HitBox"):
-		already_hit = true
 		area.take_damage(1)
 
 	if area.is_in_group("Subzerobullet"):
-		already_hit = true
-		area.take_damage(1)
+		take_damage(1)
 
 	if area.is_in_group("Subzero"):
-		already_hit = true
 		area.take_damage(1)
 
 	if area.is_in_group("SubzeroAttack"):
-		already_hit = true
 		area.take_damage(1)
 
 # ---------------- DEATH ----------------
