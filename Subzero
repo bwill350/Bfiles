@@ -301,19 +301,16 @@ func take_damage(amount: int):
 # ---------------- HIT ----------------
 func _on_hit_box_area_entered(area):
 
-	if already_hit:
-		return
-
 	if area.is_in_group("ReptileBullet"):
-		already_hit = true
 		take_damage(1)
 
 	elif area.is_in_group("Reptile"):
-		already_hit = true
 		take_damage(1)
 
 	elif area.is_in_group("ReptileAttack"):
-		already_hit = true
+		take_damage(1)
+
+	elif area.is_in_group("ReptilesHitBox"):
 		take_damage(1)
 
 
