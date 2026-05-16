@@ -176,6 +176,9 @@ func cpu_logic(delta):
 	if target == null:
 		return
 
+	if action_locked or hurt_locked:
+		return
+
 	ai_timer -= delta
 
 	var dist = target.global_position.x - global_position.x
@@ -204,27 +207,27 @@ func cpu_logic(delta):
 			state = State.IDLE
 			play_anim("jidle")
 
-	if ai_timer <= 0:
+		if ai_timer <= 0:
 
-		ai_timer = randf_range(0.4, 0.8)
+			ai_timer = randf_range(0.4, 0.8)
 
-		match randi() % 5:
+			match randi() % 5:
 
-			0:
-				do_action("jpunch")
+				0:
+					do_action("jpunch")
 
-			1:
-				do_action("jkick")
+				1:
+					do_action("jkick")
 
-			2:
-				do_action("juppercut")
+				2:
+					do_action("juppercut")
 
-			3:
-				do_action("jroundhousekick")
+				3:
+					do_action("jroundhousekick")
 
-			4:
-				if randf() < 0.3:
-					shoot_player()
+				4:
+					if randf() < 0.3:
+						shoot_player()
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -328,12 +331,10 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 	if area == null:
 		return
 
-	# PLAYER ATTACK
 	if area.is_in_group("SubzeroAttack"):
 		take_damage(1)
 		return
 
-	# PLAYER BULLET
 	if area.is_in_group("Subzerobullet"):
 		take_damage(1)
 		return
@@ -392,8 +393,11 @@ func check_combos():
 
 		combo.clear()
 
+# ---------------- SEPARATION ----------------
 func separate_from_other_fighter():
+
 	var other = get_tree().get_first_node_in_group("Reptile")
+
 	if other == self:
 		other = get_tree().get_first_node_in_group("Subzero")
 
@@ -402,9 +406,8 @@ func separate_from_other_fighter():
 
 	var dist = global_position.distance_to(other.global_position)
 
-	var min_dist = 60.0  # width of a fighter
+	var min_dist = 60.0
 
 	if dist < min_dist:
 		var push_dir = (global_position - other.global_position).normalized()
 		global_position += push_dir * (min_dist - dist) * 0.5
-		separate_from_other_fighter()
