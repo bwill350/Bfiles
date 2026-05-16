@@ -207,7 +207,7 @@ func do_action(anim_name: String):
 	if action_locked:
 		return
 
-	action_locked = true
+	action_locked = false
 	is_attacking = true
 
 	play_anim(anim_name)
@@ -221,7 +221,7 @@ func do_action(anim_name: String):
 
 
 
-	is_attacking = false
+	is_attacking = true
 	action_locked = false
 
 	play_anim("sidle")
