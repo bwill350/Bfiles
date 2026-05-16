@@ -14,9 +14,11 @@ func _ready():
 	area_entered.connect(_on_area_entered)
 
 func enable_hitbox():
+
 	collision_shape.disabled = false
 
 func disable_hitbox():
+
 	collision_shape.disabled = true
 
 func _on_area_entered(area: Area2D) -> void:
@@ -24,12 +26,15 @@ func _on_area_entered(area: Area2D) -> void:
 	if area == null:
 		return
 
-	# PLAYER HURTBOX
-	if area.name == "HitBox":
+	# ONLY HIT PLAYER HURTBOX
+	if area.is_in_group("HitBox"):
 
 		var target = area.get_parent()
 
-		if target and target.is_in_group("HitBox"):
+		if target and target.has_method("take_damage"):
 
-			if target.has_method("take_damage"):
-				target.take_damage(damage)
+			# SAFETY CHECK: prevent self-hit
+			if target.is_in_group("Reptile"):
+				return
+
+			target.take_damage(damage)
