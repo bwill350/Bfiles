@@ -241,9 +241,14 @@ func do_action(anim_name: String):
 	play_anim(anim_name)
 
 	if anim_name in ["jpunch", "jkick", "jroundhousekick", "juppercut"]:
+
+		$ReptileAttack.enable_hitbox()
+
 		spawn_attack()
 
 	await sprite.animation_finished
+
+	$ReptileAttack.disable_hitbox()
 
 	is_attacking = false
 	action_locked = false
