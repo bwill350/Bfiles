@@ -6,7 +6,7 @@ signal combo_used(combo_name: String)
 
 # ---------------- STATE ----------------
 enum State { IDLE, JRUN, JJUMP, JJUMPKICK, JBLOCK, JPUNCH, JCLIMB, DEAD }
-
+var special_bullet: PackedScene = null
 var state: State = State.IDLE
 
 # ---------------- CPU ----------------
@@ -38,8 +38,18 @@ const GRAVITY = 5000
 
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
+
+const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
+const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
+const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
+
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
+
+# ---------------- COMBO FX ----------------
+const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
+const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
+const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
@@ -55,6 +65,8 @@ var combo_timer := 0.0
 const FIRE_COMBO = ["jdown", "jright", "jshoot"]
 const ICE_COMBO = ["jleft", "jleft", "jshoot"]
 const ELECTRIC_COMBO = ["jup", "jdown", "jshoot"]
+
+var current_combo_element := "fire"
 
 # ---------------- READY ----------------
 func _ready():
@@ -92,6 +104,11 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+
+	combo_timer += delta
+
+	if combo_timer > combo_reset_time:
+		combo.clear()
 
 	if is_cpu:
 		cpu_logic(delta)
@@ -208,26 +225,8 @@ func cpu_logic(delta):
 			play_anim("jidle")
 
 		if ai_timer <= 0:
-
 			ai_timer = randf_range(0.4, 0.8)
-
-			match randi() % 5:
-
-				0:
-					do_action("jpunch")
-
-				1:
-					do_action("jkick")
-
-				2:
-					do_action("juppercut")
-
-				3:
-					do_action("jroundhousekick")
-
-				4:
-					if randf() < 0.3:
-						shoot_player()
+			do_action("jpunch")
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -246,7 +245,6 @@ func do_action(anim_name: String):
 	if anim_name in ["jpunch", "jkick", "jroundhousekick", "juppercut"]:
 
 		$ReptileAttack.enable_hitbox()
-
 		spawn_attack()
 
 	await sprite.animation_finished
@@ -278,7 +276,22 @@ func shoot_player():
 
 	play_anim("jshoot")
 
-	var bullet = BULLET_SCENE.instantiate()
+	var bullet_scene: PackedScene
+
+	# ---------------- SPECIAL BULLET ----------------
+	if special_bullet != null:
+
+		bullet_scene = special_bullet
+
+		# reset back to normal after one special shot
+		special_bullet = null
+
+	else:
+
+		# normal default projectile
+		bullet_scene = BULLET_SCENE
+
+	var bullet = bullet_scene.instantiate()
 
 	get_tree().current_scene.add_child(bullet)
 
@@ -319,7 +332,6 @@ func take_damage(amount: int):
 
 	is_hurting = false
 	hurt_locked = false
-
 	can_take_damage = true
 
 	if health <= 0:
@@ -331,14 +343,90 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 	if area == null:
 		return
 
+	# ---------------- BLOCK ----------------
+	if Input.is_action_pressed("jblock"):
+
+		play_anim("jblock")
+
+		# optional pushback
+		velocity.x = -facing * 100
+
+		# destroy projectile if blocking
+		if area.is_in_group("Subzerobullet"):
+			area.queue_free()
+
+		return
+
+	# ---------------- NORMAL DAMAGE ----------------
 	if area.is_in_group("SubzeroAttack"):
 		take_damage(1)
 		return
 
 	if area.is_in_group("Subzerobullet"):
 		take_damage(1)
+
+		# optional destroy bullet on hit
+		area.queue_free()
+
 		return
 
+# ---------------- COMBOS ----------------
+func register_input(input: String):
+
+	combo.append(input)
+
+	combo_timer = 0.0
+
+	check_combos()
+
+func spawn_fx(scene: PackedScene):
+
+	var fx = scene.instantiate()
+
+	get_tree().current_scene.add_child(fx)
+
+	if target and target.has_node("FIRE"):
+		fx.global_position = target.get_node("FIRE").global_position
+
+	else:
+		fx.global_position = global_position + Vector2(80, 0)
+
+	get_tree().create_timer(1.0).timeout.connect(func():
+		if is_instance_valid(fx):
+			fx.queue_free()
+	)
+
+func check_combos():
+
+	if combo == FIRE_COMBO:
+
+		combo_used.emit("fire")
+
+		spawn_fx(FIRE_DEATH)
+
+		special_bullet = FIRE_BULLET
+
+		combo.clear()
+
+	elif combo == ICE_COMBO:
+
+		combo_used.emit("ice")
+
+		spawn_fx(ICE_DEATH)
+
+		special_bullet = ICE_BULLET
+
+		combo.clear()
+
+	elif combo == ELECTRIC_COMBO:
+
+		combo_used.emit("electric")
+
+		spawn_fx(ELECTRIC_DEATH)
+
+		special_bullet = ELECTRIC_BULLET
+
+		combo.clear()
 # ---------------- DEATH ----------------
 func die():
 
@@ -363,51 +451,3 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 
 	sprite.play(anim_name)
-
-# ---------------- COMBOS ----------------
-func register_input(input: String):
-
-	combo.append(input)
-
-	combo_timer = 0.0
-
-	check_combos()
-
-func check_combos():
-
-	if combo == FIRE_COMBO:
-
-		combo_used.emit("fire")
-
-		combo.clear()
-
-	elif combo == ICE_COMBO:
-
-		combo_used.emit("ice")
-
-		combo.clear()
-
-	elif combo == ELECTRIC_COMBO:
-
-		combo_used.emit("electric")
-
-		combo.clear()
-
-# ---------------- SEPARATION ----------------
-func separate_from_other_fighter():
-
-	var other = get_tree().get_first_node_in_group("Reptile")
-
-	if other == self:
-		other = get_tree().get_first_node_in_group("Subzero")
-
-	if other == null:
-		return
-
-	var dist = global_position.distance_to(other.global_position)
-
-	var min_dist = 60.0
-
-	if dist < min_dist:
-		var push_dir = (global_position - other.global_position).normalized()
-		global_position += push_dir * (min_dist - dist) * 0.5
