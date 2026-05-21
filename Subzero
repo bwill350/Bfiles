@@ -87,18 +87,19 @@ func _ready():
 	health_changed.connect(_on_health_changed)
 
 func _on_health_changed(h):
-	if h == 1:
+
+	if h == 1 and not is_finish_state:
+
+		is_finish_state = true
+
 		$HUD/FinishLabel.text = "FINISH HIM"
 		$HUD/FinishLabel.visible = true
-	else:
+
+		await get_tree().create_timer(2.0).timeout
+
 		$HUD/FinishLabel.visible = false
 
-func update_finish_state():
-	if health == 1:
-		$HUD.get_node("FinishLabel").text = "FINISH HIM"
-		$HUD.get_node("FinishLabel").visible = true
-	else:
-		$HUD.get_node("FinishLabel").visible = false
+	 
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -360,7 +361,6 @@ func take_damage(amount: int):
 
 	health_changed.emit(health)
 
-	update_finish_state() # 🔥 ADD THIS HERE
 
 	hit_sound.play()
 	play_anim("jhurt")
@@ -383,7 +383,6 @@ func take_damage(amount: int):
 		is_finish_state = false
 	else:
 		play_anim("jidle")
-	update_finish_state()
 
 
 
