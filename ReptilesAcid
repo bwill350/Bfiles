@@ -27,7 +27,7 @@ func _on_area_entered(area: Area2D) -> void:
 	if area == null:
 		return
 
-	if area.name != "HitBox":
+	if area.name != "SubzeroAttack":
 		return
 
 	var target = area.get_parent()
