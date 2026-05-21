@@ -1,26 +1,70 @@
 extends Control
 
-@onready var score_label = $Panel/ScoreLabel
-@onready var restart_button = $Panel/RestartButton
-@onready var menu_button = $Panel/MenuButton
+@onready var reptile_btn = $ReptileButton
+@onready var subzero_btn = $SubzeroButton
+@onready var mode_button = $ModeButton
+@onready var start_button = $StartButton
+
+@onready var p1_label = $P1Label
+@onready var p2_label = $P2Label
+@onready var cpu_label = $CPULabel
+
+
+# ---------------- FIXED PATHS ----------------
+const REPTILE_DATA = preload("res://Data/Reptile.tres")
+const SUBZERO_DATA = preload("res://Data/Subzero.tres")
 
 
 func _ready():
-	restart_button.pressed.connect(_on_restart)
+	reptile_btn.pressed.connect(func(): _select_character("Reptile"))
+	subzero_btn.pressed.connect(func(): _select_character("Subzero"))
+
+	mode_button.pressed.connect(_toggle_mode)
+	start_button.pressed.connect(_start_game)
 
 
-	# show final score from Game.gd
-	if Game:
-		score_label.text = "Score: %d" % Game.points
+func _select_character(char_name: String):
+
+	# ---------------- P1 ----------------
+	if Game.p1_character == "":
+		Game.p1_character = char_name
+
+		if char_name == "Reptile":
+			Game.p1_data = REPTILE_DATA
+		elif char_name == "Subzero":
+			Game.p1_data = SUBZERO_DATA
+
+		p1_label.text = "P1: " + char_name
+		return
 
 
-func _on_restart():
+	# ---------------- P2 (PvP ONLY) ----------------
+	if not Game.vs_cpu:
+		if Game.p2_character == "":
+			Game.p2_character = char_name
+
+			if char_name == "Reptile":
+				Game.p2_data = REPTILE_DATA
+			elif char_name == "Subzero":
+				Game.p2_data = SUBZERO_DATA
+
+			p2_label.text = "P2: " + char_name
+			return
+
+
+func _toggle_mode():
+	Game.vs_cpu = !Game.vs_cpu
+
+	Game.p1_character = ""
+	Game.p2_character = ""
+
+	Game.p1_data = null
+	Game.p2_data = null
+
+	p1_label.text = "P1: Not Selected"
+	p2_label.text = "P2: Not Selected"
+	cpu_label.text = "CPU: Not Selected"
+
+
+func _start_game():
 	get_tree().change_scene_to_file("res://Scenes/Levels/Level1.tscn")
-
-
-func _on_menu():
-	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
-
-
-func _on_restart_button_pressed():
-	get_tree().change_scene_to_file("res://Scenes/Level1.tscn")
