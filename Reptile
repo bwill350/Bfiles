@@ -487,3 +487,18 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 
 	sprite.play(anim_name)
+
+func separate_from_other_fighter():
+
+	var fighters = get_tree().get_nodes_in_group("player")
+
+	for other in fighters:
+
+		if other == self:
+			continue
+
+		var dist = global_position.distance_to(other.global_position)
+
+		if dist < 60.0:
+			var push_dir = (global_position - other.global_position).normalized()
+			global_position += push_dir * (60.0 - dist) * 0.5
