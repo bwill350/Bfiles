@@ -107,6 +107,7 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	separate_from_other_fighter()
 	move_and_slide()
 	velocity.x = move_toward(velocity.x, 0, 0)
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -193,7 +194,7 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("Reptilesacid"):
 		if shoot_cooldown <= 0:
 			shoot_acid()
-
+	
 	move_and_slide()
 
 func shoot_acid():
@@ -497,8 +498,20 @@ func separate_from_other_fighter():
 		if other == self:
 			continue
 
-		var dist = global_position.distance_to(other.global_position)
+		if not is_instance_valid(other):
+			continue
 
-		if dist < 60.0:
-			var push_dir = (global_position - other.global_position).normalized()
-			global_position += push_dir * (60.0 - dist) * 0.5
+		var delta = global_position - other.global_position
+		var dist = delta.length()
+
+		if dist == 0:
+			continue
+
+		var min_dist := 60.0
+
+		if dist < min_dist:
+
+			var push_dir = delta / dist
+			var push_strength = (min_dist - dist) * 6.0
+
+			velocity += push_dir * push_strength
