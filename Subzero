@@ -16,6 +16,8 @@ var ai_timer := 0.0
 
 var hit_from_reptileacid := false
 
+@onready var finish_label: Label = get_tree().current_scene.get_node("CanvasLayer/FinishLabel")
+
 # ---------------- COMBAT ----------------
 var is_hurting := false
 var is_shooting := false
@@ -82,9 +84,21 @@ func _ready():
 	play_anim("sidle")
 
 	ai_timer = randf_range(0.2, 0.6)
+	health_changed.connect(_on_health_changed)
 
+func _on_health_changed(h):
+	if h == 1:
+		$HUD/FinishLabel.text = "FINISH HIM"
+		$HUD/FinishLabel.visible = true
+	else:
+		$HUD/FinishLabel.visible = false
 
-
+func update_finish_state():
+	if health == 1:
+		$HUD.get_node("FinishLabel").text = "FINISH HIM"
+		$HUD.get_node("FinishLabel").visible = true
+	else:
+		$HUD.get_node("FinishLabel").visible = false
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -331,12 +345,12 @@ func take_damage(amount: int):
 
 	health_changed.emit(health)
 
+	update_finish_state() # 🔥 ADD THIS HERE
+
 	hit_sound.play()
+	play_anim("jhurt")
 
-	play_anim("shurt")
-
-	# short guaranteed hurt time
-	await get_tree().create_timer(0.01).timeout
+	await get_tree().create_timer(0.15).timeout
 
 	is_hurting = false
 	hurt_locked = false
@@ -344,14 +358,13 @@ func take_damage(amount: int):
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
-
 	blood.global_position = blood_marker.global_position
 
 	if health <= 0:
 		die()
 	else:
 		play_anim("jidle")
-
+	update_finish_state()
 
 # ---------------- DEATH ----------------
 func die():
