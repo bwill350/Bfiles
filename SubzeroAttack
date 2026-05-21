@@ -5,26 +5,35 @@ class_name SubzeroAttack
 @export var lifetime := 0.05
 
 func _ready():
+	add_to_group("SubzeroAttack")
+
 	area_entered.connect(_on_area_entered)
-	body_entered.connect(_on_body_entered)
+	# IMPORTANT: remove body_entered unless you REALLY need physics bodies
 
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
+
 
 func _on_area_entered(area: Area2D) -> void:
 	if area == null:
 		return
 
-	if area.is_in_group("ReptileAttack"):
-		var target = area.get_parent()
-
-		if target and target.has_method("take_damage"):
-			target.take_damage(damage)
-
-
-func _on_body_entered(body: Node) -> void:
-	if body == null:
+	# ONLY HIT HURTBOXES
+	if not area.is_in_group("HitBox"):
 		return
 
-	if body.has_method("take_damage"):
-		body.take_damage(damage)
+	var target = area.get_parent()
+	if target == null:
+		return
+
+	# SAFETY: prevent self-hit
+	if target.is_in_group("Subzero"):
+		return
+	if target.is_in_group("Reptile"):
+		return
+
+	if target.has_method("take_damage"):
+		target.take_damage(damage)
+
+	if area.is_in_group("ReptilesHitBox"):
+		area.take_damage(1)
