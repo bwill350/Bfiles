@@ -321,6 +321,7 @@ func take_damage(amount: int):
 		return
 
 	can_take_damage = false
+
 	is_hurting = true
 	hurt_locked = true
 
@@ -330,30 +331,25 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 
 	hit_sound.play()
+
 	play_anim("shurt")
 
-	# ---------------- EFFECTS (ONLY ONCE) ----------------
-	if hit_from_reptileacid:
-
-		var smoke = SMOKE_EFFECT.instantiate()
-		get_tree().current_scene.add_child(smoke)
-		smoke.global_position = smoke_marker.global_position
-	else:
-
-		var blood = BLOOD_EFFECT.instantiate()
-		get_tree().current_scene.add_child(blood)
-		blood.global_position = blood_marker.global_position
-
-	hit_from_reptileacid = false
-	print("SMOKE SPAWNED")
-	await sprite.animation_finished
+	# short guaranteed hurt time
+	await get_tree().create_timer(0.15).timeout
 
 	is_hurting = false
 	hurt_locked = false
 	can_take_damage = true
 
+	var blood = BLOOD_EFFECT.instantiate()
+	get_tree().current_scene.add_child(blood)
+
+	blood.global_position = blood_marker.global_position
+
 	if health <= 0:
 		die()
+	else:
+		play_anim("jidle")
 
 # ---------------- HIT DETECTION ----------------
 func _on_hit_box_area_entered(area: Area2D) -> void:
