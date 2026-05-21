@@ -261,11 +261,6 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-	if hit_from_reptileacid:
-
-		var smoke = SMOKE_EFFECT.instantiate()
-		get_tree().current_scene.add_child(smoke)
-		smoke.global_position = smoke_marker.global_position
 
 	if state == State.DEAD:
 		return
@@ -285,19 +280,12 @@ func take_damage(amount: int):
 	hit_sound.play()
 	play_anim("shurt")
 
-	await sprite.animation_finished
-
-	is_hurting = false
-	hurt_locked = false
-	can_take_damage = true
-
-	# ---------------- EFFECTS ----------------
+	# ---------------- EFFECTS (ONLY ONCE) ----------------
 	if hit_from_reptileacid:
 
 		var smoke = SMOKE_EFFECT.instantiate()
 		get_tree().current_scene.add_child(smoke)
 		smoke.global_position = smoke_marker.global_position
-
 	else:
 
 		var blood = BLOOD_EFFECT.instantiate()
@@ -305,6 +293,12 @@ func take_damage(amount: int):
 		blood.global_position = blood_marker.global_position
 
 	hit_from_reptileacid = false
+	print("SMOKE SPAWNED")
+	await sprite.animation_finished
+
+	is_hurting = false
+	hurt_locked = false
+	can_take_damage = true
 
 	if health <= 0:
 		die()
@@ -316,6 +310,11 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 		return
 
 	if area.is_in_group("ReptileBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ReptileAcid"): # <-- IMPORTANT
+		hit_from_reptileacid = true
 		take_damage(1)
 		return
 
