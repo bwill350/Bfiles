@@ -87,7 +87,7 @@ func _ready():
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-
+	separate_from_other_fighter()
 	# ---------------- LOCK TIMER SAFETY ----------------
 	if action_locked:
 		lock_timer -= delta
@@ -426,16 +426,27 @@ func play_anim(anim_name: String):
 # ---------------- SEPARATION ----------------
 func separate_from_other_fighter():
 
-	var other = get_tree().get_first_node_in_group("Reptile")
+	var fighters = get_tree().get_nodes_in_group("player")
 
-	if other == self:
-		other = get_tree().get_first_node_in_group("Subzero")
+	for other in fighters:
 
-	if other == null:
-		return
+		if other == self:
+			continue
 
-	var dist = global_position.distance_to(other.global_position)
+		if not is_instance_valid(other):
+			continue
 
-	if dist < 60.0:
-		var push_dir = (global_position - other.global_position).normalized()
-		global_position += push_dir * (60.0 - dist) * 0.5
+		var delta = global_position - other.global_position
+		var dist = delta.length()
+
+		if dist == 0:
+			continue
+
+		var min_dist := 60.0
+
+		if dist < min_dist:
+
+			var push_dir = delta / dist
+			var push_strength = (min_dist - dist) * 6.0
+
+			velocity += push_dir * push_strength
