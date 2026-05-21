@@ -1,52 +1,36 @@
 extends Area2D
-class_name Reptilebullet
+class_name ReptileBullet
 
-@export var speed: float = 600.0
-@export var turn_speed: float = 6.0
+@export var speed: float = 900.0
 @export var lifetime: float = 3.0
 
 var velocity: Vector2 = Vector2.ZERO
-var target: Node2D = null
 
+@onready var sprite: Sprite2D = $Sprite2D
 
-# ---------------- READY ----------------
 func _ready():
+	add_to_group("ReptileBullet")
 	area_entered.connect(_on_area_entered)
 
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
 
-	# find Subzero (opposite side target)
-	var enemies = get_tree().get_nodes_in_group("Subzero")
-	if enemies.size() > 0:
-		target = enemies[0]
-
-
-# ---------------- MOVEMENT ----------------
 func _physics_process(delta):
-
-	if target == null or not is_instance_valid(target):
-		global_position += velocity * delta
-		return
-
-	var dir = (target.global_position - global_position).normalized()
-
-	velocity = velocity.lerp(dir * speed, turn_speed * delta)
-
 	global_position += velocity * delta
-	rotation = velocity.angle()
 
-
-# ---------------- HIT ----------------
 func _on_area_entered(area: Area2D) -> void:
+
 	if area == null:
 		return
 
-	# ONLY hit Subzero HitBox
-	if area.is_in_group("HitBox"):
-		var subzero = area.get_parent()
+	if area.name != "HitBox":
+		return
 
-		if subzero and subzero.is_in_group("Subzero") and subzero.has_method("take_damage"):
-			subzero.take_damage(1)
+	var target = area.get_parent()
+	if target == null:
+		return
 
-		queue_free()
+	if target.is_in_group("Subzero"):
+		target.take_damage(1)
+
+	queue_free()
