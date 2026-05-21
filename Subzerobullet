@@ -47,10 +47,8 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 
 	# ONLY hit Reptile HitBox
-	if area.is_in_group("HitBox"):
+	if area.is_in_group("ReptilesHurtBox"):
 		var reptile = area.get_parent()
 
 		if reptile and reptile.is_in_group("Reptile") and reptile.has_method("take_damage"):
 			reptile.take_damage(1)
-
-		queue_free()
