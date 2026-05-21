@@ -519,9 +519,11 @@ func _separate_from_opponent():
 		var other = collision.get_collider()
 
 		if other == null:
-			continue
+			return
 
-		# If it's just hurtboxes touching → DO NOTHING
+		# ----------------------------------------------------
+		# 1. HurtBox vs HurtBox = DO NOTHING
+		# ----------------------------------------------------
 		if (other.name == "ReptileHurtBox" and self.name == "SubzeroHurtBox") \
 		or (other.name == "SubzeroHurtBox" and self.name == "ReptileHurtBox"):
 			return
