@@ -514,7 +514,7 @@ func separate_from_other_fighter():
 
 		if dist < min_dist:
 
-			var push_dir = delta / dist
+			var push_dir = sign(global_position.x - other.global_position.x)
 			var push_strength = (min_dist - dist) * 6.0
 
-			velocity += push_dir * push_strength
+			velocity.x += push_dir * push_strength
