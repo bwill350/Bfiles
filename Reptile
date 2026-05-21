@@ -1,12 +1,13 @@
 extends CharacterBody2D
 class_name Reptile
 
+
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
 var shoot_cooldown: float = 0.0
 # ---------------- STATE ----------------
-enum State { IDLE, JRUN, JJUMP, JJUMPKICK, JBLOCK, JPUNCH, JCLIMB, DEAD }
+enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 var special_bullet: PackedScene = null
 var state: State = State.IDLE
 var is_blocking := false
@@ -14,6 +15,8 @@ var is_blocking := false
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
+
+
 
 # ---------------- COMBAT FLAGS ----------------
 var is_hurting := false
@@ -56,7 +59,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
-@onready var hurt_box: Area2D = $ReptileHurtBox
+@onready var hit_box: Area2D = $ReptileHurtBox
 @onready var shoot_marker: Marker2D = $Reptileshoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
@@ -65,10 +68,10 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 var combo := []
 var combo_timer := 0.0
 
-const ACID_COMBO = ["jdown", "jdown", "jdown", "jright", "jshoot"]
-const FIRE_COMBO = ["jdown", "jright", "jshoot"]
-const ICE_COMBO = ["jleft", "jleft", "jshoot"]
-const ELECTRIC_COMBO = ["jup", "jdown", "jshoot"]
+const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
+const FIRE_COMBO = ["down", "right", "shoot"]
+const ICE_COMBO = ["left", "left", "shoot"]
+const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
 var current_combo_element := "fire"
 
@@ -81,11 +84,11 @@ func _ready():
 	health = max_health
 	health_changed.emit(health)
 
-	play_anim("jidle")
+	play_anim("idle")
 
-	if hurt_box:
-		if not hurt_box.area_entered.is_connected(_on_Reptile_Hurt_Box_area_entered):
-			hurt_box.area_entered.connect(_on_Reptile_Hurt_Box_area_entered)
+	if hit_box:
+		if not hit_box.area_entered.is_connected(_on_Reptile_Hurt_Box_area_entered):
+			hit_box.area_entered.connect(_on_Reptile_Hurt_Box_area_entered)
 
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
@@ -93,20 +96,20 @@ func _unhandled_input(event):
 	if is_cpu:
 		return
 
-	if event.is_action_pressed("jup"):
-		register_input("jup")
+	if event.is_action_pressed("up"):
+		register_input("up")
 
-	elif event.is_action_pressed("jdown"):
-		register_input("jdown")
+	elif event.is_action_pressed("down"):
+		register_input("down")
 
-	elif event.is_action_pressed("jleft"):
-		register_input("jleft")
+	elif event.is_action_pressed("left"):
+		register_input("left")
 
-	elif event.is_action_pressed("jright"):
-		register_input("jright")
+	elif event.is_action_pressed("right"):
+		register_input("right")
 
-	elif event.is_action_pressed("jshoot"):
-		register_input("jshoot")
+	elif event.is_action_pressed("shoot"):
+		register_input("shoot")
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -130,8 +133,8 @@ func _physics_process(delta):
 	if action_locked or hurt_locked:
 		return
 
-	var input_dir = Input.get_axis("jleft", "jright")
-	var climb_pressed = Input.is_action_pressed("jclimb")
+	var input_dir = Input.get_axis("left", "right")
+	var climb_pressed = Input.is_action_pressed("climb")
 
 	velocity.y += GRAVITY * delta
 
@@ -143,58 +146,65 @@ func _physics_process(delta):
 	sprite.flip_h = facing > 0
 
 	if climb_pressed and not is_on_floor() and is_on_wall():
-		state = State.JCLIMB
+		state = State.CLIMB
 
 	elif not is_on_floor():
-		state = State.JJUMP
+		state = State.JUMP
 
 	elif input_dir != 0:
-		state = State.JRUN
+		state = State.RUN
 
 	else:
 		state = State.IDLE
 
 	match state:
 
-		State.JCLIMB:
+		State.CLIMB:
 			velocity.y = -JCLIMB_SPEED
-			play_anim("jclimb")
+			play_anim("climb")
 
-		State.JJUMP:
-			play_anim("jjump")
+		State.JUMP:
+			play_anim("jump")
 
-		State.JRUN:
-			play_anim("jwalk")
+		State.RUN:
+			play_anim("walk")
 
 		State.IDLE:
-			play_anim("jidle")
+			play_anim("idle")
 
-	if Input.is_action_just_pressed("jjump") and is_on_floor():
+	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jjump_velocity
 
-	if Input.is_action_just_pressed("jjumpkick"):
-		do_action("jjumpkick")
+	if Input.is_action_just_pressed("jumpkick"):
+		play_anim("jumpkick")
+		do_action("jumpkick")
 
-	elif Input.is_action_just_pressed("jpunch"):
-		do_action("jpunch")
+	elif Input.is_action_just_pressed("punch"):
+		play_anim("punch")
+		do_action("punch")
 
-	elif Input.is_action_just_pressed("jroundhousekick"):
-		do_action("jroundhousekick")
+	elif Input.is_action_just_pressed("roundhousekick"):
+		play_anim("roundhousekick")
+		do_action("roundhousekick")
 
-	elif Input.is_action_pressed("jkick"):
-		do_action("jkick")
+	elif Input.is_action_pressed("kick"):
+		play_anim("kick")
+		do_action("kick")
 
-	elif Input.is_action_just_pressed("juppercut"):
-		do_action("juppercut")
+	elif Input.is_action_just_pressed("uppercut"):
+		play_anim("uppercut")
+		do_action("uppercut")
 
-	elif Input.is_action_just_pressed("jshoot"):
+	elif Input.is_action_just_pressed("shoot"):
+		play_anim("shoot")
 		shoot_player()
 
 	elif Input.is_action_just_pressed("Reptilesacid"):
 		if shoot_cooldown <= 0:
 			shoot_acid()
 
-	elif Input.is_action_pressed("jblock"):
+	elif Input.is_action_pressed("block"):
+		play_anim("block")
 		start_block()
 	else:
 		stop_block()
@@ -207,9 +217,9 @@ func start_block():
 		return
 
 	is_blocking = true
-	state = State.JBLOCK
+	state = State.BLOCK
 
-	play_anim("jblock")
+	play_anim("block")
 
 func stop_block():
 
@@ -226,7 +236,7 @@ func shoot_acid():
 
 	is_attacking = true
 
-	play_anim("jshoot")
+	play_anim("shoot")
 
 	var bullet = REPTILES_ACID.instantiate()
 	get_tree().current_scene.add_child(bullet)
@@ -237,7 +247,7 @@ func shoot_acid():
 	await sprite.animation_finished
 
 	is_attacking = false
-	play_anim("jidle")
+	play_anim("idle")
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
@@ -245,7 +255,7 @@ func cpu_logic(delta):
 	if target == null:
 		return
 
-	if action_locked or hurt_locked:
+	if action_locked:
 		return
 
 	ai_timer -= delta
@@ -264,9 +274,9 @@ func cpu_logic(delta):
 
 		velocity.x = dir * SPEED * 0.8
 
-		if state != State.JRUN:
-			state = State.JRUN
-			play_anim("jwalk")
+		if state != State.RUN:
+			state = State.RUN
+			play_anim("walk")
 
 	else:
 
@@ -274,11 +284,11 @@ func cpu_logic(delta):
 
 		if state != State.IDLE:
 			state = State.IDLE
-			play_anim("jidle")
+			play_anim("idle")
 
 		if ai_timer <= 0:
 			ai_timer = randf_range(0.4, 0.8)
-			do_action("jpunch")
+			do_action("punch")
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -294,25 +304,21 @@ func do_action(anim_name: String):
 
 	play_anim(anim_name)
 
-	if anim_name in ["jpunch", "jkick", "jroundhousekick", "juppercut"]:
+	if anim_name in ["punch", "kick", "roundhousekick", "uppercut"]:
 
-		$ReptileAttack.enable_hitbox()
 		spawn_attack()
 
 	await sprite.animation_finished
 
-	$ReptileAttack.disable_hitbox()
-
 	is_attacking = false
 	action_locked = false
 
-	play_anim("jidle")
+	play_anim("idle")
 
 # ---------------- ATTACK ----------------
 func spawn_attack():
 
 	var attack = REPTILE_ATTACK.instantiate()
-
 	get_tree().current_scene.add_child(attack)
 
 	attack.global_position = attack_marker.global_position
@@ -326,7 +332,7 @@ func shoot_player():
 	is_shooting = true
 	is_attacking = true
 
-	play_anim("jshoot")
+	play_anim("shoot")
 
 	var bullet_scene: PackedScene
 
@@ -355,7 +361,7 @@ func shoot_player():
 	is_shooting = false
 	is_attacking = false
 
-	play_anim("jidle")
+	play_anim("idle")
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
@@ -372,7 +378,6 @@ func take_damage(amount: int):
 	can_take_damage = false
 
 	is_hurting = true
-	hurt_locked = true
 
 	health -= amount
 	health = max(health, 0)
@@ -380,7 +385,7 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 
 	hit_sound.play()
-	play_anim("jhurt")
+	play_anim("hurt")
 
 	# short guaranteed hurt time
 	await get_tree().create_timer(0.01).timeout
@@ -395,8 +400,7 @@ func take_damage(amount: int):
 
 	if health <= 0:
 		die()
-	else:
-		play_anim("jidle")
+
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
@@ -529,7 +533,7 @@ func _separate_from_opponent():
 			return
 
 		# ----------------------------------------------------
-		# 1. HurtBox vs HurtBox = DO NOTHING
+		# 1. HurtBox vs HurtBox = DO NOTHING 
 		# ----------------------------------------------------
 		if (other.name == "ReptileHurtBox" and self.name == "SubzeroHurtBox") \
 		or (other.name == "SubzeroHurtBox" and self.name == "ReptileHurtBox"):
