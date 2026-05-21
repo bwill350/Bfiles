@@ -261,6 +261,11 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
+	if hit_from_reptileacid:
+
+		var smoke = SMOKE_EFFECT.instantiate()
+		get_tree().current_scene.add_child(smoke)
+		smoke.global_position = smoke_marker.global_position
 
 	if state == State.DEAD:
 		return
@@ -383,3 +388,6 @@ func separate_from_other_fighter():
 	if dist < 60.0:
 		var push_dir = (global_position - other.global_position).normalized()
 		global_position += push_dir * (60.0 - dist) * 0.5
+
+
+
