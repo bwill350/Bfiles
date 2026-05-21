@@ -107,7 +107,6 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-	separate_from_other_fighter()
 	move_and_slide()
 	velocity.x = move_toward(velocity.x, 0, 0)
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -492,29 +491,3 @@ func play_anim(anim_name: String):
 
 	sprite.play(anim_name)
 
-func separate_from_other_fighter():
-
-	var fighters = get_tree().get_nodes_in_group("player")
-
-	for other in fighters:
-
-		if other == self:
-			continue
-
-		if not is_instance_valid(other):
-			continue
-
-		var delta = global_position - other.global_position
-		var dist = delta.length()
-
-		if dist == 0:
-			continue
-
-		var min_dist := 60.0
-
-		if dist < min_dist:
-
-			var push_dir = sign(global_position.x - other.global_position.x)
-			var push_strength = (min_dist - dist) * 6.0
-
-			velocity.x += push_dir * push_strength
