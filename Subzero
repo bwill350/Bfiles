@@ -8,7 +8,7 @@ signal combo_used(combo_name: String)
 enum State { IDLE, SRUN, SJUMP, SJUMPKICK, SBLOCK, SPUNCH, SCLIMB, DEAD }
 
 var state: State = State.IDLE
-
+var is_finish_state := false
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -102,6 +102,20 @@ func update_finish_state():
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	if is_finish_state:
+		velocity.x = move_toward(velocity.x, 0, SPEED * 10 * delta)
+
+	# optional: force idle animation
+	if state != State.DEAD:
+		play_anim("sidle")
+
+	# stop attacking input logic
+	if Input.is_action_just_pressed("spunch") \
+	or Input.is_action_just_pressed("skick") \
+	or Input.is_action_just_pressed("suppercut") \
+	or Input.is_action_just_pressed("sshoot"):
+
+		return
 	_separate_from_opponent()
 	move_and_slide()
 	# ---------------- LOCK TIMER SAFETY ----------------
@@ -249,9 +263,10 @@ func cpu_logic(delta):
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
-
-	if state == State.DEAD:
+	if is_finish_state:
 		return
+		if state == State.DEAD:
+			return
 
 	if action_locked:
 		return
@@ -362,9 +377,15 @@ func take_damage(amount: int):
 
 	if health <= 0:
 		die()
+	if health == 1:
+		is_finish_state = true
+	elif health > 1:
+		is_finish_state = false
 	else:
 		play_anim("jidle")
 	update_finish_state()
+
+
 
 # ---------------- DEATH ----------------
 func die():
