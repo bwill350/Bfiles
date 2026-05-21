@@ -4,6 +4,7 @@ class_name Reptile
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
+var shoot_cooldown: float = 0.0
 # ---------------- STATE ----------------
 enum State { IDLE, JRUN, JJUMP, JJUMPKICK, JBLOCK, JPUNCH, JCLIMB, DEAD }
 var special_bullet: PackedScene = null
@@ -28,8 +29,10 @@ var health: int
 var can_take_damage := true
 
 const GRAVITY = 5000
-
+const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
+const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
 # ---------------- EXPORTS ----------------
+@export var shoot_cooldown_time: float = 0.25
 @export var SPEED = 900.0
 @export var JCLIMB_SPEED = 250.0
 @export var max_health: int = 10
@@ -45,10 +48,9 @@ const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
-
+const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 # ---------------- COMBO FX ----------------
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
-const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 
 # ---------------- NODES ----------------
@@ -57,6 +59,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 @onready var hit_box: Area2D = $HitBox
 @onready var shoot_marker: Marker2D = $Reptileshoot
 @onready var attack_marker: Marker2D = $AttackMarker
+@onready var blood_marker: Marker2D = $BloodMarker
 
 # ---------------- COMBOS ----------------
 var combo := []
@@ -104,7 +107,9 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-
+	move_and_slide()
+	velocity.x = move_toward(velocity.x, 0, 0)
+	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 	combo_timer += delta
 
 	if combo_timer > combo_reset_time:
@@ -185,7 +190,33 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("jshoot"):
 		shoot_player()
 
+	elif Input.is_action_just_pressed("Reptilesacid"):
+		if shoot_cooldown <= 0:
+			shoot_acid()
+
 	move_and_slide()
+
+func shoot_acid():
+
+	if shoot_cooldown > 0:
+		return
+
+	shoot_cooldown = shoot_cooldown_time
+
+	is_attacking = true
+
+	play_anim("jshoot")
+
+	var bullet = REPTILES_ACID.instantiate()
+	get_tree().current_scene.add_child(bullet)
+
+	bullet.global_position = shoot_marker.global_position
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
+
+	await sprite.animation_finished
+
+	is_attacking = false
+	play_anim("jidle")
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
@@ -333,6 +364,11 @@ func take_damage(amount: int):
 	is_hurting = false
 	hurt_locked = false
 	can_take_damage = true
+
+	var blood = BLOOD_EFFECT.instantiate()
+	get_tree().current_scene.add_child(blood)
+
+	blood.global_position = blood_marker.global_position
 
 	if health <= 0:
 		die()
