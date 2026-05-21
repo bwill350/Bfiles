@@ -71,7 +71,8 @@ func _ready():
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-
+	move_and_slide()
+	velocity.x = move_toward(velocity.x, 0, 0)
 	if is_cpu:
 		cpu_logic(delta)
 		move_and_slide()
@@ -81,6 +82,7 @@ func _physics_process(delta):
 		return
 
 	if is_attacking or action_locked or hurt_locked:
+		velocity.x = 0
 		move_and_slide()
 		return
 
@@ -89,11 +91,16 @@ func _physics_process(delta):
 
 	velocity.y += GRAVITY * delta
 
-	if input_dir != 0:
-		facing = input_dir
+	if input_dir > 0:
+		facing = 1
+	elif input_dir < 0:
+		facing = -1
+		
 
-	velocity.x = input_dir * SPEED
-	sprite.flip_h = facing > 0
+	if not is_attacking and not action_locked and not hurt_locked:
+
+		velocity.x = input_dir * SPEED
+		sprite.flip_h = facing > 0
 
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.SCLIMB
@@ -304,7 +311,6 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 		return
 
 	if area.is_in_group("ReptileBullet"):
-		hit_from_reptileacid = true
 		take_damage(1)
 		return
 
