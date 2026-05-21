@@ -122,15 +122,12 @@ func _physics_process(delta):
 	if is_cpu:
 		cpu_logic(delta)
 		_separate_from_opponent()
-		move_and_slide()
 		return
 
 	if state == State.DEAD:
 		return
 
 	if action_locked or hurt_locked:
-		move_and_slide()
-		_separate_from_opponent()
 		return
 
 	var input_dir = Input.get_axis("jleft", "jright")
