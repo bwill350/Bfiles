@@ -56,7 +56,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
-@onready var hit_box: Area2D = $HitBox
+@onready var hurt_box: Area2D = $ReptileHurtBox
 @onready var shoot_marker: Marker2D = $Reptileshoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
@@ -82,7 +82,9 @@ func _ready():
 
 	play_anim("jidle")
 
-	hit_box.area_entered.connect(_on_hit_box_area_entered)
+	if hurt_box:
+		if not hurt_box.area_entered.is_connected(_on_Reptile_Hurt_Box_area_entered):
+			hurt_box.area_entered.connect(_on_Reptile_Hurt_Box_area_entered)
 
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
@@ -356,7 +358,6 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 
 	hit_sound.play()
-
 	play_anim("jhurt")
 
 	# short guaranteed hurt time
@@ -368,46 +369,12 @@ func take_damage(amount: int):
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
-
 	blood.global_position = blood_marker.global_position
 
 	if health <= 0:
 		die()
 	else:
 		play_anim("jidle")
-
-# ---------------- HIT DETECTION ----------------
-func _on_hit_box_area_entered(area: Area2D) -> void:
-
-	if area == null:
-		return
-
-	# ---------------- BLOCK ----------------
-	if Input.is_action_pressed("jblock"):
-
-		play_anim("jblock")
-
-		# optional pushback
-		velocity.x = -facing * 100
-
-		# destroy projectile if blocking
-		if area.is_in_group("Subzerobullet"):
-			area.queue_free()
-
-		return
-
-	# ---------------- NORMAL DAMAGE ----------------
-	if area.is_in_group("SubzeroAttack"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("Subzerobullet"):
-		take_damage(1)
-
-		# optional destroy bullet on hit
-		area.queue_free()
-
-		return
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
@@ -491,3 +458,32 @@ func play_anim(anim_name: String):
 
 	sprite.play(anim_name)
 
+
+
+func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
+
+	if area == null:
+		return
+
+	# Subzero melee attack
+	if area.is_in_group("SubzeroAttack"):
+		take_damage(1)
+		return
+
+	# Subzero bullets
+	if area.is_in_group("Subzerobullet"):
+		take_damage(1)
+		return
+
+	# Elemental deaths
+	if area.is_in_group("FireDeath"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("IceDeath"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricDeath"):
+		take_damage(1)
+		return
