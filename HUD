@@ -1,5 +1,6 @@
 extends CanvasLayer
 
+# ---------------- UI ----------------
 @onready var duke_label = $DukeLabel
 @onready var reptile_label = $ReptileLabel
 @onready var subzero_label = $SubzeroLabel
@@ -8,24 +9,25 @@ extends CanvasLayer
 @onready var duke_bar: TextureProgressBar = $DukeHealthBar
 @onready var reptile_bar: TextureProgressBar = $ReptileHealthBar
 @onready var subzero_bar: TextureProgressBar = $SubzeroHealthBar
-# Duke Segs (1–8)
-@onready var seg5 = $Seg5
-@onready var seg6 = $Seg6
-@onready var seg7 = $Seg7
-@onready var seg8 = $Seg8
 
-# Reptile Segs (1–4)
+# ---------------- SEGMENTS ----------------
 @onready var seg1 = $Seg1
 @onready var seg2 = $Seg2
 @onready var seg3 = $Seg3
 @onready var seg4 = $Seg4
 
-# Subzero Segs (9–12)
+@onready var seg5 = $Seg5
+@onready var seg6 = $Seg6
+@onready var seg7 = $Seg7
+@onready var seg8 = $Seg8
+
 @onready var seg9 = $Seg9
 @onready var seg10 = $Seg10
 @onready var seg11 = $Seg11
 @onready var seg12 = $Seg12
 
+
+# ---------------- REFERENCES ----------------
 var reptile
 var subzero
 var duke
@@ -35,34 +37,31 @@ func _ready():
 
 	Game.points_changed.connect(_on_points_changed)
 
-	duke = get_tree().get_first_node_in_group("player")
-	if duke:
-		duke.health_changed.connect(_on_duke_health_changed)
+	_find_fighters()
+
+
+func _find_fighters():
+
+	duke = get_tree().get_first_node_in_group("Duke")
+	if duke and duke.has_signal("health_changed"):
+		if not duke.health_changed.is_connected(_on_duke_health_changed):
+			duke.health_changed.connect(_on_duke_health_changed)
 
 	reptile = get_tree().get_first_node_in_group("Reptile")
-	if reptile:
-		reptile.health_changed.connect(_on_reptile_health_changed)
+	if reptile and reptile.has_signal("health_changed"):
+		if not reptile.health_changed.is_connected(_on_reptile_health_changed):
+			reptile.health_changed.connect(_on_reptile_health_changed)
 
 	subzero = get_tree().get_first_node_in_group("Subzero")
-	if subzero:
-		subzero.health_changed.connect(_on_subzero_health_changed)
+	if subzero and subzero.has_signal("health_changed"):
+		if not subzero.health_changed.is_connected(_on_subzero_health_changed):
+			subzero.health_changed.connect(_on_subzero_health_changed)
 
 
 func _process(_delta):
 
-	if reptile == null:
-		reptile = get_tree().get_first_node_in_group("Reptile")
-		if reptile and reptile.has_signal("health_changed"):
-			reptile.health_changed.connect(_on_reptile_health_changed)
-
-	if subzero == null:
-		subzero = get_tree().get_first_node_in_group("Subzero")
-		if subzero and subzero.has_signal("health_changed"):
-			subzero.health_changed.connect(_on_subzero_health_changed)
-
-
-
-
+	if reptile == null or subzero == null or duke == null:
+		_find_fighters()
 
 
 # ---------------- DUKE ----------------
@@ -72,7 +71,7 @@ func _on_duke_health_changed(health):
 	duke_bar.value = health
 
 
-# ---------------- REPTILE (Seg1–4) ----------------
+# ---------------- REPTILE ----------------
 func _on_reptile_health_changed(health):
 
 	reptile_label.text = "Reptile: %d" % health
@@ -90,12 +89,11 @@ func _on_reptile_health_changed(health):
 	seg4.visible = percent > 0.03
 
 
-# ---------------- SUBZERO (Seg9–12) ----------------
+# ---------------- SUBZERO ----------------
 func _on_subzero_health_changed(health):
 
 	subzero_label.text = "Subzero: %d" % health
-	# hide Duke/Reptile bar if needed (optional safe swap behavior)
-	subzero_bar.visible = health
+	subzero_bar.value = health
 
 	var max_hp = subzero_bar.max_value
 	if max_hp <= 0:
