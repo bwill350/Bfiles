@@ -524,17 +524,4 @@ func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 		return
 
 func _separate_from_opponent():
-
-	for i in range(get_slide_collision_count()):
-		var collision = get_slide_collision(i)
-		var other = collision.get_collider()
-
-		if other == null:
-			return
-
-		# ----------------------------------------------------
-		# 1. HurtBox vs HurtBox = DO NOTHING 
-		# ----------------------------------------------------
-		if (other.name == "ReptileHurtBox" and self.name == "SubzeroHurtBox") \
-		or (other.name == "SubzeroHurtBox" and self.name == "ReptileHurtBox"):
-			return
+	pass
