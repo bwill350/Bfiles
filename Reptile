@@ -45,7 +45,7 @@ const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
-
+const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
@@ -65,6 +65,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 var combo := []
 var combo_timer := 0.0
 
+const ACID_COMBO = ["jdown", "jdown", "jdown", "jright", "jshoot"]
 const FIRE_COMBO = ["jdown", "jright", "jshoot"]
 const ICE_COMBO = ["jleft", "jleft", "jshoot"]
 const ELECTRIC_COMBO = ["jup", "jdown", "jshoot"]
@@ -180,13 +181,13 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("jpunch"):
 		do_action("jpunch")
 
-	elif Input.is_action_pressed("jroundhousekick"):
+	elif Input.is_action_just_pressed("jroundhousekick"):
 		do_action("jroundhousekick")
 
 	elif Input.is_action_pressed("jkick"):
 		do_action("jkick")
 
-	elif Input.is_action_pressed("juppercut"):
+	elif Input.is_action_just_pressed("juppercut"):
 		do_action("juppercut")
 
 	elif Input.is_action_just_pressed("jshoot"):
@@ -427,6 +428,15 @@ func spawn_fx(scene: PackedScene):
 	)
 
 func check_combos():
+
+	if combo == ACID_COMBO:
+
+		combo_used.emit("acid")
+
+		special_bullet = ACID_BULLET
+
+		combo.clear()
+		return
 
 	if combo == FIRE_COMBO:
 
