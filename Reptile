@@ -9,7 +9,7 @@ var shoot_cooldown: float = 0.0
 enum State { IDLE, JRUN, JJUMP, JJUMPKICK, JBLOCK, JPUNCH, JCLIMB, DEAD }
 var special_bullet: PackedScene = null
 var state: State = State.IDLE
-
+var is_blocking := false
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -109,6 +109,7 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	_separate_from_opponent()
 	move_and_slide()
 	velocity.x = move_toward(velocity.x, 0, 0)
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -119,6 +120,7 @@ func _physics_process(delta):
 
 	if is_cpu:
 		cpu_logic(delta)
+		_separate_from_opponent()
 		move_and_slide()
 		return
 
@@ -127,6 +129,7 @@ func _physics_process(delta):
 
 	if action_locked or hurt_locked:
 		move_and_slide()
+		_separate_from_opponent()
 		return
 
 	var input_dir = Input.get_axis("jleft", "jright")
@@ -174,9 +177,6 @@ func _physics_process(delta):
 	if Input.is_action_just_pressed("jjumpkick"):
 		do_action("jjumpkick")
 
-	elif Input.is_action_pressed("jblock"):
-		do_action("jblock")
-
 	elif Input.is_action_just_pressed("jpunch"):
 		do_action("jpunch")
 
@@ -195,8 +195,29 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("Reptilesacid"):
 		if shoot_cooldown <= 0:
 			shoot_acid()
-	
+
+	elif Input.is_action_pressed("jblock"):
+		start_block()
+	else:
+		stop_block()
+
 	move_and_slide()
+
+func start_block():
+
+	if state == State.DEAD:
+		return
+
+	is_blocking = true
+	state = State.JBLOCK
+
+	play_anim("jblock")
+
+func stop_block():
+
+	if is_blocking:
+		is_blocking = false
+		state = State.IDLE
 
 func shoot_acid():
 
@@ -344,6 +365,9 @@ func take_damage(amount: int):
 	if state == State.DEAD:
 		return
 
+	if is_blocking:
+		amount = max(amount - 1, 0)
+
 	if not can_take_damage:
 		return
 
@@ -361,7 +385,7 @@ func take_damage(amount: int):
 	play_anim("jhurt")
 
 	# short guaranteed hurt time
-	await get_tree().create_timer(0.15).timeout
+	await get_tree().create_timer(0.01).timeout
 
 	is_hurting = false
 	hurt_locked = false
@@ -487,3 +511,17 @@ func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("ElectricDeath"):
 		take_damage(1)
 		return
+
+func _separate_from_opponent():
+
+	for i in range(get_slide_collision_count()):
+		var collision = get_slide_collision(i)
+		var other = collision.get_collider()
+
+		if other == null:
+			continue
+
+		# If it's just hurtboxes touching → DO NOTHING
+		if (other.name == "ReptileHurtBox" and self.name == "SubzeroHurtBox") \
+		or (other.name == "SubzeroHurtBox" and self.name == "ReptileHurtBox"):
+			return
