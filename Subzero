@@ -9,6 +9,7 @@ enum State { IDLE, SRUN, SJUMP, SJUMPKICK, SBLOCK, SPUNCH, SCLIMB, DEAD }
 
 var state: State = State.IDLE
 var is_finish_state := false
+
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -92,23 +93,40 @@ func _on_health_changed(h):
 
 		is_finish_state = true
 
+		# HARD RESET COMBAT STATE HERE TOO
+		is_attacking = false
+		is_shooting = false
+		action_locked = true
+		hurt_locked = true
+		state = State.IDLE
+		velocity = Vector2.ZERO
+
 		$HUD/FinishLabel.text = "FINISH HIM"
 		$HUD/FinishLabel.visible = true
 
 		await get_tree().create_timer(2.0).timeout
 
 		$HUD/FinishLabel.visible = false
+		$HUD/FinishLabel.text = "FINISH HIM"
+		$HUD/FinishLabel.visible = true
+		$HUD/FinishLabel.start_flicker(2.0, 0.05)
 
-	 
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-	if is_finish_state:
-		velocity.x = move_toward(velocity.x, 0, SPEED * 10 * delta)
 
-	# optional: force idle animation
-	if state != State.DEAD:
-		play_anim("sidle")
+	if is_finish_state:
+
+		# FULL PHYSICS LOCK (prevents floating / lifting)
+		velocity = Vector2.ZERO
+
+		if state != State.DEAD:
+			state = State.IDLE
+			play_anim("sidle")
+
+		_separate_from_opponent()
+		move_and_slide()
+		return
 
 	# stop attacking input logic
 	if Input.is_action_just_pressed("spunch") \
@@ -117,8 +135,10 @@ func _physics_process(delta):
 	or Input.is_action_just_pressed("sshoot"):
 
 		return
+
 	_separate_from_opponent()
 	move_and_slide()
+
 	# ---------------- LOCK TIMER SAFETY ----------------
 	if action_locked:
 		lock_timer -= delta
@@ -130,7 +150,6 @@ func _physics_process(delta):
 	if state != State.DEAD:
 		velocity.y += GRAVITY * delta
 
-
 	# ---------------- CPU ----------------
 	if is_cpu:
 		if target == null:
@@ -139,13 +158,11 @@ func _physics_process(delta):
 		cpu_logic(delta)
 		return
 
-
 	# ---------------- BLOCK INPUT WHEN LOCKED ----------------
 	if action_locked or hurt_locked:
 		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
 		move_and_slide()
 		return
-
 
 	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("sleft", "sright")
@@ -163,7 +180,6 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing > 0
 
-
 	# ---------------- STATE ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.SCLIMB
@@ -173,7 +189,6 @@ func _physics_process(delta):
 		state = State.SRUN
 	else:
 		state = State.IDLE
-
 
 	# ---------------- ANIMATION ----------------
 	if not action_locked:
@@ -363,7 +378,7 @@ func take_damage(amount: int):
 
 
 	hit_sound.play()
-	play_anim("jhurt")
+	play_anim("shurt")
 
 	await get_tree().create_timer(0.15).timeout
 
@@ -382,7 +397,7 @@ func take_damage(amount: int):
 	elif health > 1:
 		is_finish_state = false
 	else:
-		play_anim("jidle")
+		play_anim("sidle")
 
 
 
