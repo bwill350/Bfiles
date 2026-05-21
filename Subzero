@@ -49,7 +49,7 @@ const SMOKE_DEATH = preload("res://SmokeEffect.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
-@onready var hit_box: Area2D = $HitBox
+@onready var hit_box: Area2D = $SubzeroHurtBox
 @onready var shoot_marker: Marker2D = $Subzeroshoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
@@ -57,6 +57,7 @@ const SMOKE_DEATH = preload("res://SmokeEffect.tscn")
 
 # ---------------- READY ----------------
 func _ready():
+
 	action_locked = false
 	hurt_locked = false
 	is_attacking = false
@@ -82,7 +83,7 @@ func _ready():
 
 	ai_timer = randf_range(0.2, 0.6)
 
-	hit_box.area_entered.connect(_on_hit_box_area_entered)
+
 
 
 # ---------------- PHYSICS ----------------
@@ -350,40 +351,6 @@ func take_damage(amount: int):
 	else:
 		play_anim("jidle")
 
-# ---------------- HIT DETECTION ----------------
-func _on_hit_box_area_entered(area: Area2D) -> void:
-
-	if area == null:
-		return
-
-	if area.is_in_group("ReptileBullet"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("ReptileAcid"): # <-- IMPORTANT
-		hit_from_reptileacid = true
-		take_damage(1)
-		return
-
-	if area.is_in_group("SubzeroAttack"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("FireDeath"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("IceDeath"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("ElectricDeath"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("FireBullet"):
-		take_damage(1)
-		return
 
 # ---------------- DEATH ----------------
 func die():
@@ -418,4 +385,37 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 	sprite.play(anim_name)
 
+# ---------------- HIT DETECTION ----------------
+func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
+	if area == null:
+		return
+
+	if area.is_in_group("ReptileBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ReptileAcid"): # <-- IMPORTANT
+		hit_from_reptileacid = true
+		take_damage(1)
+		return
+
+	if area.is_in_group("ReptileAttack"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("FireDeath"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("IceDeath"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricDeath"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("FireBullet"):
+		take_damage(1)
+		return
 
