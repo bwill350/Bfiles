@@ -275,8 +275,8 @@ func cpu_logic(delta):
 func do_action(anim_name: String):
 	if is_finish_state:
 		return
-		if state == State.DEAD:
-			return
+	if state == State.DEAD:
+		return
 
 	if action_locked:
 		return
