@@ -1,7 +1,6 @@
 extends CharacterBody2D
 class_name Reptile
 
-
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
@@ -15,8 +14,6 @@ var is_blocking := false
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
-
-
 
 # ---------------- COMBAT FLAGS ----------------
 var is_hurting := false
@@ -113,7 +110,6 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-	_separate_from_opponent()
 	move_and_slide()
 	velocity.x = move_toward(velocity.x, 0, 0)
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -124,7 +120,6 @@ func _physics_process(delta):
 
 	if is_cpu:
 		cpu_logic(delta)
-		_separate_from_opponent()
 		return
 
 	if state == State.DEAD:
@@ -195,7 +190,7 @@ func _physics_process(delta):
 		play_anim("uppercut")
 		do_action("uppercut")
 
-	elif Input.is_action_just_pressed("shoot"):
+	elif Input.is_action_pressed("shoot"):
 		play_anim("shoot")
 		shoot_player()
 
@@ -378,6 +373,8 @@ func take_damage(amount: int):
 	can_take_damage = false
 
 	is_hurting = true
+	hurt_locked = true
+	action_locked = true
 
 	health -= amount
 	health = max(health, 0)
@@ -385,22 +382,27 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 
 	hit_sound.play()
+
+	state = State.IDLE
+
 	play_anim("hurt")
-
-	# short guaranteed hurt time
-	await get_tree().create_timer(0.01).timeout
-
-	is_hurting = false
-	hurt_locked = false
-	can_take_damage = true
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = blood_marker.global_position
 
+	# wait for hurt animation
+	await sprite.animation_finished
+
+	is_hurting = false
+	hurt_locked = false
+	action_locked = false
+	can_take_damage = true
+
+	play_anim("idle")
+
 	if health <= 0:
 		die()
-
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
@@ -492,8 +494,6 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 
 	sprite.play(anim_name)
-
-
 
 func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 
