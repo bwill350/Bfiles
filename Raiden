@@ -1,6 +1,31 @@
 extends CharacterBody2D
 class_name RaidenCharacter
 
+Raiden (CharacterBody2D)
+├── Sprite (AnimatedSprite2D)
+├── CollisionShape2D
+│
+├── RaidenHurtBox (Area2D)
+│   └── CollisionShape2D
+│
+├── ShootTimer (Timer)
+├── PhaseTimer (Timer)
+├── HitFlashTimer (Timer)
+│
+├── Hit (AudioStreamPlayer2D)
+│
+├── RaidenShoot (Marker2D)
+├── AttackMarker (Marker2D)
+├── BloodMarker (Marker2D)
+│
+├── NavigationAgent2D (Agent)
+│
+└── Attack Scenes (used via script, not children):
+    ├── RaidenAttack.tscn (spawned melee hitbox)
+    ├── RaidenElectricBullet.tscn
+    ├── ElectricBurst.tscn
+    └── ElectricForceField.tscn
+
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
 signal combo_used(combo_name: String)
