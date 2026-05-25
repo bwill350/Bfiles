@@ -4,33 +4,36 @@ class_name Reptile
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
-var shoot_cooldown: float = 0.0
 # ---------------- STATE ----------------
 enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
-var special_bullet: PackedScene = null
+
 var state: State = State.IDLE
-var is_blocking := false
+var special_bullet: PackedScene = null
+
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
 
-# ---------------- COMBAT FLAGS ----------------
+# ---------------- FLAGS ----------------
+var is_blocking := false
 var is_hurting := false
 var is_shooting := false
 var is_attacking := false
 var action_locked := false
 var hurt_locked := false
-
-var facing := 1
-var current_anim := ""
-
-var health: int
 var can_take_damage := true
 
+# ---------------- MOVEMENT ----------------
+var facing := 1
+var current_anim := ""
+var health: int
+
 const GRAVITY = 5000
-const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
-const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
+
+# ---------------- COOLDOWNS ----------------
+var shoot_cooldown: float = 0.0
+
 # ---------------- EXPORTS ----------------
 @export var shoot_cooldown_time: float = 0.25
 @export var SPEED = 900.0
@@ -41,16 +44,20 @@ const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
 
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/Reptilebullet.tscn")
-
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
+
+const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
+
+const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
+
+# ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
-const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
-# ---------------- COMBO FX ----------------
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
+const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 
 # ---------------- NODES ----------------
@@ -70,13 +77,14 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
-var current_combo_element := "fire"
-
 # ---------------- READY ----------------
 func _ready():
 
 	add_to_group("enemy")
 	add_to_group("Reptile")
+	add_to_group("FireDeath")
+	add_to_group("IceDeath")
+	add_to_group("ElectricDeath")
 
 	health = max_health
 	health_changed.emit(health)
@@ -110,9 +118,9 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-	move_and_slide()
-	velocity.x = move_toward(velocity.x, 0, 0)
+
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
+
 	combo_timer += delta
 
 	if combo_timer > combo_reset_time:
@@ -120,26 +128,31 @@ func _physics_process(delta):
 
 	if is_cpu:
 		cpu_logic(delta)
+		move_and_slide()
 		return
 
 	if state == State.DEAD:
 		return
 
+	velocity.y += GRAVITY * delta
+
 	if action_locked or hurt_locked:
+		move_and_slide()
 		return
 
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
 
-	velocity.y += GRAVITY * delta
-
+	# ---------------- FACING ----------------
 	if input_dir != 0:
 		facing = input_dir
 
-	velocity.x = input_dir * SPEED
-
 	sprite.flip_h = facing > 0
 
+	# ---------------- MOVEMENT ----------------
+	velocity.x = input_dir * SPEED
+
+	# ---------------- CLIMB ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.CLIMB
 
@@ -152,46 +165,48 @@ func _physics_process(delta):
 	else:
 		state = State.IDLE
 
+	# ---------------- ANIMS ----------------
 	match state:
 
 		State.CLIMB:
 			velocity.y = -JCLIMB_SPEED
-			play_anim("climb")
+
+			if not is_attacking:
+				play_anim("climb")
 
 		State.JUMP:
-			play_anim("jump")
+			if not is_attacking:
+				play_anim("jump")
 
 		State.RUN:
-			play_anim("walk")
+			if not is_attacking:
+				play_anim("walk")
 
 		State.IDLE:
-			play_anim("idle")
+			if not is_attacking:
+				play_anim("idle")
 
+	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jjump_velocity
 
+	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("jumpkick"):
-		play_anim("jumpkick")
 		do_action("jumpkick")
 
 	elif Input.is_action_just_pressed("punch"):
-		play_anim("punch")
 		do_action("punch")
 
 	elif Input.is_action_just_pressed("roundhousekick"):
-		play_anim("roundhousekick")
 		do_action("roundhousekick")
 
-	elif Input.is_action_pressed("kick"):
-		play_anim("kick")
+	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
 
 	elif Input.is_action_just_pressed("uppercut"):
-		play_anim("uppercut")
 		do_action("uppercut")
 
 	elif Input.is_action_pressed("shoot"):
-		play_anim("shoot")
 		shoot_player()
 
 	elif Input.is_action_just_pressed("Reptilesacid"):
@@ -199,13 +214,14 @@ func _physics_process(delta):
 			shoot_acid()
 
 	elif Input.is_action_pressed("block"):
-		play_anim("block")
 		start_block()
+
 	else:
 		stop_block()
 
 	move_and_slide()
 
+# ---------------- BLOCK ----------------
 func start_block():
 
 	if state == State.DEAD:
@@ -222,6 +238,7 @@ func stop_block():
 		is_blocking = false
 		state = State.IDLE
 
+# ---------------- ACID SHOOT ----------------
 func shoot_acid():
 
 	if shoot_cooldown > 0:
@@ -230,10 +247,12 @@ func shoot_acid():
 	shoot_cooldown = shoot_cooldown_time
 
 	is_attacking = true
+	action_locked = true
 
 	play_anim("shoot")
 
 	var bullet = REPTILES_ACID.instantiate()
+
 	get_tree().current_scene.add_child(bullet)
 
 	bullet.global_position = shoot_marker.global_position
@@ -242,6 +261,8 @@ func shoot_acid():
 	await sprite.animation_finished
 
 	is_attacking = false
+	action_locked = false
+
 	play_anim("idle")
 
 # ---------------- CPU ----------------
@@ -271,6 +292,8 @@ func cpu_logic(delta):
 
 		if state != State.RUN:
 			state = State.RUN
+
+		if not is_attacking:
 			play_anim("walk")
 
 	else:
@@ -279,11 +302,30 @@ func cpu_logic(delta):
 
 		if state != State.IDLE:
 			state = State.IDLE
+
+		if not is_attacking:
 			play_anim("idle")
 
 		if ai_timer <= 0:
+
 			ai_timer = randf_range(0.4, 0.8)
-			do_action("punch")
+
+			match randi() % 5:
+
+				0:
+					do_action("punch")
+
+				1:
+					do_action("kick")
+
+				2:
+					do_action("uppercut")
+
+				3:
+					do_action("roundhousekick")
+
+				4:
+					shoot_player()
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -299,8 +341,13 @@ func do_action(anim_name: String):
 
 	play_anim(anim_name)
 
-	if anim_name in ["punch", "kick", "roundhousekick", "uppercut"]:
-
+	if anim_name in [
+		"punch",
+		"kick",
+		"roundhousekick",
+		"uppercut",
+		"jumpkick"
+	]:
 		spawn_attack()
 
 	await sprite.animation_finished
@@ -314,6 +361,7 @@ func do_action(anim_name: String):
 func spawn_attack():
 
 	var attack = REPTILE_ATTACK.instantiate()
+
 	get_tree().current_scene.add_child(attack)
 
 	attack.global_position = attack_marker.global_position
@@ -326,6 +374,7 @@ func shoot_player():
 
 	is_shooting = true
 	is_attacking = true
+	action_locked = true
 
 	play_anim("shoot")
 
@@ -336,12 +385,11 @@ func shoot_player():
 
 		bullet_scene = special_bullet
 
-		# reset back to normal after one special shot
+		# reset after one shot
 		special_bullet = null
 
 	else:
 
-		# normal default projectile
 		bullet_scene = BULLET_SCENE
 
 	var bullet = bullet_scene.instantiate()
@@ -355,6 +403,7 @@ func shoot_player():
 
 	is_shooting = false
 	is_attacking = false
+	action_locked = false
 
 	play_anim("idle")
 
@@ -388,10 +437,11 @@ func take_damage(amount: int):
 	play_anim("hurt")
 
 	var blood = BLOOD_EFFECT.instantiate()
+
 	get_tree().current_scene.add_child(blood)
+
 	blood.global_position = blood_marker.global_position
 
-	# wait for hurt animation
 	await sprite.animation_finished
 
 	is_hurting = false
@@ -419,8 +469,8 @@ func spawn_fx(scene: PackedScene):
 
 	get_tree().current_scene.add_child(fx)
 
-	if target and target.has_node("FIRE"):
-		fx.global_position = target.get_node("FIRE").global_position
+	if target:
+		fx.global_position = target.global_position
 
 	else:
 		fx.global_position = global_position + Vector2(80, 0)
@@ -432,6 +482,7 @@ func spawn_fx(scene: PackedScene):
 
 func check_combos():
 
+	# ---------------- ACID ----------------
 	if combo == ACID_COMBO:
 
 		combo_used.emit("acid")
@@ -441,7 +492,8 @@ func check_combos():
 		combo.clear()
 		return
 
-	if combo == FIRE_COMBO:
+	# ---------------- FIRE ----------------
+	elif combo == FIRE_COMBO:
 
 		combo_used.emit("fire")
 
@@ -450,7 +502,9 @@ func check_combos():
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
+		return
 
+	# ---------------- ICE ----------------
 	elif combo == ICE_COMBO:
 
 		combo_used.emit("ice")
@@ -460,7 +514,9 @@ func check_combos():
 		special_bullet = ICE_BULLET
 
 		combo.clear()
+		return
 
+	# ---------------- ELECTRIC ----------------
 	elif combo == ELECTRIC_COMBO:
 
 		combo_used.emit("electric")
@@ -470,6 +526,8 @@ func check_combos():
 		special_bullet = ELECTRIC_BULLET
 
 		combo.clear()
+		return
+
 # ---------------- DEATH ----------------
 func die():
 
@@ -479,9 +537,9 @@ func die():
 
 	var death = BLOOD_DEATH.instantiate()
 
-	death.global_position = global_position
-
 	get_tree().current_scene.add_child(death)
+
+	death.global_position = global_position
 
 	queue_free()
 
@@ -495,22 +553,41 @@ func play_anim(anim_name: String):
 
 	sprite.play(anim_name)
 
+# ---------------- HURT BOX ----------------
 func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 
 	if area == null:
 		return
 
-	# Subzero melee attack
+	var attacker = area.get_parent()
+
+	# ---------------- SUBZERO ----------------
 	if area.is_in_group("SubzeroAttack"):
 		take_damage(1)
 		return
 
-	# Subzero bullets
 	if area.is_in_group("Subzerobullet"):
 		take_damage(1)
 		return
 
-	# Elemental deaths
+	# ---------------- RAIDEN ----------------
+	if area.is_in_group("RaidenAttack"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("RaidenElectricBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricForceHurtBox"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricBurst"):
+		take_damage(1)
+		return
+
+	# ---------------- ELEMENTAL ----------------
 	if area.is_in_group("FireDeath"):
 		take_damage(1)
 		return
@@ -523,5 +600,8 @@ func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 		take_damage(1)
 		return
 
-func _separate_from_opponent():
-	pass
+	# ---------------- FALLBACK ----------------
+	if attacker != null and attacker != self:
+		if attacker.has_method("take_damage"):
+			take_damage(1)
+			return
