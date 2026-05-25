@@ -201,12 +201,10 @@ func _physics_process(delta):
 		do_action("electricfly")
 
 	elif Input.is_action_just_pressed("electricburst"):
-
 		do_action("electricburst")
 		spawn_burst()
 
 	elif Input.is_action_just_pressed("doublepalmshocker"):
-
 		do_action("doublepalmshocker")
 		spawn_burst()
 
@@ -214,6 +212,11 @@ func _physics_process(delta):
 
 		play_anim("electricforcehurtbox")
 		spawn_force_field()
+
+	elif Input.is_action_just_pressed("doublepalmshocker"):
+		play_anim("doublepalmshocker")
+		do_action("doublepalmshocker")
+		spawn_burst()
 
 	elif Input.is_action_just_pressed("shoot"):
 
@@ -229,7 +232,6 @@ func cpu_logic(delta):
 		return
 
 	if action_locked:
-		move_and_slide()
 		return
 
 	var dist = target.global_position.x - global_position.x
@@ -251,7 +253,7 @@ func cpu_logic(delta):
 			play_anim("walk")
 
 	else:
-
+		play_anim("walk")
 		velocity.x = 0
 
 		if state != State.IDLE:
@@ -453,11 +455,12 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 	var attacker = area.get_parent()
 	if attacker == null:
 		return
-
+		take_damage(1)
+		return
 	# ---------------- REPTILE ----------------
 	if area.is_in_group("ReptileAttack") \
-	or area.is_in_group("Reptilebullet") \
-	or area.is_in_group("ReptileHurtBox"):
+		or area.is_in_group("Reptilebullet") \
+		or area.is_in_group("ReptileHurtBox"):
 		take_damage(1)
 		return
 
