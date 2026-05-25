@@ -202,6 +202,7 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("electricburst"):
 		do_action("electricburst")
+		play_anim("doublepalmshocker")
 		spawn_burst()
 
 	elif Input.is_action_just_pressed("doublepalmshocker"):
@@ -209,17 +210,10 @@ func _physics_process(delta):
 		spawn_burst()
 
 	elif Input.is_action_just_pressed("ElectricForceHurtbox"):
-
 		play_anim("electricforcehurtbox")
 		spawn_force_field()
 
-	elif Input.is_action_just_pressed("doublepalmshocker"):
-		play_anim("doublepalmshocker")
-		do_action("doublepalmshocker")
-		spawn_burst()
-
 	elif Input.is_action_just_pressed("shoot"):
-
 		play_anim("shoot")
 		shoot_player()
 
