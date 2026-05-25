@@ -1,1 +1,28 @@
+extends Area2D
+class_name RaidenAttack
 
+@onready var collision: CollisionShape2D = $CollisionShape2D
+
+@export var lifetime := 0.15
+var damage := 1
+var active := false
+
+func _ready():
+	add_to_group("RaidenAttack")
+	enable_hitbox()
+
+	# small delay so spawn is clean
+	await get_tree().process_frame
+
+	await get_tree().create_timer(lifetime).timeout
+	queue_free()
+
+func enable_hitbox():
+	active = true
+	monitoring = true
+	collision.disabled = false
+
+func disable_hitbox():
+	active = false
+	monitoring = false
+	collision.disabled = true
