@@ -1,5 +1,37 @@
 extends Node2D
 
+Level1 (Node2D)
+└── HUD (CanvasLayer)
+    ├── DukeLabel (Label)
+    ├── RaidenLabel (Label)
+    ├── ReptileLabel (Label)
+    ├── SubzeroLabel (Label)
+    │
+    ├── DukeHealthBar (Control / TextureProgressBar)
+    ├── RaidenHealthBar (Control / TextureProgressBar)
+    ├── ReptileHealthBar (Control / TextureProgressBar)
+    ├── SubzeroHealthBar (Control / TextureProgressBar)
+    │
+    ├── Points (Label)
+    ├── Health (Label)
+    │
+    ├── Seg1 (TextureRect)
+    ├── Seg2 (TextureRect)
+    ├── Seg3 (TextureRect)
+    ├── Seg4 (TextureRect)
+    ├── Seg5 (TextureRect)
+    ├── Seg6 (TextureRect)
+    ├── Seg7 (TextureRect)
+    ├── Seg8 (TextureRect)
+    ├── Seg9 (TextureRect)
+    ├── Seg10 (TextureRect)
+    ├── Seg11 (TextureRect)
+    ├── Seg12 (TextureRect)
+    ├── Seg13 (TextureRect)
+    ├── Seg14 (TextureRect)
+    ├── Seg15 (TextureRect)
+    └── Seg16 (TextureRect)
+
 const P1_SPAWN := Vector2(603, 496)
 const P2_SPAWN := Vector2(840, 496)
 
