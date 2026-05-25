@@ -1,6 +1,23 @@
 extends CharacterBody2D
 class_name Reptile
 
+Reptile (CharacterBody2D)
+├── Sprite (AnimatedSprite2D)
+├── CollisionShape2D
+├── ReptileHurtBox (Area2D)
+│   └── CollisionShape2D
+├── Hit (AudioStreamPlayer2D)
+├── Reptileshoot (Marker2D)
+├── AttackMarker (Marker2D)
+├── BloodMarker (Marker2D)
+├── ShootTimer (Timer)
+├── PhaseTimer (Timer)
+├── HitFlashTimer (Timer)
+├── Agent (NavigationAgent2D)
+├── Camera2D (optional)
+└── AnimationPlayer (optional)
+
+
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
