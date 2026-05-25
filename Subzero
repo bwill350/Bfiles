@@ -41,6 +41,7 @@ const GRAVITY = 5000
 @export var SCLIMB_SPEED = 250.0
 @export var max_health: int = 10
 @export var sjump_velocity = -1800.0
+@export var damage := 1
 
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/Subzerobullet.tscn")
@@ -101,13 +102,13 @@ func _on_health_changed(h):
 		state = State.IDLE
 		velocity = Vector2.ZERO
 
-		$HUD/FinishLabel.text = "FINISH HIM"
+		$HUD/FinishLabel.text 
 		$HUD/FinishLabel.visible = true
 
 		await get_tree().create_timer(2.0).timeout
 
 		$HUD/FinishLabel.visible = false
-		$HUD/FinishLabel.text = "FINISH HIM"
+		$HUD/FinishLabel.text 
 		$HUD/FinishLabel.visible = true
 		$HUD/FinishLabel.start_flicker(2.0, 0.05)
 
@@ -428,16 +429,22 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 	sprite.play(anim_name)
 
-# ---------------- HIT DETECTION ----------------
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
+
 	if area == null:
 		return
 
+	var attacker = area.get_parent()
+
+	if attacker == null:
+		return
+
+	# ---------------- REPTILE ----------------
 	if area.is_in_group("ReptileBullet"):
 		take_damage(1)
 		return
 
-	if area.is_in_group("ReptileAcid"): # <-- IMPORTANT
+	if area.is_in_group("ReptileAcid"):
 		hit_from_reptileacid = true
 		take_damage(1)
 		return
@@ -446,6 +453,20 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		take_damage(1)
 		return
 
+	# ---------------- RAIDEN ----------------
+	if area.is_in_group("RaidenElectricBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricForceHurtBox"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("RaidenAttack"):
+		take_damage(1)
+		return
+
+	# ---------------- ELEMENTAL ----------------
 	if area.is_in_group("FireDeath"):
 		take_damage(1)
 		return
@@ -461,6 +482,3 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
 		return
-
-func _separate_from_opponent():
-	pass
