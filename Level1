@@ -1,36 +1,42 @@
 extends Node2D
 
-Level1 (Node2D)
-└── HUD (CanvasLayer)
-    ├── DukeLabel (Label)
-    ├── RaidenLabel (Label)
-    ├── ReptileLabel (Label)
-    ├── SubzeroLabel (Label)
-    │
-    ├── DukeHealthBar (Control / TextureProgressBar)
-    ├── RaidenHealthBar (Control / TextureProgressBar)
-    ├── ReptileHealthBar (Control / TextureProgressBar)
-    ├── SubzeroHealthBar (Control / TextureProgressBar)
-    │
-    ├── Points (Label)
-    ├── Health (Label)
-    │
-    ├── Seg1 (TextureRect)
-    ├── Seg2 (TextureRect)
-    ├── Seg3 (TextureRect)
-    ├── Seg4 (TextureRect)
-    ├── Seg5 (TextureRect)
-    ├── Seg6 (TextureRect)
-    ├── Seg7 (TextureRect)
-    ├── Seg8 (TextureRect)
-    ├── Seg9 (TextureRect)
-    ├── Seg10 (TextureRect)
-    ├── Seg11 (TextureRect)
-    ├── Seg12 (TextureRect)
-    ├── Seg13 (TextureRect)
-    ├── Seg14 (TextureRect)
-    ├── Seg15 (TextureRect)
-    └── Seg16 (TextureRect)
+# =========================================================
+# LEVEL TREE
+# =========================================================
+#
+# Level1 (Node2D)
+# └── HUD (CanvasLayer)
+#     ├── DukeLabel (Label)
+#     ├── RaidenLabel (Label)
+#     ├── ReptileLabel (Label)
+#     ├── SubzeroLabel (Label)
+#     │
+#     ├── DukeHealthBar (Control / TextureProgressBar)
+#     ├── RaidenHealthBar (Control / TextureProgressBar)
+#     ├── ReptileHealthBar (Control / TextureProgressBar)
+#     ├── SubzeroHealthBar (Control / TextureProgressBar)
+#     │
+#     ├── Points (Label)
+#     ├── Health (Label)
+#     │
+#     ├── Seg1 (TextureRect)
+#     ├── Seg2 (TextureRect)
+#     ├── Seg3 (TextureRect)
+#     ├── Seg4 (TextureRect)
+#     ├── Seg5 (TextureRect)
+#     ├── Seg6 (TextureRect)
+#     ├── Seg7 (TextureRect)
+#     ├── Seg8 (TextureRect)
+#     ├── Seg9 (TextureRect)
+#     ├── Seg10 (TextureRect)
+#     ├── Seg11 (TextureRect)
+#     ├── Seg12 (TextureRect)
+#     ├── Seg13 (TextureRect)
+#     ├── Seg14 (TextureRect)
+#     ├── Seg15 (TextureRect)
+#     └── Seg16 (TextureRect)
+#
+# =========================================================
 
 const P1_SPAWN := Vector2(603, 496)
 const P2_SPAWN := Vector2(840, 496)
@@ -48,6 +54,9 @@ func _ready():
 	setup()
 	assign_targets()
 
+	# FIX STUCK HITBOXES
+	disable_all_hitboxes()
+
 
 func spawn_players():
 	spawn_p1()
@@ -62,8 +71,10 @@ func spawn_p1():
 		match Game.p1_character:
 			"Duke":
 				p1 = DUKE.instantiate()
+
 			"Reptile":
 				p1 = REPTILE.instantiate()
+
 			"Subzero":
 				p1 = SUBZERO.instantiate()
 
@@ -80,8 +91,10 @@ func spawn_p2():
 		match Game.p2_character:
 			"Duke":
 				p2 = DUKE.instantiate()
+
 			"Reptile":
 				p2 = REPTILE.instantiate()
+
 			"Subzero":
 				p2 = SUBZERO.instantiate()
 
@@ -91,6 +104,7 @@ func spawn_p2():
 
 
 func setup():
+
 	if p1:
 		p1.add_to_group("player")
 
@@ -107,3 +121,38 @@ func assign_targets():
 	if p1 and p2:
 		p1.target = p2
 		p2.target = p1
+
+
+# =========================================================
+# HITBOX FIX
+# =========================================================
+
+func disable_all_hitboxes():
+
+	if p1:
+		_disable_shapes_recursive(p1)
+
+	if p2:
+		_disable_shapes_recursive(p2)
+
+
+func _disable_shapes_recursive(node):
+
+	for child in node.get_children():
+
+		# Disable attack areas only
+		if child is Area2D:
+
+			if child.name.contains("HitBox") \
+			or child.name.contains("Attack") \
+			or child.name.contains("Punch") \
+			or child.name.contains("Kick") \
+			or child.name.contains("Freeze") \
+			or child.name.contains("Force"):
+
+				for shape in child.get_children():
+
+					if shape is CollisionShape2D:
+						shape.disabled = true
+
+		_disable_shapes_recursive(child)
