@@ -17,7 +17,9 @@ Reptile (CharacterBody2D)
 ├── Camera2D (optional)
 └── AnimationPlayer (optional)
 
-
+extends CharacterBody2D
+class_name Reptile
+var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
@@ -84,7 +86,6 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 @onready var shoot_marker: Marker2D = $Reptileshoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
-
 # ---------------- COMBOS ----------------
 var combo := []
 var combo_timer := 0.0
@@ -96,7 +97,8 @@ const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
 # ---------------- READY ----------------
 func _ready():
-
+	spawn_protection = true
+	await get_tree().create_timer(1.0).timeout
 	add_to_group("enemy")
 	add_to_group("Reptile")
 	add_to_group("FireDeath")
@@ -154,7 +156,6 @@ func _physics_process(delta):
 	velocity.y += GRAVITY * delta
 
 	if action_locked or hurt_locked:
-		move_and_slide()
 		return
 
 	var input_dir = Input.get_axis("left", "right")
@@ -426,7 +427,8 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-
+	if spawn_protection:
+		return
 	if state == State.DEAD:
 		return
 
@@ -584,6 +586,10 @@ func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 		return
 
 	if area.is_in_group("Subzerobullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("SubzeroHurtBox"):
 		take_damage(1)
 		return
 
