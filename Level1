@@ -41,27 +41,21 @@ extends Node2D
 const P1_SPAWN := Vector2(603, 496)
 const P2_SPAWN := Vector2(840, 496)
 
-const DUKE = preload("res://Scenes/Player/Duke.tscn")
 const REPTILE = preload("res://Scenes/Boss/Reptile.tscn")
 const SUBZERO = preload("res://Scenes/Boss/Subzero.tscn")
+const RAIDEN = preload("res://Scenes/Boss/Raiden.tscn")
 
 var p1
 var p2
-
 
 func _ready():
 	spawn_players()
 	setup()
 	assign_targets()
 
-	# FIX STUCK HITBOXES
-	disable_all_hitboxes()
-
-
 func spawn_players():
 	spawn_p1()
 	spawn_p2()
-
 
 func spawn_p1():
 
@@ -69,19 +63,16 @@ func spawn_p1():
 		p1 = Game.p1_data.scene.instantiate()
 	else:
 		match Game.p1_character:
-			"Duke":
-				p1 = DUKE.instantiate()
-
 			"Reptile":
 				p1 = REPTILE.instantiate()
-
 			"Subzero":
 				p1 = SUBZERO.instantiate()
+			"Raiden":
+				p1 = RAIDEN.instantiate()
 
 	if p1:
 		p1.position = P1_SPAWN
 		add_child(p1)
-
 
 func spawn_p2():
 
@@ -89,28 +80,23 @@ func spawn_p2():
 		p2 = Game.p2_data.scene.instantiate()
 	else:
 		match Game.p2_character:
-			"Duke":
-				p2 = DUKE.instantiate()
-
 			"Reptile":
 				p2 = REPTILE.instantiate()
-
 			"Subzero":
 				p2 = SUBZERO.instantiate()
+			"Raiden":
+				p2 = RAIDEN.instantiate()
 
 	if p2:
 		p2.position = P2_SPAWN
 		add_child(p2)
 
-
 func setup():
-
 	if p1:
 		p1.add_to_group("player")
 
 	if p2:
 		p2.add_to_group("player")
-
 
 func assign_targets():
 
@@ -121,38 +107,3 @@ func assign_targets():
 	if p1 and p2:
 		p1.target = p2
 		p2.target = p1
-
-
-# =========================================================
-# HITBOX FIX
-# =========================================================
-
-func disable_all_hitboxes():
-
-	if p1:
-		_disable_shapes_recursive(p1)
-
-	if p2:
-		_disable_shapes_recursive(p2)
-
-
-func _disable_shapes_recursive(node):
-
-	for child in node.get_children():
-
-		# Disable attack areas only
-		if child is Area2D:
-
-			if child.name.contains("HitBox") \
-			or child.name.contains("Attack") \
-			or child.name.contains("Punch") \
-			or child.name.contains("Kick") \
-			or child.name.contains("Freeze") \
-			or child.name.contains("Force"):
-
-				for shape in child.get_children():
-
-					if shape is CollisionShape2D:
-						shape.disabled = true
-
-		_disable_shapes_recursive(child)
