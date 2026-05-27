@@ -62,7 +62,7 @@ const GRAVITY = 5000
 @export var JCLIMB_SPEED = 250.0
 @export var jjump_velocity = -1800.0
 @export var max_health: int = 10
-@export var shoot_cooldown_time := 0.25
+@export var shoot_cooldown_time := 0.01
 
 # ---------------- PROJECTILES ----------------
 const RAIDEN_ELECTRIC_BULLET = preload("res://Projectiles/RaidenElectricBullet.tscn")
@@ -89,6 +89,9 @@ const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
+
+func update_attack_marker():
+	$Raidenshoot.position = Vector2(55 * facing, -105)
 
 # ---------------- READY ----------------
 func _ready():
@@ -162,7 +165,6 @@ func _physics_process(delta):
 
 	# ---------------- LOCKED ----------------
 	if action_locked or hurt_locked:
-		move_and_slide()
 		return
 
 	var input_dir = Input.get_axis("left", "right")
@@ -170,7 +172,7 @@ func _physics_process(delta):
 	# ---------------- FACING ----------------
 	if input_dir != 0:
 		facing = input_dir
-
+	update_attack_marker()
 	sprite.flip_h = facing < 0
 
 	# ---------------- MOVEMENT ----------------
@@ -231,12 +233,20 @@ func _physics_process(delta):
 		spawn_burst()
 
 	elif Input.is_action_just_pressed("doublepalmshocker"):
+		play_anim("doublepalmshocker")
 		do_action("doublepalmshocker")
+		var bullet = RAIDEN_ELECTRIC_BULLET.instantiate()
+		get_tree().current_scene.add_child(bullet)
+		
+
+		bullet.global_position = shoot_marker.global_position
+		bullet.velocity = Vector2(facing, 0) * bullet.speed
 
 
-	elif Input.is_action_just_pressed("ElectricForceHurtbox"):
+	if Input.is_action_just_pressed("electricforcefield"):
 		play_anim("electricforcefield")
 		spawn_force_field()
+		
 
 	elif Input.is_action_just_pressed("shoot"):
 		play_anim("shoot")
@@ -362,7 +372,7 @@ func spawn_force_field():
 	action_locked = false
 	is_attacking = false
 
-	play_anim("electricburst")
+	play_anim("doublepalmshocker")
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
 
@@ -373,6 +383,7 @@ func do_action(anim_name: String):
 	is_attacking = true
 
 	play_anim(anim_name)
+
 
 	# ONLY melee attacks spawn attack hitbox
 	if anim_name in [
