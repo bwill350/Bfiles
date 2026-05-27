@@ -48,11 +48,17 @@ const RAIDEN = preload("res://Scenes/Boss/Raiden.tscn")
 var p1
 var p2
 
+# ---------------- READY ----------------
 func _ready():
 	spawn_players()
 	setup()
 	assign_targets()
 
+	# small delay so physics settles (prevents instant overlap hits)
+	await get_tree().create_timer(0.1).timeout
+	enable_spawn_protection()
+
+# ---------------- SPAWN ----------------
 func spawn_players():
 	spawn_p1()
 	spawn_p2()
@@ -91,6 +97,7 @@ func spawn_p2():
 		p2.position = P2_SPAWN
 		add_child(p2)
 
+# ---------------- SETUP ----------------
 func setup():
 	if p1:
 		p1.add_to_group("player")
@@ -98,6 +105,7 @@ func setup():
 	if p2:
 		p2.add_to_group("player")
 
+# ---------------- TARGETS ----------------
 func assign_targets():
 
 	if Game.vs_cpu and p2:
@@ -107,3 +115,21 @@ func assign_targets():
 	if p1 and p2:
 		p1.target = p2
 		p2.target = p1
+
+# ---------------- SPAWN PROTECTION ----------------
+func enable_spawn_protection():
+
+	if p1:
+		p1.spawn_protection = true
+
+	if p2:
+		p2.spawn_protection = true
+
+	await get_tree().create_timer(1.0).timeout
+
+	if p1:
+		p1.spawn_protection = false
+
+	if p2:
+		p2.spawn_protection = false
+
