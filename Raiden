@@ -26,6 +26,7 @@ Raiden (CharacterBody2D)
     ├── ElectricBurst.tscn
     └── ElectricForceField.tscn
 
+var spawn_protection := false
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -89,13 +90,13 @@ const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
-
 func update_attack_marker():
 	$Raidenshoot.position = Vector2(55 * facing, -105)
 
 # ---------------- READY ----------------
 func _ready():
-
+	spawn_protection = true
+	await get_tree().create_timer(1.0).timeout
 	add_to_group("enemy")
 	add_to_group("Raiden")
 
@@ -415,7 +416,8 @@ func spawn_attack():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-
+	if spawn_protection:
+		return
 	if state == State.DEAD:
 		return
 
@@ -483,10 +485,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		return
 
 	var attacker = area.get_parent()
-	if attacker == null:
-		return
-		take_damage(1)
-		return
+
 	# ---------------- REPTILE ----------------
 	if area.is_in_group("ReptileAttack") \
 		or area.is_in_group("Reptilebullet") \
@@ -496,8 +495,8 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 
 	# ---------------- SUBZERO ----------------
 	if area.is_in_group("SubzeroAttack") \
-	or area.is_in_group("Subzerobullet") \
-	or area.is_in_group("SubzeroHurtBox"):
+		or area.is_in_group("Subzerobullet") \
+		or area.is_in_group("SubzeroHurtBox"):
 		take_damage(1)
 		return
 
@@ -506,6 +505,6 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		return # ignore own field OR decide damage here
 
 	# ---------------- SAFE FALLBACK ----------------
-	if attacker != self and attacker.has_method("take_damage"):
+	if attacker != self and attacker != null and attacker.has_method("take_damage"):
 		take_damage(1)
 		return
