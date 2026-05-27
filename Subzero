@@ -26,9 +26,11 @@ Subzero (CharacterBody2D)
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
+var combo := []
+var combo_timer := 0.0
 
 # ---------------- STATE ----------------
-enum State { IDLE, SRUN, SJUMP, SJUMPKICK, SBLOCK, SPUNCH, SCLIMB, DEAD }
+enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
 var state: State = State.IDLE
 var is_finish_state := false
@@ -42,19 +44,33 @@ var hit_from_reptileacid := false
 
 @onready var finish_label: Label = get_tree().current_scene.get_node("CanvasLayer/FinishLabel")
 
+func _unhandled_input(event):
+
+	if event.is_action_pressed("left"):
+		register_input("left")
+
+	elif event.is_action_pressed("right"):
+		register_input("right")
+
+	elif event.is_action_pressed("down"):
+		register_input("down")
+
+	elif event.is_action_pressed("shoot"):
+		register_input("shoot")
+
 # ---------------- COMBAT ----------------
 var is_hurting := false
 var is_shooting := false
 var is_attacking := false
 var action_locked := false
 var hurt_locked := false
-
+var special_bullet: PackedScene = null
 var facing := -1
 var current_anim := ""
 var lock_timer := 0.0
 var health: int
 var can_take_damage := true
-
+const ICE_COMBO = ["right", "down", "shoot"]
 const BLOOD_EFFECT = preload("res://Bloodeffect.tscn")
 const SMOKE_EFFECT = preload("res://SmokeEffect.tscn")
 const GRAVITY = 5000
@@ -72,7 +88,7 @@ const SUBZERO_ATTACK = preload("res://Projectiles/SubzeroAttack.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const SMOKE_DEATH = preload("res://SmokeEffect.tscn")
-
+const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
@@ -142,7 +158,10 @@ func _on_health_changed(h):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	combo_timer += delta
 
+	if combo_timer > 0.6:
+		combo.clear()
 	if is_finish_state:
 
 		# FULL PHYSICS LOCK (prevents floating / lifting)
@@ -150,7 +169,7 @@ func _physics_process(delta):
 
 		if state != State.DEAD:
 			state = State.IDLE
-			play_anim("sidle")
+			play_anim("idle")
 
 		move_and_slide()
 		return
@@ -182,8 +201,8 @@ func _physics_process(delta):
 		return
 
 	# ---------------- INPUT ----------------
-	var input_dir = Input.get_axis("sleft", "sright")
-	var climb_pressed = Input.is_action_pressed("sclimb")
+	var input_dir = Input.get_axis("left", "right")
+	var climb_pressed = Input.is_action_pressed("climb")
 
 	if input_dir != 0:
 		facing = -sign(input_dir)
@@ -196,11 +215,11 @@ func _physics_process(delta):
 
 	# ---------------- STATE ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
-		state = State.SCLIMB
+		state = State.CLIMB
 	elif not is_on_floor():
-		state = State.SJUMP
+		state = State.JUMP
 	elif input_dir != 0:
-		state = State.SRUN
+		state = State.RUN
 	else:
 		state = State.IDLE
 
@@ -209,39 +228,39 @@ func _physics_process(delta):
 # ---------------- ANIMATION ----------------
 	if not action_locked:
 		match state:
-			State.SCLIMB:
-				play_anim("sclimb")
-			State.SJUMP:
-				play_anim("sjump")
-			State.SRUN:
-				play_anim("swalk")
+			State.CLIMB:
+				play_anim("climb")
+			State.JUMP:
+				play_anim("jump")
+			State.RUN:
+				play_anim("walk")
 			State.IDLE:
-				play_anim("sidle")
+				play_anim("idle")
 
 
 	# ---------------- INPUT ACTIONS ----------------
-	if Input.is_action_just_pressed("sjump") and is_on_floor():
+	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = sjump_velocity
 
-	elif Input.is_action_just_pressed("sjumpkick"):
-		do_action("sjumpkick")
+	elif Input.is_action_just_pressed("jumpkick"):
+		do_action("jumpkick")
 
-	elif Input.is_action_pressed("sblock"):
-		do_action("sblock")
+	elif Input.is_action_pressed("block"):
+		do_action("block")
 
-	elif Input.is_action_just_pressed("spunch"):
-		do_action("spunch")
+	elif Input.is_action_just_pressed("punch"):
+		do_action("punch")
 
-	elif Input.is_action_just_pressed("sroundhousekick"):
-		do_action("sroundhousekick")
+	elif Input.is_action_just_pressed("roundhousekick"):
+		do_action("roundhousekick")
 
-	elif Input.is_action_pressed("skick"):
-		do_action("skick")
+	elif Input.is_action_pressed("kick"):
+		do_action("kick")
 
-	elif Input.is_action_pressed("suppercut"):
-		do_action("suppercut")
+	elif Input.is_action_pressed("uppercut"):
+		do_action("uppercut")
 
-	elif Input.is_action_just_pressed("sshoot"):
+	elif Input.is_action_just_pressed("shoot"):
 		shoot_player()
 
 	move_and_slide()
@@ -267,25 +286,25 @@ func cpu_logic(delta):
 	if abs_dist > 220:
 		velocity.x = dir * SPEED * 0.8
 
-		if state != State.SRUN:
-			state = State.SRUN
-			play_anim("swalk")
+		if state != State.RUN:
+			state = State.RUN
+			play_anim("walk")
 
 	else:
 		velocity.x = move_toward(velocity.x, 0, SPEED * 6 * delta)
 
 		if state != State.IDLE:
 			state = State.IDLE
-			play_anim("sidle")
+			play_anim("idle")
 
 		if ai_timer <= 0:
 			ai_timer = randf_range(0.4, 0.8)
 
 			match randi() % 5:
-				0: do_action("spunch")
-				1: do_action("skick")
-				2: do_action("suppercut")
-				3: do_action("sroundhousekick")
+				0: do_action("punch")
+				1: do_action("kick")
+				2: do_action("uppercut")
+				3: do_action("roundhousekick")
 				4:
 					if randf() < 0.3:
 						shoot_player()
@@ -307,7 +326,7 @@ func do_action(anim_name: String):
 
 	play_anim(anim_name)
 
-	if anim_name in ["spunch", "skick", "sroundhousekick", "suppercut"]:
+	if anim_name in ["punch", "kick", "roundhousekick", "uppercut"]:
 		spawn_attack(anim_name)
 
 	await sprite.animation_finished
@@ -316,8 +335,33 @@ func do_action(anim_name: String):
 	action_locked = false
 	hurt_locked = false
 
-	play_anim("sidle")
+	play_anim("idle")
 
+# ---------------- COMBOS ----------------
+func register_input(input: String):
+
+	combo.append(input)
+
+	combo_timer = 0.0
+
+	check_combos()
+
+# ---------------- ICE COMBO ----------------
+func ice_combo():
+	combo_used.emit("ice")
+
+	special_bullet = ICE_BULLET
+
+	spawn_fx(ICE_DEATH)
+
+	combo.clear()
+
+
+func check_combos():
+
+	if combo == ICE_COMBO:
+		ice_combo()
+		return
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
@@ -330,13 +374,13 @@ func spawn_attack(anim_name: String):
 	var dmg := 1
 
 	match anim_name:
-		"sroundhousekick":
+		"roundhousekick":
 			dmg = 1
-		"suppercut":
+		"uppercut":
 			dmg = 1
-		"skick":
+		"kick":
 			dmg = 1
-		"spunch":
+		"punch":
 			dmg = 1
 
 	if attack.has_method("set_damage"):
@@ -356,7 +400,7 @@ func shoot_player():
 	is_shooting = true
 	is_attacking = true
 
-	play_anim("sshoot")
+	play_anim("shoot")
 
 	var bullet = BULLET_SCENE.instantiate()
 	get_tree().current_scene.add_child(bullet)
@@ -369,7 +413,7 @@ func shoot_player():
 	is_shooting = false
 	is_attacking = false
 
-	play_anim("sidle")
+	play_anim("idle")
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
@@ -393,7 +437,7 @@ func take_damage(amount: int):
 
 
 	hit_sound.play()
-	play_anim("shurt")
+	play_anim("hurt")
 
 	await get_tree().create_timer(0.15).timeout
 
@@ -437,6 +481,25 @@ func die():
 		death.set("facing", facing)
 
 	queue_free()
+
+
+
+func spawn_fx(scene: PackedScene):
+
+	var fx = scene.instantiate()
+
+	get_tree().current_scene.add_child(fx)
+
+	if target:
+		fx.global_position = target.global_position
+
+	else:
+		fx.global_position = global_position + Vector2(50, 40)
+
+	get_tree().create_timer(1.0).timeout.connect(func():
+		if is_instance_valid(fx):
+			fx.queue_free()
+	)
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
@@ -504,3 +567,4 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
 		return
+
