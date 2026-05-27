@@ -17,8 +17,6 @@ Reptile (CharacterBody2D)
 ├── Camera2D (optional)
 └── AnimationPlayer (optional)
 
-extends CharacterBody2D
-class_name Reptile
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
