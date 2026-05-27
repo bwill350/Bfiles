@@ -1,9 +1,9 @@
 extends Control
 
-@onready var duke_btn = $Panel/MarginContainer/VBoxContainer/CharactersPanel/HBoxContainer/DukeButton
+# ---------------- UI ----------------
 @onready var reptile_btn = $Panel/MarginContainer/VBoxContainer/CharactersPanel/HBoxContainer/ReptileButton
 @onready var subzero_btn = $Panel/MarginContainer/VBoxContainer/CharactersPanel/HBoxContainer/SubzeroButton
-
+@onready var raiden_btn = $Panel/MarginContainer/VBoxContainer/CharactersPanel/HBoxContainer/RaidenButton
 @onready var mode_button = $Panel/MarginContainer/VBoxContainer/ModePanel/ModeButton
 @onready var start_button = $Panel/StartButton
 
@@ -12,11 +12,17 @@ extends Control
 @onready var cpu_label = $Panel/MarginContainer/VBoxContainer/InfoPanel/CPULabel
 
 
-func _ready():
-	duke_btn.pressed.connect(func(): _select_character("Duke"))
-	reptile_btn.pressed.connect(func(): _select_character("Reptile"))
-	subzero_btn.pressed.connect(func(): _select_character("SubZero"))
+# ---------------- CHARACTER SCENES ----------------
+const REPTILE_SCENE := preload("res://Scenes/Boss/Reptile.tscn")
+const SUBZERO_SCENE := preload("res://Scenes/Boss/Subzero.tscn")
+const RAIDEN_SCENE := preload("res://Scenes/Boss/Raiden.tscn")
 
+
+func _ready():
+
+	reptile_btn.pressed.connect(func(): _select_character("Reptile"))
+	subzero_btn.pressed.connect(func(): _select_character("Subzero"))
+	raiden_btn.pressed.connect(func(): _select_character("Raiden"))
 	mode_button.pressed.connect(_toggle_mode)
 	start_button.pressed.connect(_start_game)
 
@@ -24,6 +30,7 @@ func _ready():
 	_update_labels()
 
 
+# ---------------- CHARACTER SELECT ----------------
 func _select_character(char_name: String):
 
 	# Player 1 selection
@@ -31,23 +38,24 @@ func _select_character(char_name: String):
 		Game.p1_character = char_name
 		p1_label.text = "P1: " + char_name
 
-		# CPU mode auto-assign real character
+		# CPU auto pick
 		if Game.vs_cpu:
 			Game.p2_character = _get_random_cpu()
 			cpu_label.text = "CPU: " + Game.p2_character
 
 		return
 
-	# Player 2 selection (only PvP mode)
+	# Player 2 selection (PvP only)
 	if not Game.vs_cpu:
 		if Game.p2_character == "":
 			Game.p2_character = char_name
 			p2_label.text = "P2: " + char_name
-			return
 
 
+# ---------------- CPU PICK ----------------
 func _get_random_cpu() -> String:
-	var options = ["Duke", "Reptile", "SubZero"]
+
+	var options = ["Reptile", "Subzero", "Raiden"]
 
 	if Game.p1_character in options:
 		options.erase(Game.p1_character)
@@ -55,7 +63,9 @@ func _get_random_cpu() -> String:
 	return options[randi() % options.size()]
 
 
+# ---------------- MODE TOGGLE ----------------
 func _toggle_mode():
+
 	Game.vs_cpu = !Game.vs_cpu
 
 	Game.p1_character = ""
@@ -70,6 +80,7 @@ func _toggle_mode():
 
 
 func _update_mode_text():
+
 	if Game.vs_cpu:
 		mode_button.text = "Player 1 vs CPU"
 	else:
@@ -77,10 +88,12 @@ func _update_mode_text():
 
 
 func _update_labels():
+
 	p2_label.visible = not Game.vs_cpu
 	cpu_label.visible = Game.vs_cpu
 
 
+# ---------------- START GAME ----------------
 func _start_game():
 
 	if Game.p1_character == "":
@@ -92,34 +105,3 @@ func _start_game():
 		return
 
 	get_tree().change_scene_to_file("res://Scenes/Levels/Level1.tscn")
-
-func get_character_scene(char_name: String) -> PackedScene:
-	match char_name:
-		"Duke":
-			return preload("res://Scenes/Player/Duke.tscn")
-		"Subzero":
-			return preload("res://Scenes/Boss/Subzero.tscn")
-		"Reptile":
-			return preload("res://Scenes/Boss/Reptile.tscn")
-		_:
-			return null
-
-func _on_start_button_pressed():
-
-
-	var p1_scene = get_character_scene(Game.p1_character)
-	var p2_scene = get_character_scene(Game.p2_character)
-
-	var p1 = p1_scene.instantiate()
-	var p2 = p2_scene.instantiate()
-
-	get_tree().current_scene.add_child(p1)
-	get_tree().current_scene.add_child(p2)
-
-	p1.global_position = Vector2(300, 400)
-	p2.global_position = Vector2(900, 400)
-
-	# CPU assignment
-	if Game.vs_cpu:
-		p2.is_cpu = true
-		p2.target = p1
