@@ -23,6 +23,7 @@ Subzero (CharacterBody2D)
 │       └── Sprite2D
 └── SubzeroAttack.tscn
 
+var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
@@ -59,7 +60,7 @@ const SMOKE_EFFECT = preload("res://SmokeEffect.tscn")
 const GRAVITY = 5000
 
 # ---------------- EXPORTS ----------------
-@export var SPEED = 900.0
+@export var SPEED = 300.0
 @export var SCLIMB_SPEED = 250.0
 @export var max_health: int = 10
 @export var sjump_velocity = -1800.0
@@ -80,14 +81,14 @@ const SMOKE_DEATH = preload("res://SmokeEffect.tscn")
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
 @onready var smoke_marker: Marker2D = $SmokeMarker
-
 func update_facing_offsets():
 	$AttackMarker.position = Vector2(34 * facing, -124)
 	$SubzeroHurtBox/CollisionShape2D.position = Vector2(32.5 * facing, -81)
 
 # ---------------- READY ----------------
 func _ready():
-
+	spawn_protection = true
+	await get_tree().create_timer(1.0).timeout
 	action_locked = false
 	hurt_locked = false
 	is_attacking = false
@@ -372,7 +373,8 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-
+	if spawn_protection:
+		return
 	if state == State.DEAD:
 		return
 
@@ -502,5 +504,3 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
 		return
-
-
