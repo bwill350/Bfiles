@@ -23,8 +23,6 @@ Subzero (CharacterBody2D)
 │       └── Sprite2D
 └── SubzeroAttack.tscn
 
-
-
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
@@ -50,7 +48,7 @@ var is_attacking := false
 var action_locked := false
 var hurt_locked := false
 
-var facing := 1
+var facing := -1
 var current_anim := ""
 var lock_timer := 0.0
 var health: int
@@ -82,6 +80,10 @@ const SMOKE_DEATH = preload("res://SmokeEffect.tscn")
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
 @onready var smoke_marker: Marker2D = $SmokeMarker
+
+func update_facing_offsets():
+	$AttackMarker.position = Vector2(34 * facing, -124)
+	$SubzeroHurtBox/CollisionShape2D.position = Vector2(32.5 * facing, -81)
 
 # ---------------- READY ----------------
 func _ready():
@@ -148,17 +150,9 @@ func _physics_process(delta):
 		if state != State.DEAD:
 			state = State.IDLE
 			play_anim("sidle")
+
 		move_and_slide()
 		return
-
-	# stop attacking input logic
-	if Input.is_action_just_pressed("spunch") \
-	or Input.is_action_just_pressed("skick") \
-	or Input.is_action_just_pressed("suppercut") \
-	or Input.is_action_just_pressed("sshoot"):
-
-		pass
-	move_and_slide()
 
 	# ---------------- LOCK TIMER SAFETY ----------------
 	if action_locked:
@@ -177,6 +171,7 @@ func _physics_process(delta):
 			target = get_tree().get_first_node_in_group("Reptile")
 
 		cpu_logic(delta)
+		move_and_slide()
 		return
 
 	# ---------------- BLOCK INPUT WHEN LOCKED ----------------
@@ -190,16 +185,13 @@ func _physics_process(delta):
 	var climb_pressed = Input.is_action_pressed("sclimb")
 
 	if input_dir != 0:
+		facing = -sign(input_dir)
+		update_facing_offsets()
 		velocity.x = input_dir * SPEED
 	else:
 		velocity.x = move_toward(velocity.x, 0, SPEED * 10 * delta)
 
-	if input_dir > 0:
-		facing = 1
-	elif input_dir < 0:
-		facing = -1
-
-	sprite.flip_h = facing > 0
+	sprite.flip_h = facing < 0
 
 	# ---------------- STATE ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
@@ -211,7 +203,9 @@ func _physics_process(delta):
 	else:
 		state = State.IDLE
 
-	# ---------------- ANIMATION ----------------
+	move_and_slide()
+
+# ---------------- ANIMATION ----------------
 	if not action_locked:
 		match state:
 			State.SCLIMB:
@@ -336,11 +330,11 @@ func spawn_attack(anim_name: String):
 
 	match anim_name:
 		"sroundhousekick":
-			dmg = 5
+			dmg = 1
 		"suppercut":
-			dmg = 3
+			dmg = 1
 		"skick":
-			dmg = 2
+			dmg = 1
 		"spunch":
 			dmg = 1
 
@@ -367,7 +361,7 @@ func shoot_player():
 	get_tree().current_scene.add_child(bullet)
 
 	bullet.global_position = shoot_marker.global_position
-	bullet.velocity = Vector2(facing, 0) * bullet.speed
+	bullet.velocity = Vector2(-facing, 0) * bullet.speed
 
 	await sprite.animation_finished
 
@@ -415,8 +409,6 @@ func take_damage(amount: int):
 		is_finish_state = true
 	elif health > 1:
 		is_finish_state = false
-	else:
-		play_anim("sidle")
 
 
 
@@ -478,6 +470,10 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		return
 
 	# ---------------- RAIDEN ----------------
+	if area.is_in_group("RaidenAttack"):
+		take_damage(1)
+		return
+
 	if area.is_in_group("RaidenElectricBullet"):
 		take_damage(1)
 		return
@@ -486,7 +482,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		take_damage(1)
 		return
 
-	if area.is_in_group("RaidenAttack"):
+	if area.is_in_group("ElectricBurst"):
 		take_damage(1)
 		return
 
@@ -506,3 +502,5 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
 		return
+
+
