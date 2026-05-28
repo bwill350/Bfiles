@@ -1,31 +1,5 @@
 extends CharacterBody2D
 class_name RaidenCharacter
-
-Raiden (CharacterBody2D)
-├── Sprite (AnimatedSprite2D)
-├── CollisionShape2D
-│
-├── RaidenHurtBox (Area2D)
-│   └── CollisionShape2D
-│
-├── ShootTimer (Timer)
-├── PhaseTimer (Timer)
-├── HitFlashTimer (Timer)
-│
-├── Hit (AudioStreamPlayer2D)
-│
-├── RaidenShoot (Marker2D)
-├── AttackMarker (Marker2D)
-├── BloodMarker (Marker2D)
-│
-├── NavigationAgent2D (Agent)
-│
-└── Attack Scenes (used via script, not children):
-    ├── RaidenAttack.tscn (spawned melee hitbox)
-    ├── RaidenElectricBullet.tscn
-    ├── ElectricBurst.tscn
-    └── ElectricForceField.tscn
-
 var spawn_protection := false
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
@@ -63,7 +37,7 @@ var shoot_cooldown := 0.0
 const GRAVITY = 5000
 
 # ---------------- EXPORTS ----------------
-@export var SPEED = 900.0
+@export var SPEED = 300.0
 @export var JCLIMB_SPEED = 250.0
 @export var jjump_velocity = -1800.0
 @export var max_health: int = 10
@@ -195,6 +169,7 @@ func _physics_process(delta):
 
 	# ---------------- LOCKED ----------------
 	if action_locked or hurt_locked:
+		move_and_slide()
 		return
 
 	var input_dir = Input.get_axis("left", "right")
@@ -202,6 +177,7 @@ func _physics_process(delta):
 	# ---------------- FACING ----------------
 	if input_dir != 0:
 		facing = input_dir
+
 	update_attack_marker()
 	sprite.flip_h = facing < 0
 
@@ -213,29 +189,27 @@ func _physics_process(delta):
 		velocity.y = jjump_velocity
 		state = State.JUMP
 
-	# ---------------- STATES ----------------
-	if not is_on_floor():
-		state = State.JUMP
+	# ---------------- STATES (ONLY WHEN FREE) ----------------
+	if not is_hurting and not is_attacking:
+		if not is_on_floor():
+			state = State.JUMP
+		elif input_dir != 0:
+			state = State.RUN
+		else:
+			state = State.IDLE
 
-	elif input_dir != 0:
-		state = State.RUN
-
+	# ---------------- ANIMS (ONLY ONCE) ----------------
+	if is_hurting:
+		play_anim("hurt")
+	elif is_attacking:
+		pass # attack system controls animation
 	else:
-		state = State.IDLE
-
-	# ---------------- ANIMS ----------------
-	match state:
-
-		State.JUMP:
-			if not is_attacking:
+		match state:
+			State.JUMP:
 				play_anim("jump")
-
-		State.RUN:
-			if not is_attacking:
+			State.RUN:
 				play_anim("walk")
-
-		State.IDLE:
-			if not is_attacking:
+			State.IDLE:
 				play_anim("idle")
 
 	# ---------------- ATTACKS ----------------
@@ -259,32 +233,24 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("electricburst"):
 		do_action("electricburst")
-		play_anim("electricburst")
 		spawn_burst()
 
 	elif Input.is_action_just_pressed("doublepalmshocker"):
-		play_anim("doublepalmshocker")
 		do_action("doublepalmshocker")
 		var bullet = RAIDEN_ELECTRIC_BULLET.instantiate()
 		get_tree().current_scene.add_child(bullet)
-		
 
 		bullet.global_position = shoot_marker.global_position
 		bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-
-	if Input.is_action_just_pressed("electricforcefield"):
-		play_anim("electricforcefield")
-		spawn_force_field()
-		
+	elif Input.is_action_just_pressed("electricforcefield"):
+		do_action("electricforcefield")
 
 	elif Input.is_action_just_pressed("shoot"):
-		play_anim("shoot")
 		shoot_player()
 
 	move_and_slide()
 
-# ---------------- CPU LOGIC ----------------
 func cpu_logic(delta):
 
 	if target == null:
@@ -297,52 +263,47 @@ func cpu_logic(delta):
 	var dir = sign(dist)
 
 	facing = dir
-
 	sprite.flip_h = facing < 0
 
 	velocity.y += GRAVITY * delta
-	velocity.x = dir * SPEED * 0.7
 
+	# ---------------- MOVE ----------------
 	if abs(dist) > 140:
 
-		if state != State.RUN:
-			state = State.RUN
-
-		if not is_attacking:
-			play_anim("walk")
+		velocity.x = dir * SPEED * 0.7
+		state = State.RUN
 
 	else:
-		play_anim("walk")
+
 		velocity.x = 0
-
-		if state != State.IDLE:
-			state = State.IDLE
-
-		if not is_attacking:
-			play_anim("idle")
+		state = State.IDLE
 
 		ai_timer -= delta
 
 		if ai_timer <= 0:
-
 			ai_timer = randf_range(0.5, 1.0)
 
 			match randi() % 5:
-
 				0:
 					do_action("punch")
-
 				1:
 					do_action("kick")
-
 				2:
 					do_action("uppercut")
-
 				3:
 					do_action("roundhousekick")
-
 				4:
 					shoot_player()
+
+	# ---------------- ANIMS (ONLY ONCE) ----------------
+	if is_attacking:
+		pass
+	else:
+		match state:
+			State.RUN:
+				play_anim("walk")
+			State.IDLE:
+				play_anim("idle")
 
 	move_and_slide()
 
@@ -370,8 +331,6 @@ func shoot_player():
 	is_shooting = false
 	is_attacking = false
 	action_locked = false
-
-	play_anim("idle")
 
 # ---------------- BURST ----------------
 func spawn_burst():
