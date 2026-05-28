@@ -54,7 +54,7 @@ var shoot_cooldown: float = 0.0
 
 # ---------------- EXPORTS ----------------
 @export var shoot_cooldown_time: float = 0.25
-@export var SPEED = 900.0
+@export var SPEED = 300.0
 @export var JCLIMB_SPEED = 250.0
 @export var max_health: int = 10
 @export var jjump_velocity = -1800.0
@@ -301,7 +301,7 @@ func shoot_acid():
 	bullet.global_position = shoot_marker.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-	await sprite.animation_finished
+	await get_tree().create_timer(0.25).timeout
 
 	is_attacking = false
 	action_locked = false
@@ -443,7 +443,7 @@ func shoot_player():
 	bullet.global_position = shoot_marker.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-	await sprite.animation_finished
+	await get_tree().create_timer(0.25).timeout
 
 	is_shooting = false
 	is_attacking = false
@@ -512,18 +512,17 @@ func spawn_fx(scene: PackedScene):
 
 	var fx = scene.instantiate()
 
-	get_tree().current_scene.add_child(fx)
+	get_tree().current_scene.call_deferred("add_child", fx)
 
 	if target:
-		fx.global_position = target.global_position
-
+		fx.global_position = target.global_position + Vector2(60 * facing, 0)
 	else:
-		fx.global_position = global_position + Vector2(80, 0)
+		fx.global_position = global_position + Vector2(80 * facing, 0)
 
-	get_tree().create_timer(1.0).timeout.connect(func():
-		if is_instance_valid(fx):
-			fx.queue_free()
-	)
+	await get_tree().create_timer(1.0).timeout
+
+	if is_instance_valid(fx):
+		fx.queue_free()
 
 func check_combos():
 
