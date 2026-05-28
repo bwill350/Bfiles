@@ -17,6 +17,8 @@ Reptile (CharacterBody2D)
 ├── Camera2D (optional)
 └── AnimationPlayer (optional)
 
+extends CharacterBody2D
+class_name Reptile
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -40,7 +42,8 @@ var is_attacking := false
 var action_locked := false
 var hurt_locked := false
 var can_take_damage := true
-
+var is_finish_state := false
+var lock_timer := 0.0
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -88,13 +91,39 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 var combo := []
 var combo_timer := 0.0
 
+@onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
+
 const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
+func _on_health_changed(h):
+
+	if h <= 1 and not is_finish_state:
+
+		is_finish_state = true
+
+		is_attacking = false
+		is_shooting = false
+		is_hurting = false
+
+		action_locked = true
+		hurt_locked = true
+
+		state = State.IDLE
+		velocity = Vector2.ZERO
+
+		finish_label.visible = true
+
+		await get_tree().create_timer(2.0).timeout
+
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
+
 # ---------------- READY ----------------
 func _ready():
+	health_changed.connect(_on_health_changed)
 	spawn_protection = true
 	await get_tree().create_timer(1.0).timeout
 	add_to_group("enemy")
@@ -384,7 +413,8 @@ func spawn_attack():
 
 # ---------------- SHOOT ----------------
 func shoot_player():
-
+	if is_finish_state:
+		return
 	if is_shooting:
 		return
 
