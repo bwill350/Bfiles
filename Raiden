@@ -530,7 +530,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		return
 
 	# ---------------- RAIDEN SELF / FX ----------------
-	if area.is_in_group("ElectricBurst"):
+	if area.is_in_group("Raiden"):
 		return # ignore own field OR decide damage here
 
 	# ---------------- SAFE FALLBACK ----------------
