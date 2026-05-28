@@ -23,12 +23,13 @@ Subzero (CharacterBody2D)
 │       └── Sprite2D
 └── SubzeroAttack.tscn
 
+extends CharacterBody2D
+class_name Subzero
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
 var combo := []
 var combo_timer := 0.0
-
 # ---------------- STATE ----------------
 enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
@@ -42,7 +43,7 @@ var ai_timer := 0.0
 
 var hit_from_reptileacid := false
 
-@onready var finish_label: Label = get_tree().current_scene.get_node("CanvasLayer/FinishLabel")
+@onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
 func _unhandled_input(event):
 
@@ -137,35 +138,43 @@ func _on_health_changed(h):
 
 		is_finish_state = true
 
-		# HARD RESET COMBAT STATE HERE TOO
 		is_attacking = false
 		is_shooting = false
-		action_locked = true
-		hurt_locked = true
+		is_hurting = false
+
+		action_locked = false
+		hurt_locked = false
+
 		state = State.IDLE
 		velocity = Vector2.ZERO
 
-		$HUD/FinishLabel.text 
-		$HUD/FinishLabel.visible = true
+		finish_label.visible = true
+
+		if finish_label.has_method("start_flicker"):
+			finish_label.start_flicker(2.0, 0.05)
 
 		await get_tree().create_timer(2.0).timeout
 
-		$HUD/FinishLabel.visible = false
-		$HUD/FinishLabel.text 
-		$HUD/FinishLabel.visible = true
-		$HUD/FinishLabel.start_flicker(2.0, 0.05)
-
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+
 	combo_timer += delta
 
 	if combo_timer > 0.6:
 		combo.clear()
+
+	# ---------------- FINISH HIM ----------------
 	if is_finish_state:
 
-		# FULL PHYSICS LOCK (prevents floating / lifting)
-		velocity = Vector2.ZERO
+		velocity.x = 0
+
+		if not is_on_floor():
+			velocity.y += GRAVITY * delta
+		else:
+			velocity.y = 0
 
 		if state != State.DEAD:
 			state = State.IDLE
@@ -177,13 +186,21 @@ func _physics_process(delta):
 	# ---------------- LOCK TIMER SAFETY ----------------
 	if action_locked:
 		lock_timer -= delta
+
 		if lock_timer <= 0:
 			action_locked = false
 			is_attacking = false
 			hurt_locked = false
 
+	# ---------------- GRAVITY ----------------
 	if state != State.DEAD:
 		velocity.y += GRAVITY * delta
+
+	# ---------------- LOCKED ----------------
+	if action_locked or hurt_locked:
+		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
+		move_and_slide()
+		return
 
 	# ---------------- CPU ----------------
 	if is_cpu:
@@ -567,4 +584,3 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
 		return
-
