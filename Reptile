@@ -313,6 +313,12 @@ func cpu_logic(delta):
 
 	if target == null:
 		return
+	#STOP ALL ACTIONS AT 1HP
+	if health <= 1:
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
+		move_and_slide()
 
 	if action_locked:
 		return
@@ -453,6 +459,9 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
+	if health <= 1:
+		action_locked = true
+		velocity.x = 0
 	if spawn_protection:
 		return
 	if state == State.DEAD:
@@ -644,6 +653,7 @@ func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("ElectricDeath"):
 		take_damage(1)
 		return
+	
 
 	# ---------------- FALLBACK ----------------
 	if attacker != null and attacker != self:
