@@ -1,6 +1,24 @@
 extends CharacterBody2D
 class_name RaidenCharacter
 
+#Raiden (CharacterBody2D)
+#├── Sprite (AnimatedSprite2D)
+#├── CollisionShape2D
+#├── RaidenHurtBox (Area2D)
+#│   └── CollisionShape2D
+#├── AttackMarker (Marker2D)
+#├── Raidenshoot (Marker2D)
+#├── BloodMarker (Marker2D)
+#├── ShootTimer (Timer)
+#├── PhaseTimer (Timer)
+#├── HitFlashTimer (Timer)
+#├── Hit (AudioStreamPlayer2D)
+#├── Agent (NavigationAgent2D)
+#├── HUD (CanvasLayer)
+#│   └── FinishLabel (Label)
+#└── Sprite2D
+
+
 var spawn_protection := false
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
