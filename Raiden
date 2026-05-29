@@ -18,7 +18,6 @@ class_name RaidenCharacter
 #│   └── FinishLabel (Label)
 #└── Sprite2D
 
-
 var spawn_protection := false
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
@@ -274,7 +273,12 @@ func cpu_logic(delta):
 
 	if target == null:
 		return
-
+#STOP ALL ACTIONS AT 1HP
+	if health <= 1:
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
+		move_and_slide()
 	if action_locked:
 		return
 
@@ -427,6 +431,14 @@ func do_action(anim_name: String):
 
 	play_anim("idle")
 
+func attack():
+	if health <= 1:
+		return
+
+func do_combo():
+	if health <= 1:
+		return
+
 # ---------------- ATTACK ----------------
 func spawn_attack():
 	var attack = RAIDEN_ATTACK.instantiate()
@@ -476,6 +488,10 @@ func take_damage(amount: int):
 
 	if health <= 0:
 		die()
+	if health <= 1:
+		action_locked = true
+		velocity.x = 0
+
 
 # ---------------- DEATH ----------------
 func die():
