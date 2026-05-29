@@ -23,8 +23,6 @@ Subzero (CharacterBody2D)
 │       └── Sprite2D
 └── SubzeroAttack.tscn
 
-extends CharacterBody2D
-class_name Subzero
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -100,7 +98,7 @@ const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 @onready var smoke_marker: Marker2D = $SmokeMarker
 func update_facing_offsets():
 	$AttackMarker.position = Vector2(34 * facing, -124)
-	$SubzeroHurtBox/CollisionShape2D.position = Vector2(32.5 * facing, -81)
+	$SubzeroHurtBox/CollisionShape2D.position = Vector2(34 * facing, -81)
 
 # ---------------- READY ----------------
 func _ready():
@@ -288,6 +286,11 @@ func cpu_logic(delta):
 
 	if target == null:
 		return
+	#STOP ALL ACTIONS AT 1HP
+	if health <= 1:
+		is_attacking = false
+		action_locked = true
+		move_and_slide()
 
 
 	ai_timer -= delta
@@ -434,6 +437,9 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
+	if health <= 1:
+		action_locked = true
+		velocity.x = 0
 	if spawn_protection:
 		return
 	if state == State.DEAD:
@@ -511,7 +517,7 @@ func spawn_fx(scene: PackedScene):
 		fx.global_position = target.global_position
 
 	else:
-		fx.global_position = global_position + Vector2(50, 40)
+		fx.global_position = global_position + Vector2(80, 0)
 
 	get_tree().create_timer(1.0).timeout.connect(func():
 		if is_instance_valid(fx):
