@@ -1,5 +1,6 @@
 extends CharacterBody2D
 class_name RaidenCharacter
+
 var spawn_protection := false
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
@@ -271,16 +272,21 @@ func cpu_logic(delta):
 	if abs(dist) > 140:
 
 		velocity.x = dir * SPEED * 0.7
-		state = State.RUN
+
+		if is_on_floor():
+			state = State.RUN
 
 	else:
 
 		velocity.x = 0
-		state = State.IDLE
+
+		if is_on_floor():
+			state = State.IDLE
 
 		ai_timer -= delta
 
 		if ai_timer <= 0:
+
 			ai_timer = randf_range(0.5, 1.0)
 
 			match randi() % 5:
@@ -295,17 +301,24 @@ func cpu_logic(delta):
 				4:
 					shoot_player()
 
-	# ---------------- ANIMS (ONLY ONCE) ----------------
+	# ---------------- AIR ----------------
+	if not is_on_floor():
+		state = State.JUMP
+
+	# ---------------- ANIMS ----------------
 	if is_attacking:
 		pass
 	else:
 		match state:
+
 			State.RUN:
 				play_anim("walk")
+
 			State.IDLE:
 				play_anim("idle")
 
-	move_and_slide()
+			State.JUMP:
+				play_anim("jump")
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -471,12 +484,13 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 
 	if area == null:
 		return
+		move_and_slide()
 
 	var attacker = area.get_parent()
 
 	# ---------------- REPTILE ----------------
 	if area.is_in_group("ReptileAttack") \
-		or area.is_in_group("Reptilebullet") \
+		or area.is_in_group("ReptileBullet") \
 		or area.is_in_group("ReptileHurtBox"):
 		take_damage(1)
 		return
