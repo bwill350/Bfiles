@@ -361,11 +361,14 @@ func shoot_player():
 	bullet.global_position = shoot_marker.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-	await sprite.animation_finished
+	# WAIT FIX
+	await get_tree().create_timer(0.25).timeout
 
 	is_shooting = false
 	is_attacking = false
 	action_locked = false
+
+	play_anim("idle")
 
 # ---------------- BURST ----------------
 func spawn_burst():
