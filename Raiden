@@ -87,8 +87,7 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
-func update_attack_marker():
-	$Raidenshoot.position = Vector2(55 * facing, -105)
+
 
 func _on_health_changed(h):
 
@@ -196,7 +195,6 @@ func _physics_process(delta):
 	if input_dir != 0:
 		facing = input_dir
 
-	update_attack_marker()
 	sprite.flip_h = facing < 0
 
 	# ---------------- MOVEMENT ----------------
@@ -276,11 +274,11 @@ func cpu_logic(delta):
 
 	var dist = target.global_position.x - global_position.x
 	var dir = sign(dist)
-
+	velocity.y += GRAVITY * delta
 	facing = dir
 	sprite.flip_h = facing < 0
 
-	velocity.y += GRAVITY * delta
+
 
 #STOP ALL ACTIONS AT 1HP
 	if health <= 1:
@@ -356,13 +354,14 @@ func shoot_player():
 	play_anim("shoot")
 
 	var bullet = RAIDEN_ELECTRIC_BULLET.instantiate()
-
 	get_tree().current_scene.add_child(bullet)
 
+	# 🔥 SPAWN FROM MARKER
 	bullet.global_position = shoot_marker.global_position
-	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-	# WAIT FIX
+	# 🔥 FIXED DIRECTION
+	bullet.velocity = Vector2.RIGHT * sign(facing) * bullet.speed
+
 	await get_tree().create_timer(0.25).timeout
 
 	is_shooting = false
@@ -448,7 +447,8 @@ func spawn_attack():
 	var attack = RAIDEN_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 	attack.global_position = attack_marker.global_position
-
+	get_tree().current_scene.add_child(attack)
+	attack.global_position = shoot_marker.global_position + Vector2(0, 3)
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 	if spawn_protection:
