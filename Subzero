@@ -44,6 +44,8 @@ var hit_from_reptileacid := false
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
 func _unhandled_input(event):
+	if is_cpu:
+		return
 
 	if event.is_action_pressed("left"):
 		register_input("left")
@@ -64,11 +66,12 @@ var is_attacking := false
 var action_locked := false
 var hurt_locked := false
 var special_bullet: PackedScene = null
-var facing := -1
+var facing := 1
 var current_anim := ""
 var lock_timer := 0.0
 var health: int
 var can_take_damage := true
+var is_blocking := false
 const ICE_COMBO = ["right", "down", "shoot"]
 const BLOOD_EFFECT = preload("res://Bloodeffect.tscn")
 const SMOKE_EFFECT = preload("res://SmokeEffect.tscn")
@@ -80,7 +83,8 @@ const GRAVITY = 5000
 @export var max_health: int = 10
 @export var sjump_velocity = -1800.0
 @export var damage := 1
-
+@export var shoot_cooldown_time: float = 0.25
+var shoot_cooldown := 0.0
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/Subzerobullet.tscn")
 const SUBZERO_ATTACK = preload("res://Projectiles/SubzeroAttack.tscn")
@@ -102,6 +106,8 @@ func update_facing_offsets():
 
 # ---------------- READY ----------------
 func _ready():
+	facing = 1
+	sprite.flip_h = false
 	spawn_protection = true
 	await get_tree().create_timer(1.0).timeout
 	action_locked = false
@@ -125,7 +131,7 @@ func _ready():
 	health = max_health
 	health_changed.emit(health)
 
-	play_anim("sidle")
+	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
 	health_changed.connect(_on_health_changed)
@@ -159,10 +165,15 @@ func _on_health_changed(h):
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
-	combo_timer += delta
+	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
+	combo_timer += delta
 	if combo_timer > 0.6:
 		combo.clear()
+
+	# ---------------- DEAD ----------------
+	if state == State.DEAD:
+		return
 
 	# ---------------- FINISH HIM ----------------
 	if is_finish_state:
@@ -174,9 +185,8 @@ func _physics_process(delta):
 		else:
 			velocity.y = 0
 
-		if state != State.DEAD:
-			state = State.IDLE
-			play_anim("idle")
+		state = State.IDLE
+		play_anim("idle")
 
 		move_and_slide()
 		return
@@ -184,15 +194,13 @@ func _physics_process(delta):
 	# ---------------- LOCK TIMER SAFETY ----------------
 	if action_locked:
 		lock_timer -= delta
-
 		if lock_timer <= 0:
 			action_locked = false
 			is_attacking = false
 			hurt_locked = false
 
 	# ---------------- GRAVITY ----------------
-	if state != State.DEAD:
-		velocity.y += GRAVITY * delta
+	velocity.y += GRAVITY * delta
 
 	# ---------------- LOCKED ----------------
 	if action_locked or hurt_locked:
@@ -209,39 +217,36 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# ---------------- BLOCK INPUT WHEN LOCKED ----------------
-	if action_locked or hurt_locked:
-		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
-		move_and_slide()
-		return
-
 	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
 
+	# ---------------- FACING (FIXED LIKE REPTILE) ----------------
 	if input_dir != 0:
-		facing = -sign(input_dir)
-		update_facing_offsets()
-		velocity.x = input_dir * SPEED
-	else:
-		velocity.x = move_toward(velocity.x, 0, SPEED * 10 * delta)
+		facing = sign(input_dir)
 
-	sprite.flip_h = facing < 0
+	sprite.flip_h = -facing < 0
+
+	# ---------------- MOVEMENT ----------------
+	velocity.x = input_dir * SPEED
 
 	# ---------------- STATE ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.CLIMB
+
 	elif not is_on_floor():
 		state = State.JUMP
+
 	elif input_dir != 0:
 		state = State.RUN
+
 	else:
 		state = State.IDLE
 
 	move_and_slide()
 
-# ---------------- ANIMATION ----------------
-	if not action_locked:
+	# ---------------- ANIMATION ----------------
+	if not is_attacking:
 		match state:
 			State.CLIMB:
 				play_anim("climb")
@@ -252,16 +257,12 @@ func _physics_process(delta):
 			State.IDLE:
 				play_anim("idle")
 
-
 	# ---------------- INPUT ACTIONS ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = sjump_velocity
 
 	elif Input.is_action_just_pressed("jumpkick"):
 		do_action("jumpkick")
-
-	elif Input.is_action_pressed("block"):
-		do_action("block")
 
 	elif Input.is_action_just_pressed("punch"):
 		do_action("punch")
@@ -275,23 +276,47 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("uppercut"):
 		do_action("uppercut")
 
-	elif Input.is_action_just_pressed("shoot"):
+	elif Input.is_action_pressed("shoot"):
 		shoot_player()
 
-	move_and_slide()
+	elif Input.is_action_just_pressed("shoot"):
+		if shoot_cooldown <= 0:
+			shoot_player()
 
+	elif Input.is_action_pressed("block"):
+		start_block()
+	else:
+		stop_block()
+# ---------------- BLOCK ----------------
+func start_block():
+
+	if state == State.DEAD:
+		return
+
+	is_blocking = true
+	state = State.BLOCK
+
+	play_anim("block")
+
+func stop_block():
+
+	if is_blocking:
+		is_blocking = false
+		state = State.IDLE
 
 # ---------------- CPU LOGIC ----------------
 func cpu_logic(delta):
 
 	if target == null:
 		return
-	#STOP ALL ACTIONS AT 1HP
+
+	# STOP ALL ACTIONS AT 1HP
 	if health <= 1:
 		is_attacking = false
 		action_locked = true
+		velocity.x = 0
 		move_and_slide()
-
+		return
 
 	ai_timer -= delta
 
@@ -299,36 +324,59 @@ func cpu_logic(delta):
 	var dir = sign(dist)
 	var abs_dist = abs(dist)
 
-	facing = dir
-	sprite.flip_h = facing > 0
+# ---------------- FACING FIX (ALWAYS MATCH MOVEMENT) ----------------
+	if abs(velocity.x) > 1:
+		facing = sign(velocity.x)
 
+	sprite.flip_h = -facing < 0
 
+# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+# ---------------- MOVE ----------------
 	if abs_dist > 220:
+
 		velocity.x = dir * SPEED * 0.8
 
-		if state != State.RUN:
-			state = State.RUN
-			play_anim("walk")
+	if state != State.RUN:
+		state = State.RUN
+
+	if not is_attacking:
+		play_anim("walk")
 
 	else:
-		velocity.x = move_toward(velocity.x, 0, SPEED * 6 * delta)
+
+		velocity.x = 0
 
 		if state != State.IDLE:
 			state = State.IDLE
+
+		if not is_attacking:
 			play_anim("idle")
 
-		if ai_timer <= 0:
-			ai_timer = randf_range(0.4, 0.8)
+	# ---------------- AI ATTACKS ----------------
+	if ai_timer <= 0 and not action_locked:
 
-			match randi() % 5:
-				0: do_action("punch")
-				1: do_action("kick")
-				2: do_action("uppercut")
-				3: do_action("roundhousekick")
-				4:
-					if randf() < 0.3:
-						shoot_player()
+		ai_timer = randf_range(0.4, 0.8)
 
+		match randi() % 5:
+
+			0:
+				do_action("punch")
+
+			1:
+				do_action("kick")
+
+			2:
+				do_action("uppercut")
+
+			3:
+				do_action("roundhousekick")
+
+			4:
+				shoot_player()
+
+	move_and_slide()
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -419,19 +467,23 @@ func shoot_player():
 
 	is_shooting = true
 	is_attacking = true
+	action_locked = true
 
 	play_anim("shoot")
 
 	var bullet = BULLET_SCENE.instantiate()
+
 	get_tree().current_scene.add_child(bullet)
 
 	bullet.global_position = shoot_marker.global_position
-	bullet.direction = -facing
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-	await sprite.animation_finished
+	# WAIT FIX
+	await get_tree().create_timer(0.25).timeout
 
 	is_shooting = false
 	is_attacking = false
+	action_locked = false
 
 	play_anim("idle")
 
