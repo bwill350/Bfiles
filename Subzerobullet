@@ -1,67 +1,45 @@
 extends Area2D
 class_name SubzeroBullet
 
-@export var speed: float = 600.0
-@export var turn_speed: float = 6.0
-@export var freeze_time: float = 0.25
+@export var speed: float = 900.0
 @export var lifetime: float = 3.0
 
 var velocity: Vector2 = Vector2.ZERO
-var target: Node2D = null
-var has_hit := false
 
+@onready var sprite: Sprite2D = $Sprite2D
 
-# ---------------- READY ----------------
 func _ready():
-	area_entered.connect(_on_area_entered)
+	add_to_group("ReptileBullet")
+	add_to_group("Subzerobullet")
 
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
 
-	var enemies = get_tree().get_nodes_in_group("Reptile")
-	if enemies.size() > 0:
-		target = enemies[0]
-
-
-# ---------------- MOVEMENT ----------------
 func _physics_process(delta):
-
-	if has_hit:
-		return
-
-	if target == null or not is_instance_valid(target):
-		global_position += velocity * delta
-		return
-
-	var dir = (target.global_position - global_position).normalized()
-
-	velocity = velocity.lerp(dir * speed, turn_speed * delta)
-
 	global_position += velocity * delta
-	rotation = velocity.angle()
 
 
-# ---------------- HIT ----------------
 func _on_area_entered(area: Area2D) -> void:
-	if area == null or has_hit:
+
+	if area == null:
 		return
 
 	var parent = area.get_parent()
 
 	# ---------------- REPTILE ----------------
 	if area.is_in_group("ReptileHurtBox"):
+
 		if parent and parent.has_method("take_damage"):
 			parent.take_damage(1)
 
-		has_hit = true
 		queue_free()
 		return
 
 	# ---------------- RAIDEN ----------------
 	if area.is_in_group("RaidenHurtBox"):
+
 		if parent and parent.has_method("take_damage"):
 			parent.take_damage(1)
 
-		has_hit = true
 		queue_free()
 		return
