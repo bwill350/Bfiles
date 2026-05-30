@@ -273,14 +273,6 @@ func cpu_logic(delta):
 
 	if target == null:
 		return
-#STOP ALL ACTIONS AT 1HP
-	if health <= 1:
-		is_attacking = false
-		action_locked = true
-		velocity.x = 0
-		move_and_slide()
-	if action_locked:
-		return
 
 	var dist = target.global_position.x - global_position.x
 	var dir = sign(dist)
@@ -289,6 +281,15 @@ func cpu_logic(delta):
 	sprite.flip_h = facing < 0
 
 	velocity.y += GRAVITY * delta
+
+#STOP ALL ACTIONS AT 1HP
+	if health <= 1:
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
+		move_and_slide()
+	if action_locked:
+		return
 
 	# ---------------- MOVE ----------------
 	if abs(dist) > 140:
