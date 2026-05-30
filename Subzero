@@ -426,7 +426,7 @@ func shoot_player():
 	get_tree().current_scene.add_child(bullet)
 
 	bullet.global_position = shoot_marker.global_position
-	bullet.velocity = Vector2(-facing, 0) * bullet.speed
+	bullet.direction = -facing
 
 	await sprite.animation_finished
 
