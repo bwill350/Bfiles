@@ -81,7 +81,7 @@ const GRAVITY = 5000
 @export var SPEED = 300.0
 @export var SCLIMB_SPEED = 250.0
 @export var max_health: int = 10
-@export var sjump_velocity = -1800.0
+@export var sjump_velocity = -2200.0
 @export var damage := 1
 @export var shoot_cooldown_time: float = 0.25
 var shoot_cooldown := 0.0
@@ -595,6 +595,15 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if attacker == null:
 		return
 
+	# ---------------- LIU KANG ----------------
+	if area.is_in_group("LiuKangAttack"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("Fireball"):
+		take_damage(1)
+		return
+
 	# ---------------- REPTILE ----------------
 	if area.is_in_group("ReptileBullet"):
 		take_damage(1)
@@ -608,9 +617,14 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("ReptileAttack"):
 		take_damage(1)
 		return
+	if area.is_in_group("LiuKangAttack"):
+		take_damage(1)
+		return
+	
 
 	# ---------------- RAIDEN ----------------
 	if area.is_in_group("RaidenAttack"):
+		play_anim("hurt")
 		take_damage(1)
 		return
 
@@ -623,6 +637,9 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		return
 
 	if area.is_in_group("ElectricBurst"):
+		take_damage(1)
+		return
+	if area.is_in_group("ElectricForceField"):
 		take_damage(1)
 		return
 
