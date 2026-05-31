@@ -41,6 +41,7 @@ extends Node2D
 const P1_SPAWN := Vector2(603, 496)
 const P2_SPAWN := Vector2(840, 496)
 
+const LIU_KANG = preload("res://LiuKang.tscn")
 const REPTILE = preload("res://Scenes/Boss/Reptile.tscn")
 const SUBZERO = preload("res://Scenes/Boss/Subzero.tscn")
 const RAIDEN = preload("res://Scenes/Boss/Raiden.tscn")
@@ -54,7 +55,6 @@ func _ready():
 	setup()
 	assign_targets()
 
-	# small delay so physics settles (prevents instant overlap hits)
 	await get_tree().create_timer(0.1).timeout
 	enable_spawn_protection()
 
@@ -69,6 +69,8 @@ func spawn_p1():
 		p1 = Game.p1_data.scene.instantiate()
 	else:
 		match Game.p1_character:
+			"LiuKang":
+				p1 = LIU_KANG.instantiate()
 			"Reptile":
 				p1 = REPTILE.instantiate()
 			"Subzero":
@@ -86,6 +88,8 @@ func spawn_p2():
 		p2 = Game.p2_data.scene.instantiate()
 	else:
 		match Game.p2_character:
+			"LiuKang":
+				p2 = LIU_KANG.instantiate()
 			"Reptile":
 				p2 = REPTILE.instantiate()
 			"Subzero":
@@ -132,4 +136,3 @@ func enable_spawn_protection():
 
 	if p2:
 		p2.spawn_protection = false
-
