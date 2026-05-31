@@ -4,11 +4,16 @@ extends CanvasLayer
 @onready var duke_label = $DukeLabel
 @onready var reptile_label = $ReptileLabel
 @onready var subzero_label = $SubzeroLabel
+@onready var raiden_label = $RaidenLabel
+@onready var liu_kang_label = $LiuKangLabel
+
 @onready var points_label = $Points
 
 @onready var duke_bar: TextureProgressBar = $DukeHealthBar
 @onready var reptile_bar: TextureProgressBar = $ReptileHealthBar
 @onready var subzero_bar: TextureProgressBar = $SubzeroHealthBar
+@onready var raiden_bar: TextureProgressBar = $RaidenHealthBar
+@onready var liu_kang_bar: TextureProgressBar = $LiuKangHealthBar
 
 # ---------------- SEGMENTS ----------------
 @onready var seg1 = $Seg1
@@ -26,54 +31,68 @@ extends CanvasLayer
 @onready var seg11 = $Seg11
 @onready var seg12 = $Seg12
 
+@onready var seg13 = $Seg13
+@onready var seg14 = $Seg14
+@onready var seg15 = $Seg15
+@onready var seg16 = $Seg16
+
+@onready var seg17 = $Seg17
+@onready var seg18 = $Seg18
+@onready var seg19 = $Seg19
+@onready var seg20 = $Seg20
 
 # ---------------- REFERENCES ----------------
 var reptile
 var subzero
 var duke
-
+var raiden
+var liu_kang
 
 func _ready():
-
-	Game.points_changed.connect(_on_points_changed)
+	if Game.has_signal("points_changed"):
+		Game.points_changed.connect(_on_points_changed)
 
 	_find_fighters()
-
 
 func _find_fighters():
 
 	duke = get_tree().get_first_node_in_group("Duke")
+	reptile = get_tree().get_first_node_in_group("Reptile")
+	subzero = get_tree().get_first_node_in_group("Subzero")
+	raiden = get_tree().get_first_node_in_group("Raiden")
+	liu_kang = get_tree().get_first_node_in_group("LiuKang")
+
 	if duke and duke.has_signal("health_changed"):
 		if not duke.health_changed.is_connected(_on_duke_health_changed):
 			duke.health_changed.connect(_on_duke_health_changed)
 
-	reptile = get_tree().get_first_node_in_group("Reptile")
 	if reptile and reptile.has_signal("health_changed"):
 		if not reptile.health_changed.is_connected(_on_reptile_health_changed):
 			reptile.health_changed.connect(_on_reptile_health_changed)
 
-	subzero = get_tree().get_first_node_in_group("Subzero")
 	if subzero and subzero.has_signal("health_changed"):
 		if not subzero.health_changed.is_connected(_on_subzero_health_changed):
 			subzero.health_changed.connect(_on_subzero_health_changed)
 
+	if raiden and raiden.has_signal("health_changed"):
+		if not raiden.health_changed.is_connected(_on_raiden_health_changed):
+			raiden.health_changed.connect(_on_raiden_health_changed)
+
+	if liu_kang and liu_kang.has_signal("health_changed"):
+		if not liu_kang.health_changed.is_connected(_on_liu_kang_health_changed):
+			liu_kang.health_changed.connect(_on_liu_kang_health_changed)
 
 func _process(_delta):
-
-	if reptile == null or subzero == null or duke == null:
+	if reptile == null or subzero == null or duke == null or raiden == null or liu_kang == null:
 		_find_fighters()
-
 
 # ---------------- DUKE ----------------
 func _on_duke_health_changed(health):
-
 	duke_label.text = "Duke: %d" % health
 	duke_bar.value = health
 
-
 # ---------------- REPTILE ----------------
 func _on_reptile_health_changed(health):
-
 	reptile_label.text = "Reptile: %d" % health
 	reptile_bar.value = health
 
@@ -88,10 +107,8 @@ func _on_reptile_health_changed(health):
 	seg3.visible = percent > 0.02
 	seg4.visible = percent > 0.03
 
-
 # ---------------- SUBZERO ----------------
 func _on_subzero_health_changed(health):
-
 	subzero_label.text = "Subzero: %d" % health
 	subzero_bar.value = health
 
@@ -106,6 +123,41 @@ func _on_subzero_health_changed(health):
 	seg11.visible = percent > 0.02
 	seg12.visible = percent > 0.03
 
+# ---------------- RAIDEN ----------------
+func _on_raiden_health_changed(health):
+	raiden_label.text = "Raiden: %d" % health
+	raiden_bar.value = health
+
+	var max_hp = raiden_bar.max_value
+	if max_hp <= 0:
+		return
+
+	var percent = float(health) / float(max_hp)
+
+	seg13.visible = percent > 0.00
+	seg14.visible = percent > 0.01
+	seg15.visible = percent > 0.02
+	seg16.visible = percent > 0.03
+
+# ---------------- LIU KANG ----------------
+func _on_liu_kang_health_changed(health):
+
+	if liu_kang_bar == null:
+		return
+
+	liu_kang_label.text = "Liu Kang: %d" % health
+	liu_kang_bar.value = health
+
+	var max_hp = liu_kang_bar.max_value
+	if max_hp <= 0:
+		return
+
+	var percent = float(health) / float(max_hp)
+
+	seg17.visible = percent > 0.00
+	seg18.visible = percent > 0.01
+	seg19.visible = percent > 0.02
+	seg20.visible = percent > 0.03
 
 # ---------------- POINTS ----------------
 func _on_points_changed(points):
