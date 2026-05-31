@@ -55,9 +55,9 @@ var shoot_cooldown: float = 0.0
 # ---------------- EXPORTS ----------------
 @export var shoot_cooldown_time: float = 0.25
 @export var SPEED = 300.0
-@export var JCLIMB_SPEED = 250.0
+@export var CLIMB_SPEED = 250.0
 @export var max_health: int = 10
-@export var jjump_velocity = -1800.0
+@export var jump_velocity = -2200.0
 @export var combo_reset_time := 0.6
 
 # ---------------- PRELOADS ----------------
@@ -212,7 +212,7 @@ func _physics_process(delta):
 	match state:
 
 		State.CLIMB:
-			velocity.y = -JCLIMB_SPEED
+			velocity.y = -CLIMB_SPEED
 
 			if not is_attacking:
 				play_anim("climb")
@@ -231,7 +231,7 @@ func _physics_process(delta):
 
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jjump_velocity
+		velocity.y = jump_velocity
 
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("jumpkick"):
@@ -458,6 +458,11 @@ func shoot_player():
 	play_anim("idle")
 
 # ---------------- DAMAGE ----------------
+	print("HURT START")
+
+	await sprite.animation_finished
+
+	print("HURT END")
 func take_damage(amount: int):
 	if health <= 1:
 		action_locked = true
@@ -653,7 +658,18 @@ func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("ElectricDeath"):
 		take_damage(1)
 		return
-	
+	if area.is_in_group("LiuKangAttack"):
+		take_damage(1)
+		return
+
+		# ---------------- LIU KANG ----------------
+	if area.is_in_group("LiuKangAttack"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("Fireball"):
+		take_damage(1)
+		return
 
 	# ---------------- FALLBACK ----------------
 	if attacker != null and attacker != self:
