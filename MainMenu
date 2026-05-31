@@ -2,6 +2,9 @@ extends Control
 
 @onready var reptile_btn = $ReptileButton
 @onready var subzero_btn = $SubzeroButton
+@onready var raiden_btn = $RaidenButton
+@onready var liu_kang_btn = $LiuKangButton
+
 @onready var mode_button = $ModeButton
 @onready var start_button = $StartButton
 
@@ -9,19 +12,20 @@ extends Control
 @onready var p2_label = $P2Label
 @onready var cpu_label = $CPULabel
 
-
 # ---------------- FIXED PATHS ----------------
 const REPTILE_DATA = preload("res://Data/Reptile.tres")
 const SUBZERO_DATA = preload("res://Data/Subzero.tres")
-
+const RAIDEN_DATA = preload("res://Data/Raiden.tres")
+const LIU_KANG_DATA = preload("res://Data/LiuKang.tres")
 
 func _ready():
 	reptile_btn.pressed.connect(func(): _select_character("Reptile"))
 	subzero_btn.pressed.connect(func(): _select_character("Subzero"))
+	raiden_btn.pressed.connect(func(): _select_character("Raiden"))
+	liu_kang_btn.pressed.connect(func(): _select_character("LiuKang"))
 
 	mode_button.pressed.connect(_toggle_mode)
 	start_button.pressed.connect(_start_game)
-
 
 func _select_character(char_name: String):
 
@@ -29,28 +33,36 @@ func _select_character(char_name: String):
 	if Game.p1_character == "":
 		Game.p1_character = char_name
 
-		if char_name == "Reptile":
-			Game.p1_data = REPTILE_DATA
-		elif char_name == "Subzero":
-			Game.p1_data = SUBZERO_DATA
+		match char_name:
+			"Reptile":
+				Game.p1_data = REPTILE_DATA
+			"Subzero":
+				Game.p1_data = SUBZERO_DATA
+			"Raiden":
+				Game.p1_data = RAIDEN_DATA
+			"LiuKang":
+				Game.p1_data = LIU_KANG_DATA
 
 		p1_label.text = "P1: " + char_name
 		return
-
 
 	# ---------------- P2 (PvP ONLY) ----------------
 	if not Game.vs_cpu:
 		if Game.p2_character == "":
 			Game.p2_character = char_name
 
-			if char_name == "Reptile":
-				Game.p2_data = REPTILE_DATA
-			elif char_name == "Subzero":
-				Game.p2_data = SUBZERO_DATA
+			match char_name:
+				"Reptile":
+					Game.p2_data = REPTILE_DATA
+				"Subzero":
+					Game.p2_data = SUBZERO_DATA
+				"Raiden":
+					Game.p2_data = RAIDEN_DATA
+				"LiuKang":
+					Game.p2_data = LIU_KANG_DATA
 
 			p2_label.text = "P2: " + char_name
 			return
-
 
 func _toggle_mode():
 	Game.vs_cpu = !Game.vs_cpu
@@ -64,7 +76,6 @@ func _toggle_mode():
 	p1_label.text = "P1: Not Selected"
 	p2_label.text = "P2: Not Selected"
 	cpu_label.text = "CPU: Not Selected"
-
 
 func _start_game():
 	get_tree().change_scene_to_file("res://Scenes/Levels/Level1.tscn")
