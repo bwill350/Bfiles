@@ -1,9 +1,6 @@
 extends CharacterBody2D
 class_name LiuKang
 
-extends CharacterBody2D
-class_name LiuKang
-
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -244,7 +241,7 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("shoot"):
 		shoot_fireball()
 
-	elif Input.is_action_just_pressed("flyingkick"):
+	elif Input.is_action_pressed("flyingkick"):
 			do_action("flyingkick")
 
 	elif Input.is_action_pressed("block"):
@@ -616,46 +613,4 @@ func _on_health_changed(health):
 
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D):
-	
-	if area == null:
-		return
-
-	# ❌ HARD IGNORE environment
-	if area.is_in_group("Level1") or area.is_in_group("World"):
-		return
-
-	# ❌ ONLY allow these attacks
-	if area.is_in_group("ElectricBullet"):
-		take_damage(1)
-		print("Hit by Raiden")
-		return
-
-	if area.is_in_group("RaidenAttack") \
-		or area.is_in_group("ReptileAttack") \
-		or area.is_in_group("SubzeroAttack"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("ReptileAcid"):
-		take_damage(1)
-		print("Hit by Reptile")
-		return
-
-	if area.is_in_group("FireDeath"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("FireBullet"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("ReptileBullet"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("HitBox"):
-		take_damage(1)
-		return
-
-	# ❌ everything else is ignored
-	return
+	take_damage(1)
