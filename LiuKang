@@ -1,6 +1,7 @@
 extends CharacterBody2D
 class_name LiuKang
 
+
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -80,16 +81,37 @@ func _ready():
 	health_changed.emit(health)
 
 	play_anim("idle")
+	if not hit_box.area_entered.is_connected(_on_liu_kang_hurt_box_area_entered):
+		hit_box.area_entered.connect(_on_liu_kang_hurt_box_area_entered)
 
-	if hit_box:
-		if not hit_box.area_entered.is_connected(_on_LiuKang_Hurt_Box_area_entered):
-			hit_box.area_entered.connect(_on_LiuKang_Hurt_Box_area_entered)
+func _unhandled_input(event):
+
+	if event.is_action_pressed("up"):
+		register_input("up")
+
+	elif event.is_action_pressed("down"):
+		register_input("down")
+
+	elif event.is_action_pressed("left"):
+		register_input("left")
+
+	elif event.is_action_pressed("right"):
+		register_input("right")
+
+	elif event.is_action_pressed("shoot"):
+		register_input("shoot")
 
 # ---------------- PHYSICS ----------------
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	combo_timer += delta
+	special_bullet = FIRE_BULLET	
 
-	velocity.y += GRAVITY * delta
+
+	if combo_timer > combo_reset_time:
+		combo.clear()
+		
+		velocity.y += GRAVITY * delta
 
 	if is_cpu:
 		cpu_logic(delta)
@@ -209,14 +231,12 @@ func cpu_logic(delta):
 
 	if target == null:
 		return
-
-	# STOP AT LOW HP
+	#STOP ALL ACTIONS AT 1HP
 	if health <= 1:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
 		move_and_slide()
-		return
 
 	if action_locked:
 		return
@@ -224,28 +244,18 @@ func cpu_logic(delta):
 	ai_timer -= delta
 
 	var dist = target.global_position.x - global_position.x
-
 	var dir = sign(dist)
-
-	# ❗ FIX: prevent 0-direction freeze
-	if dir == 0:
-		dir = facing
-
 	var abs_dist = abs(dist)
 
-	# ---------------- FACING (REPTILE STYLE FIX) ----------------
-	if dir != 0:
-		facing = dir
+	facing = dir
 
-	sprite.flip_h = facing < 0
+	sprite.flip_h = -facing > 0
 
-	# gravity (CPU needs this too)
 	velocity.y += GRAVITY * delta
 
-	# ---------------- MOVE ----------------
 	if abs_dist > 220:
 
-		velocity.x = facing * SPEED * 0.8
+		velocity.x = dir * SPEED * 0.8
 
 		if state != State.RUN:
 			state = State.RUN
@@ -263,22 +273,58 @@ func cpu_logic(delta):
 		if not is_attacking:
 			play_anim("idle")
 
-		# ---------------- ATTACK TIMER ----------------
 		if ai_timer <= 0:
 
 			ai_timer = randf_range(0.4, 0.8)
 
 			match randi() % 5:
-				0: do_action("punch")
-				1: do_action("kick")
-				2: do_action("uppercut")
-				3: do_action("roundhousekick")
-				4: shoot_fireball()
+
+				0:
+					do_action("punch")
+
+				1:
+					do_action("kick")
+
+				2:
+					do_action("uppercut")
+
+				3:
+					do_action("roundhousekick")
+
+				4:
+					shoot_fireball()
 
 	# ---------------- AIR STATE ----------------
+	# ---------------- AIR / LAND STATE ----------------
 	if not is_on_floor():
+		velocity.y += GRAVITY * delta
+
+	if state != State.JUMP:
 		state = State.JUMP
 
+	if not is_attacking:
+		play_anim("idle")
+	else:
+		velocity.y = 0
+
+	if not is_attacking:
+		play_anim("idle")
+
+	else:
+
+		if abs_dist > 220:
+
+			state = State.RUN
+
+		if not is_attacking:
+			play_anim("walk")
+
+		else:
+
+			state = State.IDLE
+
+		if not is_attacking:
+			play_anim("idle")
 func do_action(anim_name: String):
 
 	if action_locked:
@@ -303,12 +349,14 @@ func do_action(anim_name: String):
 
 	# ---------------- FLYING KICK ----------------
 	if anim_name == "flyingkick":
-		air_launch(1800, -900)
+		air_launch(1500, -900)
+		spawn_attack()
 
 	# ---------------- BICYCLE KICK ----------------
 	elif anim_name == "bicyclekick":
-		air_launch(3000, -300) # faster, screen cross move
+		air_launch(1500, -900) # faster, screen cross move
 		state = State.JUMP
+		spawn_attack()
 
 	await sprite.animation_finished
 
@@ -340,7 +388,12 @@ func shoot_fireball():
 	get_tree().current_scene.add_child(fireball)
 
 	fireball.global_position = shoot_marker.global_position
-	fireball.velocity = Vector2(facing, 0) * fireball.speed
+
+	# ✅ FIX: always pass direction instead of hard velocity
+	fireball.direction = facing
+
+	# optional fallback if your Fireball still uses velocity:
+	fireball.velocity = Vector2(fireball.direction, 0) * fireball.speed
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -359,8 +412,6 @@ func take_damage(amount: int):
 	if not can_take_damage:
 		return
 
-	can_take_damage = false
-
 	health -= amount
 	health = max(health, 0)
 
@@ -368,12 +419,65 @@ func take_damage(amount: int):
 
 	hit_sound.play()
 
+	# DEATH
+	if health <= 0:
+		is_attacking = false
+		die()
+		return
+
+	# FINISH HIM STATE
+	if health == 1 and not is_finish_state:
+		is_finish_state = true
+
+		is_attacking = false
+		is_shooting = false
+		is_hurting = true
+
+		state = State.IDLE
+		velocity = Vector2.ZERO
+
+		await sprite.animation_finished
+
+		is_hurting = false
+		play_anim("idle")
+		return
+
+	# NORMAL HURT
+	play_anim("hurt")
+
+	await sprite.animation_finished
+
+	play_anim("idle")
+
+	# ---------------- 1 HP STOP STATE ----------------
+	if health == 1 and not is_finish_state:
+		is_finish_state = true
+
+		is_attacking = false
+		is_shooting = false
+		is_hurting = true
+
+		action_locked = false
+		hurt_locked = false
+
+		state = State.IDLE
+		velocity = Vector2.ZERO
+
+		play_anim("idle")
+
+	# ---------------- DEATH ----------------
+	elif health <= 0:
+		is_attacking = false
+		die()
+		return
+
+	# ---------------- NORMAL HURT ----------------
+	else:
+		play_anim("hurt")
+
 	await get_tree().create_timer(0.2).timeout
 
 	can_take_damage = true
-
-	if health <= 0:
-		die()
 
 # ---------------- ATTACK ----------------
 func spawn_attack():
@@ -388,6 +492,12 @@ func spawn_attack():
 func die():
 	state = State.DEAD
 	velocity = Vector2.ZERO
+	var death = BLOOD_DEATH.instantiate()
+
+	get_tree().current_scene.add_child(death)
+
+	death.global_position = global_position
+
 	queue_free()
 
 # ---------------- ANIMATION ----------------
@@ -459,35 +569,75 @@ func check_combos():
 		combo.clear()
 		return
 
+
+func _on_health_changed(health):
+
+	if health == 1 and not is_finish_state:
+
+		is_finish_state = true
+
+		is_attacking = false
+		is_shooting = false
+		is_hurting = true
+
+		action_locked = false
+		hurt_locked = false
+
+		state = State.IDLE
+		velocity = Vector2.ZERO
+
+		if finish_label:
+			finish_label.visible = true
+
+			# only call if script exists
+			if finish_label.has_method("start_flicker"):
+				finish_label.start_flicker(2.0, 0.05)
+
+		await get_tree().create_timer(2.0).timeout
+
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
+
 # ---------------- HURT BOX ----------------
-func _on_LiuKang_Hurt_Box_area_entered(area: Area2D):
+func _on_liu_kang_hurt_box_area_entered(area: Area2D):
 
 	if area == null:
 		return
 
-	var attacker = area.get_parent()
-
-	# ---------------- REPTILE ----------------
-	if area.is_in_group("ReptileAttack"):
-		take_damage(1)
+	# ❌ HARD IGNORE environment
+	if area.is_in_group("Level1") or area.is_in_group("World"):
 		return
 
-	# ---------------- SUBZERO ----------------
+	# ❌ ONLY allow these attacks
 	if area.is_in_group("SubzeroAttack"):
 		take_damage(1)
+		print("Hit by Subzero")
 		return
 
-	# ---------------- RAIDEN ----------------
+	if area.is_in_group("ReptileAttack"):
+		take_damage(1)
+		print("Hit by Reptile")
+		return
+
 	if area.is_in_group("RaidenAttack"):
 		take_damage(1)
+		print("Hit by Raiden")
 		return
 
-	if area.is_in_group("RaidenElectricBullet"):
+	if area.is_in_group("ElectricBullet"):
 		take_damage(1)
+		print("Hit by Raiden")
 		return
 
-	# ---------------- FALLBACK ----------------
-	if attacker != null and attacker != self:
-		if attacker.has_method("take_damage"):
-			take_damage(1)
-			return
+	if area.is_in_group("ReptileAcid"):
+		take_damage(1)
+		print("Hit by Reptile")
+		return
+
+	if area.is_in_group("HitBox"):
+		take_damage(1)
+		print("Hit by Fatality")
+		return
+
+	# ❌ everything else is ignored
+	return
