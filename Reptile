@@ -17,6 +17,8 @@ Reptile (CharacterBody2D)
 ├── Camera2D (optional)
 └── AnimationPlayer (optional)
 
+extends CharacterBody2D
+class_name Reptile
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -610,57 +612,4 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
-# ---------------- LIU KANG ----------------
-	if area.is_in_group("LiuKangAttack"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("Fireball"):
-		take_damage(1)
-		return
-
-	if area == null:
-		return
-
-	var attacker = area.get_parent()
-
-	# ---------------- SUBZERO ----------------
-	if attacker.is_in_group("SubzeroAttack"):
-		take_damage(1)
-		return
-
-	if attacker.is_in_group("Subzerobullet"):
-		take_damage(1)
-		return
-
-	if attacker.is_in_group("SubzeroHurtBox"):
-		take_damage(1)
-		return
-
-	# ---------------- RAIDEN ----------------
-	if area.is_in_group("RaidenAttack"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("ElectricBullet"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("ElectricForceHurtBox"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("ElectricBurst"):
-		take_damage(1)
-		return
-
-	# ---------------- ELEMENTAL ----------------
-	if area.is_in_group("HitBox"):
-		take_damage(1)
-		return
-
-	# ---------------- FALLBACK ----------------
-	if attacker != null and attacker != self:
-		if attacker.has_method("take_damage"):
-			take_damage(1)
-			return
+	take_damage(1)
