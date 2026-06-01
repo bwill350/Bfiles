@@ -610,6 +610,14 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
+# ---------------- LIU KANG ----------------
+	if area.is_in_group("LiuKangAttack"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("Fireball"):
+		take_damage(1)
+		return
 
 	if area == null:
 		return
@@ -617,15 +625,15 @@ func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 	var attacker = area.get_parent()
 
 	# ---------------- SUBZERO ----------------
-	if area.is_in_group("SubzeroAttack"):
+	if attacker.is_in_group("SubzeroAttack"):
 		take_damage(1)
 		return
 
-	if area.is_in_group("Subzerobullet"):
+	if attacker.is_in_group("Subzerobullet"):
 		take_damage(1)
 		return
 
-	if area.is_in_group("SubzeroHurtBox"):
+	if attacker.is_in_group("SubzeroHurtBox"):
 		take_damage(1)
 		return
 
@@ -634,7 +642,7 @@ func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 		take_damage(1)
 		return
 
-	if area.is_in_group("RaidenElectricBullet"):
+	if area.is_in_group("ElectricBullet"):
 		take_damage(1)
 		return
 
@@ -662,13 +670,9 @@ func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 		take_damage(1)
 		return
 
-		# ---------------- LIU KANG ----------------
-	if area.is_in_group("LiuKangAttack"):
+	if area.is_in_group("HitBox"):
 		take_damage(1)
-		return
-
-	if area.is_in_group("Fireball"):
-		take_damage(1)
+		print("Hit by Fatality")
 		return
 
 	# ---------------- FALLBACK ----------------
