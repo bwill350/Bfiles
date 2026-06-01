@@ -645,23 +645,10 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		return
 
 	# ---------------- ELEMENTAL ----------------
-	if area.is_in_group("FireDeath"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("IceDeath"):
-		take_damage(1)
-		return
-
-	if area.is_in_group("ElectricDeath"):
-		take_damage(1)
-		return
-
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
 		return
 
 	if area.is_in_group("HitBox"):
 		take_damage(1)
-		print("Hit by Fatality")
 		return
