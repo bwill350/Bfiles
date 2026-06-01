@@ -549,6 +549,11 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		take_damage(1)
 		return
 
+	if area.is_in_group("HitBox"):
+		take_damage(1)
+		print("Hit by Fatality")
+		return
+
 	# ---------------- RAIDEN SELF / FX ----------------
 	if area.is_in_group("Raiden"):
 		return # ignore own field OR decide damage here
