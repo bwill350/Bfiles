@@ -18,6 +18,9 @@ class_name RaidenCharacter
 #│   └── FinishLabel (Label)
 #└── Sprite2D
 
+extends CharacterBody2D
+class_name RaidenCharacter
+
 var spawn_protection := false
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
@@ -551,7 +554,6 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 
 	if area.is_in_group("HitBox"):
 		take_damage(1)
-		print("Hit by Fatality")
 		return
 
 	# ---------------- RAIDEN SELF / FX ----------------
