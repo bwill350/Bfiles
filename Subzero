@@ -535,7 +535,6 @@ func take_damage(amount: int):
 
 # ---------------- DEATH ----------------
 func die():
-
 	if state == State.DEAD:
 		return
 
@@ -555,7 +554,7 @@ func die():
 	if death.has_method("set"):
 		death.set("facing", facing)
 
-	queue_free()
+		queue_free()
 
 
 
@@ -587,15 +586,7 @@ func play_anim(anim_name: String):
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
-	if area == null:
-		return
-
-	var attacker = area.get_parent()
-
-	if attacker == null:
-		return
-
-	# ---------------- LIU KANG ----------------
+# ---------------- LIU KANG ----------------
 	if area.is_in_group("LiuKangAttack"):
 		take_damage(1)
 		return
@@ -603,6 +594,16 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("Fireball"):
 		take_damage(1)
 		return
+
+	if area == null:
+		return
+
+	var attacker = area
+
+	if attacker == null:
+		return
+
+	
 
 	# ---------------- REPTILE ----------------
 	if area.is_in_group("ReptileBullet"):
@@ -628,7 +629,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		take_damage(1)
 		return
 
-	if area.is_in_group("RaidenElectricBullet"):
+	if area.is_in_group("ElectricBullet"):
 		take_damage(1)
 		return
 
@@ -658,4 +659,9 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
+		return
+
+	if area.is_in_group("HitBox"):
+		take_damage(1)
+		print("Hit by Fatality")
 		return
