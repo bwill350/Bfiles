@@ -1,6 +1,24 @@
 extends CharacterBody2D
 class_name LiuKang
 
+LiuKang (CharacterBody2D)
+├── CollisionShape2D
+├── LiuKangHurtBox (Area2D)
+│   └── CollisionShape2D
+├── Sprite (AnimatedSprite2D)
+├── AttackMarker (Marker2D)
+├── BloodMarker (Marker2D)
+├── LiuKangShoot (Marker2D)
+├── Hit (AudioStreamPlayer2D)
+├── Agent (NavigationAgent2D)
+├── HUD (CanvasLayer)
+│   └── FinishLabel (Label)
+│       └── Sprite2D
+├── PhaseTimer (Timer)
+├── ShootTimer (Timer)
+├── HitFlashTimer (Timer)
+└── LiuKangAttack (Area2D)
+
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -20,7 +38,7 @@ var bicyclekick_y := 0.0
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
-
+var stunned := false
 # ---------------- FLAGS ----------------
 var is_blocking := false
 var is_hurting := false
@@ -105,6 +123,19 @@ func _unhandled_input(event):
 	elif event.is_action_pressed("shoot"):
 		register_input("shoot")
 
+func apply_stun(duration: float):
+	if stunned:
+		play_anim("freeze")
+		return
+
+	stunned = true
+	velocity = Vector2.ZERO
+
+	await get_tree().create_timer(duration).timeout
+
+	stunned = false
+	
+
 func start_flyingkick():
 	flyingkick_active = true
 	flyingkick_y = global_position.y - 120  # how high above current position
@@ -124,6 +155,11 @@ func start_bicyclekick():
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+
+	if stunned:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
 
 	if flyingkick_active:
 		global_position.y = lerp(global_position.y, flyingkick_y, 0.2)
@@ -614,3 +650,6 @@ func _on_health_changed(health):
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D):
 	take_damage(1)
+	if area.is_in_group("SubzeroBullet"):
+		apply_stun(3.0)
+
