@@ -1,7 +1,6 @@
 extends Node
 
 signal points_changed(points)
-
 # ---------------- SCORE ----------------
 var points: int = 0
 
@@ -13,27 +12,20 @@ func reset_points():
 	points = 0
 	points_changed.emit(points)
 
-
 # ---------------- OLD SYSTEM ----------------
 var p1_character := ""
 var p2_character := ""
 var vs_cpu := true
 
-
 # ---------------- NEW SYSTEM ----------------
 var p1_data: CharacterData = null
 var p2_data: CharacterData = null
 
-
 # ---------------- RESET ----------------
 func reset_match():
-
 	p1_character = ""
 	p2_character = ""
-
 	p1_data = null
 	p2_data = null
-
 	vs_cpu = true
-
 	reset_points()
