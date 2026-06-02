@@ -40,7 +40,7 @@ var hurt_locked := false
 var can_take_damage := true
 var is_finish_state := false
 var lock_timer := 0.0
-
+var stunned := false
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -87,7 +87,17 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
+func apply_stun(duration: float):
+	if stunned:
+		play_anim("freeze")
+		return
 
+	stunned = true
+	velocity = Vector2.ZERO
+
+	await get_tree().create_timer(duration).timeout
+
+	stunned = false
 
 func _on_health_changed(h):
 
@@ -173,6 +183,11 @@ func check_combos():
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+
+	if stunned:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
 
 	if is_cpu:
 		cpu_logic(delta)
@@ -520,3 +535,5 @@ func play_anim(anim_name: String):
 
 func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 	take_damage(1)
+	if area.is_in_group("SubzeroBullet"):
+		apply_stun(3.0)
