@@ -41,124 +41,102 @@ extends CanvasLayer
 @onready var seg19 = $Seg19
 @onready var seg20 = $Seg20
 
-# ---------------- REFERENCES ----------------
-var reptile
-var subzero
-var duke
-var raiden
-var liu_kang
+const P1_SPAWN := Vector2(603, 496)
+const P2_SPAWN := Vector2(840, 496)
 
+const LIU_KANG = preload("res://LiuKang.tscn")
+const REPTILE = preload("res://Scenes/Boss/Reptile.tscn")
+const SUBZERO = preload("res://Scenes/Boss/Subzero.tscn")
+const RAIDEN = preload("res://Scenes/Boss/Raiden.tscn")
+
+var p1
+var p2
+
+# ---------------- READY ----------------
 func _ready():
-	if Game.has_signal("points_changed"):
-		Game.points_changed.connect(_on_points_changed)
+	spawn_players()
+	setup()
+	assign_targets()
 
-	_find_fighters()
+	await get_tree().create_timer(0.1).timeout
+	enable_spawn_protection()
 
-func _find_fighters():
+# ---------------- SPAWN ----------------
+func spawn_players():
+	spawn_p1()
+	spawn_p2()
 
-	duke = get_tree().get_first_node_in_group("Duke")
-	reptile = get_tree().get_first_node_in_group("Reptile")
-	subzero = get_tree().get_first_node_in_group("Subzero")
-	raiden = get_tree().get_first_node_in_group("Raiden")
-	liu_kang = get_tree().get_first_node_in_group("LiuKang")
+func spawn_p1():
 
-	if duke and duke.has_signal("health_changed"):
-		if not duke.health_changed.is_connected(_on_duke_health_changed):
-			duke.health_changed.connect(_on_duke_health_changed)
+	if Game.p1_data != null:
+		p1 = Game.p1_data.scene.instantiate()
+	else:
+		match Game.p1_character:
+			"LiuKang":
+				p1 = LIU_KANG.instantiate()
+			"Reptile":
+				p1 = REPTILE.instantiate()
+			"Subzero":
+				p1 = SUBZERO.instantiate()
+			"Raiden":
+				p1 = RAIDEN.instantiate()
 
-	if reptile and reptile.has_signal("health_changed"):
-		if not reptile.health_changed.is_connected(_on_reptile_health_changed):
-			reptile.health_changed.connect(_on_reptile_health_changed)
+	if p1:
+		p1.position = P1_SPAWN
+		add_child(p1)
 
-	if subzero and subzero.has_signal("health_changed"):
-		if not subzero.health_changed.is_connected(_on_subzero_health_changed):
-			subzero.health_changed.connect(_on_subzero_health_changed)
+func spawn_p2():
 
-	if raiden and raiden.has_signal("health_changed"):
-		if not raiden.health_changed.is_connected(_on_raiden_health_changed):
-			raiden.health_changed.connect(_on_raiden_health_changed)
+	if Game.p2_data != null:
+		p2 = Game.p2_data.scene.instantiate()
+	else:
+		match Game.p2_character:
+			"LiuKang":
+				p2 = LIU_KANG.instantiate()
+			"Reptile":
+				p2 = REPTILE.instantiate()
+			"Subzero":
+				p2 = SUBZERO.instantiate()
+			"Raiden":
+				p2 = RAIDEN.instantiate()
 
-	if liu_kang and liu_kang.has_signal("health_changed"):
-		if not liu_kang.health_changed.is_connected(_on_liu_kang_health_changed):
-			liu_kang.health_changed.connect(_on_liu_kang_health_changed)
+	if p2:
+		p2.position = P2_SPAWN
+		add_child(p2)
 
-func _process(_delta):
-	if reptile == null or subzero == null or duke == null or raiden == null or liu_kang == null:
-		_find_fighters()
+# ---------------- SETUP ----------------
+func setup():
+	if p1:
+		p1.add_to_group("player")
 
-# ---------------- DUKE ----------------
-func _on_duke_health_changed(health):
-	duke_label.text = "Duke: %d" % health
-	duke_bar.value = health
+	if p2:
+		p2.add_to_group("player")
 
-# ---------------- REPTILE ----------------
-func _on_reptile_health_changed(health):
-	reptile_label.text = "Reptile: %d" % health
-	reptile_bar.value = health
+# ---------------- TARGETS ----------------
+func assign_targets():
 
-	var max_hp = reptile_bar.max_value
-	if max_hp <= 0:
-		return
+	if Game.vs_cpu and p2:
+		p2.is_cpu = true
+		p2.target = p1
 
-	var percent = float(health) / float(max_hp)
+	if p1 and p2:
+		p1.target = p2
+		p2.target = p1
 
-	seg1.visible = percent > 0.00
-	seg2.visible = percent > 0.01
-	seg3.visible = percent > 0.02
-	seg4.visible = percent > 0.03
+# ---------------- SPAWN PROTECTION ----------------
+func enable_spawn_protection():
 
-# ---------------- SUBZERO ----------------
-func _on_subzero_health_changed(health):
-	subzero_label.text = "Subzero: %d" % health
-	subzero_bar.value = health
+	if p1:
+		p1.spawn_protection = true
 
-	var max_hp = subzero_bar.max_value
-	if max_hp <= 0:
-		return
+	if p2:
+		p2.spawn_protection = true
 
-	var percent = float(health) / float(max_hp)
+	await get_tree().create_timer(1.0).timeout
 
-	seg9.visible = percent > 0.00
-	seg10.visible = percent > 0.01
-	seg11.visible = percent > 0.02
-	seg12.visible = percent > 0.03
+	if p1:
+		p1.spawn_protection = false
 
-# ---------------- RAIDEN ----------------
-func _on_raiden_health_changed(health):
-	raiden_label.text = "Raiden: %d" % health
-	raiden_bar.value = health
+	if p2:
+		p2.spawn_protection = false
 
-	var max_hp = raiden_bar.max_value
-	if max_hp <= 0:
-		return
-
-	var percent = float(health) / float(max_hp)
-
-	seg13.visible = percent > 0.00
-	seg14.visible = percent > 0.01
-	seg15.visible = percent > 0.02
-	seg16.visible = percent > 0.03
-
-# ---------------- LIU KANG ----------------
-func _on_liu_kang_health_changed(health):
-
-	if liu_kang_bar == null:
-		return
-
-	liu_kang_label.text = "Liu Kang: %d" % health
-	liu_kang_bar.value = health
-
-	var max_hp = liu_kang_bar.max_value
-	if max_hp <= 0:
-		return
-
-	var percent = float(health) / float(max_hp)
-
-	seg17.visible = percent > 0.00
-	seg18.visible = percent > 0.01
-	seg19.visible = percent > 0.02
-	seg20.visible = percent > 0.03
-
-# ---------------- POINTS ----------------
-func _on_points_changed(points):
-	points_label.text = "Points: %d" % points
