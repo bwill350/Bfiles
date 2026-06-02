@@ -1,43 +1,52 @@
 extends Area2D
-class_name ReptileAttack
 
-@export var damage := 1
 
-@onready var collision_shape: CollisionShape2D = $CollisionShape2D
+@onready var collision: CollisionShape2D = $CollisionShape2D
+
+@export var active_time := 100.08
+@export var lifetime := 66.15
+
+var damage := 1
+var active := false
 
 func _ready():
-	add_to_group("ReptileAttack")
-	collision_shape.disabled = true
 
-	area_entered.connect(_on_area_entered)
+	add_to_group("RaidenAttack")
+
+
+	await get_tree().process_frame
+
+	enable_hitbox()
+
+	await get_tree().create_timer(active_time).timeout
+
+	disable_hitbox()
+
+	await get_tree().create_timer(lifetime).timeout
+	queue_free()
 
 
 func enable_hitbox():
-	collision_shape.disabled = false
+	active = true
+	monitoring = true
+	collision.disabled = false
 
 
 func disable_hitbox():
-	collision_shape.disabled = true
+	active = false
+	monitoring = false
+	collision.disabled = true
 
 
 func _on_area_entered(area: Area2D) -> void:
+
+	if not active:
+		return
+
 	if area == null:
 		return
 
-	# ONLY HIT CHARACTER HURTBOX
-	if not area.is_in_group("HitBox"):
-		return
-
 	var target = area.get_parent()
-	if target == null:
-		return
 
-	# SAFETY: ignore self / same fighter
-	if target.is_in_group("Reptile"):
-		return
-	if target.is_in_group("Subzero"):
-		return
-
-	# extra safety: prevent double-trigger spam during attack frames
-	if target.has_method("take_damage"):
+	if target and target.has_method("take_damage"):
 		target.take_damage(damage)
