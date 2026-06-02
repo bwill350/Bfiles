@@ -1,0 +1,54 @@
+extends Area2D
+class_name Fireball
+
+# ---------------- MOVEMENT ----------------
+var velocity: Vector2 = Vector2.ZERO
+var direction := 1
+
+@export var speed := 900.0
+@export var damage := 1
+@export var lifetime := 2.0
+
+# ---------------- NODES ----------------
+@onready var sprite: AnimatedSprite2D = $Sprite
+@onready var collision: CollisionShape2D = $CollisionShape2D
+
+# ---------------- READY ----------------
+func _ready():
+	add_to_group("Fireball")
+
+	await get_tree().create_timer(lifetime).timeout
+	queue_free()
+
+# ---------------- PHYSICS ----------------
+func _physics_process(delta):
+	velocity = Vector2(direction, 0) * speed
+	position += velocity * delta
+	velocity.x = direction * speed
+
+# ---------------- HIT ----------------
+func _on_area_entered(area: Area2D):
+
+	var attacker = area.get_parent()
+
+	# ---------------- REPTILE ----------------
+	if area.is_in_group("ReptileHurtBox"):
+		queue_free()
+		return
+
+	# ---------------- SUBZERO ----------------
+	if area.is_in_group("SubzeroHurtBox"):
+		queue_free()
+		return
+
+	# ---------------- RAIDEN ----------------
+	if area.is_in_group("RaidenHurtBox"):
+		queue_free()
+		return
+
+	# ---------------- FIREBALL COLLISION (OPTIONAL SELF BLOCK) ----------------
+	if area.is_in_group("Fireball"):
+		return
+
+
+
