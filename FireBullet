@@ -1,0 +1,78 @@
+extends Area2D
+class_name FireBullet
+
+@export var speed: float = 600.0
+@export var turn_speed: float = 6.0
+@export var lifetime: float = 3.0
+
+var velocity: Vector2 = Vector2.ZERO
+var target: Node2D = null
+
+# ---------------- READY ----------------
+func _ready():
+
+	add_to_group("FireBullet")
+
+	area_entered.connect(_on_area_entered)
+
+	# auto cleanup
+	await get_tree().create_timer(lifetime).timeout
+
+	queue_free()
+
+	# find player
+	var players = get_tree().get_nodes_in_group("Subzero")
+
+	if players.size() > 0:
+		target = players[0]
+
+# ---------------- MOVEMENT ----------------
+func _physics_process(delta):
+
+	# straight movement if no target
+	if target == null or not is_instance_valid(target):
+
+		global_position += velocity * delta
+		return
+
+	var dir = (target.global_position - global_position).normalized()
+
+	# smooth homing
+	velocity = velocity.lerp(dir * speed, turn_speed * delta)
+
+	global_position += velocity * delta
+
+	rotation = velocity.angle()
+
+# ---------------- HIT ----------------
+func _on_area_entered(area: Area2D) -> void:
+
+	if area == null:
+		return
+
+	# PLAYER HURTBOX
+	if area.name == "HitBox":
+
+		var target_player = area.get_parent()
+
+		if target_player and target_player.is_in_group("Subzero"):
+
+			if target_player.has_method("take_damage"):
+				target_player.take_damage(1)
+			
+		if target_player and target_player.is_in_group("LiuKang"):
+
+			if target_player.has_method("take_damage"):
+				target_player.take_damage(1)
+			
+
+		if target_player and target_player.is_in_group("Raiden"):
+
+			if target_player.has_method("take_damage"):
+				target_player.take_damage(1)
+			
+
+		if target_player and target_player.is_in_group("Reptile"):
+
+			if target_player.has_method("take_damage"):
+				target_player.take_damage(1)
