@@ -1,21 +1,27 @@
-extends Node2D
+extends Area2D
 
 @onready var sprite: AnimatedSprite2D = $Sprite
-@onready var sound: AudioStreamPlayer2D = $AudioStreamPlayer2D
-@onready var timer: Timer = $CleanupTimer
-
+@onready var sound: AudioStreamPlayer2D = $FireSound
 @onready var ring: Sprite2D = $ShockwaveRing
 
 @onready var p1: CPUParticles2D = $CPUParticles2D
 @onready var p2: CPUParticles2D = $CPUParticles2D2
 @onready var p3: CPUParticles2D = $CPUParticles2D3
-@onready var p4: CPUParticles2D = $CPUParticles2D4
+
+const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 
 var flicker_on := true
 var finished := false
+var damage_done := false
 
 # ---------------- READY ----------------
 func _ready():
+
+	$Sprite.play("fade")
+
+	add_to_group("FireDeath")
+
+	area_entered.connect(_on_area_entered)
 
 	self.scale = Vector2.ZERO
 
@@ -30,12 +36,38 @@ func _ready():
 	start_shockwave()
 	start_particle_burst()
 
-	# 🔥 HARD STOP TIMER (THIS IS WHAT YOU WERE MISSING)
-	await get_tree().create_timer(2.8).timeout
+	# SINGLE LIFETIME
+	await get_tree().create_timer(2.5).timeout
+
+	await $Sprite.animation_finished
+
 	stop_fatality()
 
+	queue_free()
 
-# ---------------- FORCE STOP EVERYTHING ----------------
+# ---------------- DAMAGE ----------------
+func _on_area_entered(area: Area2D):
+
+	if damage_done:
+		return
+
+	if area == null:
+		return
+
+	# ---------------- HURTBOX DETECTION ----------------
+	if area.is_in_group("RaidenHurtBox") \
+	or area.is_in_group("ReptileHurtBox") \
+	or area.is_in_group("LiuKangHurtBox") \
+	or area.is_in_group("SubzeroHurtBox"):
+
+		var enemy = area.get_parent()
+
+		if enemy and enemy.has_method("take_damage"):
+			enemy.take_damage(1)
+			damage_done = true
+
+
+# ---------------- STOP EVERYTHING ----------------
 func stop_fatality():
 
 	if finished:
@@ -43,7 +75,7 @@ func stop_fatality():
 
 	finished = true
 
-	# stop sprite
+	# stop animation
 	if sprite:
 		sprite.stop()
 		sprite.modulate = Color.WHITE
@@ -52,64 +84,90 @@ func stop_fatality():
 	if sound:
 		sound.stop()
 
-	# stop ring
+	# fade ring instantly
 	if ring:
 		ring.modulate.a = 0.0
 
-	# stop particles instantly
-	for p in [p1, p2, p3, p4]:
+	# stop particles
+	for p in [p1, p2, p3]:
+
 		if p:
 			p.emitting = false
 
-	# shrink out cleanly
+	# shrink out
 	var t = create_tween()
-	t.tween_property(self, "scale", Vector2.ZERO, 0.4)\
-		.set_trans(Tween.TRANS_QUAD)\
-		.set_ease(Tween.EASE_IN)
+
+	t.tween_property(
+		self,
+		"scale",
+		Vector2.ZERO,
+		5.35
+	).set_trans(Tween.TRANS_QUAD)\
+	 .set_ease(Tween.EASE_IN)
 
 	await t.finished
 
-	queue_free()
+	$CleanupTimer.start()
 
+	queue_free()
 
 # ---------------- FLICKER ----------------
 func start_flicker():
 
 	var flicker = create_tween()
+
 	flicker.set_loops(8)
 
 	flicker.tween_callback(func():
+
 		if finished:
 			return
 
 		flicker_on = !flicker_on
-		sprite.modulate = Color(1, 1, 1) if flicker_on else Color(0.4, 0.8, 1.5)
-	).set_delay(0.05)
 
+		if flicker_on:
+			sprite.modulate = Color(1, 1, 1)
+		else:
+			sprite.modulate = Color(0.4, 0.8, 1.5)
+
+	).set_delay(0.05)
 
 # ---------------- MAIN ANIMATION ----------------
 func start_main_animation():
 
 	var t = create_tween()
 
-	t.tween_property(self, "scale", Vector2.ONE, 0.15)\
-		.set_trans(Tween.TRANS_BACK)\
-		.set_ease(Tween.EASE_OUT)
+	t.tween_property(
+		self,
+		"scale",
+		Vector2.ONE,
+		0.15
+	).set_trans(Tween.TRANS_BACK)\
+	 .set_ease(Tween.EASE_OUT)
 
-	t.tween_property(self, "scale", Vector2(6, 6), 0.12)\
-		.set_trans(Tween.TRANS_EXPO)\
-		.set_ease(Tween.EASE_OUT)
+	t.tween_property(
+		self,
+		"scale",
+		Vector2(6, 6),
+		0.12
+	).set_trans(Tween.TRANS_EXPO)\
+	 .set_ease(Tween.EASE_OUT)
 
-	t.tween_property(self, "scale", Vector2.ONE, 0.18)\
-		.set_trans(Tween.TRANS_SINE)\
-		.set_ease(Tween.EASE_IN_OUT)
+	t.tween_property(
+		self,
+		"scale",
+		Vector2.ONE,
+		0.18
+	).set_trans(Tween.TRANS_SINE)\
+	 .set_ease(Tween.EASE_IN_OUT)
 
-	t.tween_property(self, "scale", Vector2.ZERO, 0.2)\
-		.set_trans(Tween.TRANS_QUAD)\
-		.set_ease(Tween.EASE_IN)
-
-	t.finished.connect(start_cleanup)
-
+	t.tween_property(
+		self,
+		"scale",
+		Vector2.ZERO,
+		0.2
+	).set_trans(Tween.TRANS_QUAD)\
+	 .set_ease(Tween.EASE_IN)
 
 # ---------------- SHOCKWAVE ----------------
 func start_shockwave():
@@ -122,21 +180,30 @@ func start_shockwave():
 
 	var t = create_tween()
 
-	t.tween_property(ring, "scale", Vector2(10, 10), 0.35)\
-		.set_trans(Tween.TRANS_EXPO)\
-		.set_ease(Tween.EASE_OUT)
+	t.tween_property(
+		ring,
+		"scale",
+		Vector2(10, 10),
+		0.35
+	).set_trans(Tween.TRANS_EXPO)\
+	 .set_ease(Tween.EASE_OUT)
 
-	t.parallel().tween_property(ring, "modulate:a", 0.0, 0.35)
-
+	t.parallel().tween_property(
+		ring,
+		"modulate:a",
+		0.0,
+		0.35
+	)
 
 # ---------------- PARTICLES ----------------
 func start_particle_burst():
 
-	var parts = [p1, p2, p3, p4]
+	var parts = [p1, p2, p3]
 
 	for i in range(parts.size()):
 
 		var p = parts[i]
+
 		if p == null:
 			continue
 
@@ -147,38 +214,53 @@ func start_particle_burst():
 		var delay = i * 0.06
 
 		var t_in = create_tween()
+
 		t_in.tween_interval(delay)
 
 		t_in.tween_callback(func():
+
 			if finished:
 				return
+
 			p.emitting = true
 		)
 
-		t_in.tween_property(p, "scale", Vector2.ONE, 0.15)
+		t_in.tween_property(
+			p,
+			"scale",
+			Vector2.ONE,
+			0.15
+		)
 
-		t_in.tween_property(p, "modulate:a", 1.0, 0.1)
+		t_in.tween_property(
+			p,
+			"modulate:a",
+			1.0,
+			0.1
+		)
 
 		var t_out = create_tween()
+
 		t_out.tween_interval(0.25 + delay)
 
-		t_out.tween_property(p, "scale", Vector2.ZERO, 0.2)
+		t_out.tween_property(
+			p,
+			"scale",
+			Vector2.ZERO,
+			0.2
+		)
 
-		t_out.tween_property(p, "modulate:a", 0.0, 0.2)
+		t_out.tween_property(
+			p,
+			"modulate:a",
+			0.0,
+			0.2
+		)
 
 		t_out.tween_callback(func():
 			p.emitting = false
 		)
 
-
-# ---------------- CLEANUP ----------------
-func start_cleanup():
-
-	if finished:
-		return
-
-	finished = true
-	timer.start()
-
 func _on_cleanup_timer_timeout():
-	queue_free()
+
+	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
