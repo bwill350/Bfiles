@@ -1,0 +1,108 @@
+extends Area2D
+class_name ElectricBullet
+
+@export var speed: float = 100.0
+@export var turn_speed: float = 1.0
+@export var lifetime: float = 3.0
+
+var velocity: Vector2 = Vector2.ZERO
+var target: Node2D = null
+
+@onready var sprite: ElementSprite2D = $Sprite2D
+
+
+# ---------------- READY ----------------
+func _ready():
+
+	area_entered.connect(_on_area_entered)
+
+	sprite.set_element("electric")
+
+	# 🔥 Target ANY fighter, not just Subzero
+	var players = get_tree().get_nodes_in_group("Player")
+	if players.size() > 0:
+		target = players[0]
+
+	# fallback movement
+	if target == null:
+		velocity = Vector2.RIGHT * speed
+
+	await get_tree().create_timer(lifetime).timeout
+	queue_free()
+
+
+# ---------------- OPTIONAL MANUAL DIRECTION ----------------
+func set_direction(dir: Vector2):
+	velocity = dir.normalized() * speed
+
+
+# ---------------- MOVEMENT ----------------
+func _physics_process(delta):
+
+	if velocity == Vector2.ZERO:
+		velocity = Vector2.RIGHT * speed
+
+	# no target → straight line
+	if target == null or not is_instance_valid(target):
+		global_position += velocity * delta
+		rotation = velocity.angle()
+		return
+
+	# homing behavior
+	var dir = (target.global_position - global_position).normalized()
+	velocity = velocity.move_toward(dir * speed, turn_speed * speed * delta)
+
+	global_position += velocity * delta
+	rotation = velocity.angle()
+
+
+# ---------------- HIT DETECTION ----------------
+func _on_area_entered(area: Area2D) -> void:
+
+	if area == null:
+		return
+
+	# ignore Raiden
+	if area.is_in_group("Raiden"):
+		return
+
+	# ---------------- HIT ANY FIGHTER ----------------
+	if area.is_in_group("LiuKang"):
+		_deal_damage(area)
+		return
+
+	if area.is_in_group("Subzero"):
+		_deal_damage(area)
+		chain_lightning(area)
+		return
+
+	if area.is_in_group("Reptile"):
+		_deal_damage(area)
+		return
+
+	# optional fallback (if you still use generic hurtboxes)
+	if area.has_method("take_damage"):
+		area.take_damage(1)
+		queue_free()
+		return
+
+
+# ---------------- DAMAGE FUNCTION ----------------
+func _deal_damage(target_node: Node2D):
+
+	if target_node and target_node.has_method("take_damage"):
+		target_node.take_damage(1)
+
+	queue_free()
+
+
+# ---------------- CHAIN LIGHTNING ----------------
+func chain_lightning(hit_target: Node2D) -> void:
+
+	var enemies = get_tree().get_nodes_in_group("Subzero")
+
+	for e in enemies:
+		if e != hit_target and e.global_position.distance_to(hit_target.global_position) < 200:
+
+			if e.has_method("take_damage"):
+				e.take_damage(1)
