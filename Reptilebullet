@@ -22,7 +22,7 @@ func _on_area_entered(area: Area2D) -> void:
 	if area == null:
 		return
 
-	if area.name != "SubzerosHurtBox":
+	if area.name != "ReptileHurtBox":
 		return
 
 	var target = area.get_parent()
@@ -31,4 +31,5 @@ func _on_area_entered(area: Area2D) -> void:
 
 	if target.is_in_group("Subzero"):
 		target.take_damage(1)
+
 
