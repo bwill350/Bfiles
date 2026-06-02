@@ -3,24 +3,36 @@ class_name SubzeroBullet
 
 @export var speed: float = 900.0
 @export var lifetime: float = 3.0
+@export var stun_time: float = 0.5
 
 var velocity: Vector2 = Vector2.ZERO
 
 @onready var sprite: Sprite2D = $Sprite2D
 
+
 func _ready():
-	add_to_group("ReptileBullet")
 	add_to_group("Subzerobullet")
+
+	area_entered.connect(_on_area_entered)
+
+	if velocity == Vector2.ZERO:
+		velocity = Vector2.RIGHT * speed
 
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
 
+
+
 func _physics_process(delta):
 	global_position += velocity * delta
+	rotation = velocity.angle()
+
+
+func set_direction(dir: Vector2):
+	velocity = dir.normalized() * speed
 
 
 func _on_area_entered(area: Area2D) -> void:
-
 	if area == null:
 		return
 
@@ -28,18 +40,35 @@ func _on_area_entered(area: Area2D) -> void:
 
 	# ---------------- REPTILE ----------------
 	if area.is_in_group("ReptileHurtBox"):
-
-		if parent and parent.has_method("take_damage"):
-			parent.take_damage(1)
+		if parent:
+			if parent.has_method("take_damage"):
+				parent.take_damage(1)
+			if parent.has_method("apply_stun"):
+				parent.apply_stun(stun_time)
 
 		queue_free()
 		return
 
+
 	# ---------------- RAIDEN ----------------
 	if area.is_in_group("RaidenHurtBox"):
+		if parent:
+			if parent.has_method("take_damage"):
+				parent.take_damage(1)
+			if parent.has_method("apply_stun"):
+				parent.apply_stun(stun_time)
 
-		if parent and parent.has_method("take_damage"):
-			parent.take_damage(1)
+		queue_free()
+		return
+
+
+	# ---------------- LIU KANG ----------------
+	if area.is_in_group("LiuKangHurtBox"):
+		if parent:
+			if parent.has_method("take_damage"):
+				parent.take_damage(1)
+			if parent.has_method("apply_stun"):
+				parent.apply_stun(stun_time)
 
 		queue_free()
 		return
