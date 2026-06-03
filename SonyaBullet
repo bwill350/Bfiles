@@ -1,0 +1,43 @@
+extends Area2D
+class_name SonyaBullet
+
+@export var speed: float = 900.0
+@export var lifetime: float = 3.0
+
+var velocity: Vector2 = Vector2.ZERO
+
+@onready var sprite: AnimatedSprite2D = $Sprite
+
+func _ready():
+	sprite.play("default")
+	add_to_group("SonyaBullet")
+
+	await get_tree().create_timer(lifetime).timeout
+	queue_free()
+
+func _physics_process(delta):
+	global_position += velocity * delta
+
+func _on_area_entered(area: Area2D) -> void:
+
+	if area == null:
+		return
+
+	if area.name != "SonyaHurtBox":
+		return
+
+	var target = area.get_parent()
+	if target == null:
+		return
+
+	if target.is_in_group("Subzero"):
+		target.take_damage(1)
+
+	if target.is_in_group("Reptile"):
+		target.take_damage(1)
+
+	if target.is_in_group("LiuKang"):
+		target.take_damage(1)
+
+	if target.is_in_group("Raiden"):
+		target.take_damage(1)
