@@ -1,0 +1,669 @@
+extends CharacterBody2D
+class_name JohnnyCage
+
+var spawn_protection := false
+signal health_changed(health)
+signal combo_used(combo_name: String)
+var special_move := false
+var special_move_timer := 0.0
+
+# ---------------- STATE ----------------
+enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
+
+var state: State = State.IDLE
+var special_bullet: PackedScene = null
+
+# ---------------- CPU ----------------
+var is_cpu := false
+var target: Node2D = null
+var ai_timer := 0.0
+var stunned := false
+# ---------------- FLAGS ----------------
+var is_blocking := false
+var is_hurting := false
+var is_shooting := false
+var is_attacking := false
+var action_locked := false
+var hurt_locked := false
+var can_take_damage := true
+var is_finish_state := false
+var lock_timer := 0.0
+var cannonkick_active := false
+var cannonkick_timer := 0.0
+# ---------------- MOVEMENT ----------------
+var facing := 1
+var current_anim := ""
+var health: int
+
+const GRAVITY = 5000
+
+# ---------------- COOLDOWNS ----------------
+var shoot_cooldown: float = 0.0
+
+# ---------------- EXPORTS ----------------
+@export var shoot_cooldown_time: float = 0.25
+@export var SPEED = 300.0
+@export var CLIMB_SPEED = 250.0
+@export var max_health: int = 10
+@export var jump_velocity = -2200.0
+@export var combo_reset_time := 0.6
+
+# ---------------- PRELOADS ----------------
+const BULLET_SCENE = preload("res://Projectiles/KanoBullet.tscn")
+const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
+const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
+const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
+const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
+const JOHNNY_CAGE_BULLET = preload("res://JohnnyCageBullet.tscn")
+const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
+const JOHNNY_CAGE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
+
+const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
+
+# ---------------- DEATH FX ----------------
+const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
+const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
+const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
+const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
+
+# ---------------- NODES ----------------
+@onready var sprite: AnimatedSprite2D = $Sprite
+@onready var hit_sound: AudioStreamPlayer2D = $Hit
+@onready var hit_box: Area2D = $JonnyCageHurtBox
+@onready var shoot_marker: Marker2D = $JohnnyShoot
+@onready var attack_marker: Marker2D = $AttackMarker
+@onready var blood_marker: Marker2D = $BloodMarker
+# ---------------- COMBOS ----------------
+var combo := []
+var combo_timer := 0.0
+
+@onready var finish_label: Sprite2D = $CanvasLayer/Label/Sprite2D
+
+const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
+const FIRE_COMBO = ["down", "right", "shoot"]
+const ICE_COMBO = ["left", "left", "shoot"]
+const ELECTRIC_COMBO = ["up", "down", "shoot"]
+
+func apply_stun(duration: float):
+	if stunned:
+		play_anim("freeze")
+		return
+
+	stunned = true
+	velocity = Vector2.ZERO
+
+	await get_tree().create_timer(duration).timeout
+
+	stunned = false
+
+# ---------------- READY ----------------
+func _ready():
+	finish_label.visible = false
+	spawn_protection = true
+	await get_tree().create_timer(1.0).timeout
+	add_to_group("enemy")
+	add_to_group("JohnnyCage")
+	add_to_group("FireDeath")
+	add_to_group("IceDeath")
+	add_to_group("ElectricDeath")
+
+	health = max_health
+	health_changed.emit(health)
+
+	play_anim("idle")
+
+	if hit_box:
+		if not hit_box.area_entered.is_connected(_on_jonny_cage_hurt_box_area_entered):
+			hit_box.area_entered.connect(_on_jonny_cage_hurt_box_area_entered)
+
+# ---------------- INPUT ----------------
+func _unhandled_input(event):
+
+	if is_cpu:
+		return
+
+	if event.is_action_pressed("up"):
+		register_input("up")
+
+	elif event.is_action_pressed("down"):
+		register_input("down")
+
+	elif event.is_action_pressed("left"):
+		if Input.is_action_just_pressed("cannonball"):
+			start_cannonkick()
+		register_input("left")
+
+	elif event.is_action_pressed("right"):
+		if Input.is_action_just_pressed("cannonball"):
+			start_cannonkick()
+		register_input("right")
+
+	elif event.is_action_pressed("shoot"):
+		register_input("shoot")
+
+# ---------------- PHYSICS ----------------
+func _physics_process(delta):
+	# ---------------- SPECIAL MOVE TIMER ----------------
+	if special_move:
+		special_move_timer -= delta
+		if special_move_timer <= 0:
+			special_move = false
+			cannonkick_active = false
+
+	# ---------------- AIR CONTROL DURING CANNONBALL ----------------
+	if special_move and cannonkick_active:
+		var input_dir = Input.get_axis("left", "right")
+
+	# horizontal air steering
+		velocity.x += input_dir * 40
+
+	# 🔥 lock Y so it doesn't behave like falling or grounded movement
+		velocity.y = 0
+
+	# ---------------- INPUT ----------------
+	if Input.is_action_just_pressed("cannonkick"):
+		start_cannonkick()
+
+	if stunned:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
+	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
+
+	combo_timer += delta
+
+	if combo_timer > combo_reset_time:
+		combo.clear()
+
+	if is_cpu:
+		cpu_logic(delta)
+		move_and_slide()
+		return
+
+	if state == State.DEAD:
+		return
+
+	velocity.y += GRAVITY * delta
+
+	if action_locked or hurt_locked:
+		return
+
+	var input_dir = Input.get_axis("left", "right")
+	var climb_pressed = Input.is_action_pressed("climb")
+
+	# ---------------- FACING ----------------
+	if input_dir != 0:
+		facing = input_dir
+
+	sprite.flip_h = -facing > 0
+
+	# ---------------- MOVEMENT ----------------
+	if not special_move:
+		velocity.x = input_dir * SPEED
+
+	# ---------------- CLIMB ----------------
+	if climb_pressed and not is_on_floor() and is_on_wall():
+		state = State.CLIMB
+
+	elif not is_on_floor():
+		state = State.JUMP
+		if Input.is_action_just_pressed("cannonkick"):
+			start_cannonkick()
+
+	elif input_dir != 0:
+		state = State.RUN
+
+	else:
+		state = State.IDLE
+
+	# ---------------- ANIMS ----------------
+	match state:
+
+		State.CLIMB:
+			velocity.y = -CLIMB_SPEED
+
+			if not is_attacking:
+				play_anim("climb")
+
+		State.JUMP:
+			if not is_attacking:
+				play_anim("jump")
+
+		State.RUN:
+			if not is_attacking:
+				play_anim("walk")
+
+		State.IDLE:
+			if not is_attacking:
+				play_anim("idle")
+
+	# ---------------- JUMP ----------------
+	if Input.is_action_just_pressed("jump") and is_on_floor():
+		velocity.y = jump_velocity
+
+	# ---------------- ATTACKS ----------------
+	if Input.is_action_just_pressed("jumpkick"):
+		do_action("jumpkick")
+
+	elif Input.is_action_just_pressed("punch"):
+		do_action("punch")
+
+	elif Input.is_action_just_pressed("roundhousekick"):
+		do_action("roundhousekick")
+
+	elif Input.is_action_just_pressed("kick"):
+		do_action("kick")
+
+	elif Input.is_action_just_pressed("uppercut"):
+		do_action("uppercut")
+
+	elif Input.is_action_pressed("shoot"):
+		shoot_player()
+
+	elif Input.is_action_pressed("cannonkick"):
+		do_action("cannonkick")
+
+	elif Input.is_action_just_pressed("Reptilesacid"):
+		if shoot_cooldown <= 0:
+			shoot_acid()
+
+	elif Input.is_action_pressed("block"):
+		start_block()
+
+	else:
+		stop_block()
+
+	move_and_slide()
+
+# ---------------- BLOCK ----------------
+func start_block():
+
+	if state == State.DEAD:
+		return
+
+	is_blocking = true
+	state = State.BLOCK
+
+	play_anim("block")
+
+func stop_block():
+
+	if is_blocking:
+		is_blocking = false
+		state = State.IDLE
+
+# ---------------- ACID SHOOT ----------------
+func shoot_acid():
+
+	if shoot_cooldown > 0:
+		return
+
+	shoot_cooldown = shoot_cooldown_time
+
+	is_attacking = true
+	action_locked = true
+
+	play_anim("shoot")
+
+	var bullet = REPTILES_ACID.instantiate()
+
+	get_tree().current_scene.add_child(bullet)
+
+	bullet.global_position = $JohnnyShoot.global_position
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
+
+	# 🔴 ONLY KANO'S VERSION IS RED
+	if bullet.has_node("Sprite2D"):
+		bullet.get_node("Sprite2D").modulate = Color(1, 0.2, 0.2)
+	elif bullet.has_node("AnimatedSprite2D"):
+		bullet.get_node("AnimatedSprite2D").modulate = Color(1, 0.2, 0.2)
+
+	await get_tree().create_timer(0.25).timeout
+
+	is_attacking = false
+	action_locked = false
+
+	play_anim("idle")
+
+# ---------------- CPU ----------------
+func cpu_logic(delta):
+
+	if target == null:
+		return
+	#STOP ALL ACTIONS AT 1HP
+	if health <= 1:
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
+		move_and_slide()
+
+	if action_locked and not is_hurting:
+		return
+
+	ai_timer -= delta
+
+	var dist = target.global_position.x - global_position.x
+	var dir = sign(dist)
+	var abs_dist = abs(dist)
+
+	facing = dir
+
+	sprite.flip_h = facing < 0
+
+	velocity.y += GRAVITY * delta
+
+	if abs_dist > 220:
+
+		velocity.x = dir * SPEED * 0.8
+
+		if state != State.RUN:
+			state = State.RUN
+
+		if not is_attacking:
+			play_anim("walk")
+
+	else:
+
+		velocity.x = 0
+
+		if state != State.IDLE:
+			state = State.IDLE
+
+		if not is_attacking:
+			play_anim("idle")
+
+		if ai_timer <= 0:
+
+			ai_timer = randf_range(0.4, 0.8)
+
+			match randi() % 5:
+
+				0:
+					do_action("punch")
+
+				1:
+					do_action("kick")
+
+				2:
+					do_action("uppercut")
+
+				3:
+					do_action("roundhousekick")
+
+				4:
+					shoot_player()
+
+# ---------------- ACTION ----------------
+func do_action(anim_name: String):
+
+	if state == State.DEAD:
+		return
+
+	if action_locked:
+		return
+
+	action_locked = true
+	is_attacking = true
+
+	play_anim(anim_name)
+
+	if anim_name in [
+		"punch",
+		"kick",
+		"roundhousekick",
+		"uppercut",
+		"jumpkick"
+	]:
+		spawn_attack()
+
+	await sprite.animation_finished
+
+	is_attacking = false
+	action_locked = false
+
+	play_anim("idle")
+
+# ---------------- ATTACK ----------------
+func spawn_attack():
+
+	var attack = JOHNNY_CAGE_ATTACK.instantiate()
+
+	get_tree().current_scene.add_child(attack)
+
+	attack.global_position = attack_marker.global_position
+
+func start_cannonkick():
+	if state == State.DEAD:
+		return
+	if action_locked:
+		return
+
+	# allow re-boosting mid-move
+	cannonkick_active = true
+	special_move = true
+	special_move_timer = 0.4
+
+	sprite.play("cannonkick")
+
+	# 🔥 EVERY PRESS ADDS NEW FORWARD BURST
+	velocity.x = facing * 1300
+	velocity.y = 0
+
+# ---------------- SHOOT ----------------
+func shoot_player():
+	if is_finish_state:
+		return
+	if is_shooting:
+		return
+
+	is_shooting = true
+	is_attacking = true
+	action_locked = true
+
+	play_anim("shoot")
+
+	var bullet_scene: PackedScene
+
+	# ---------------- SPECIAL BULLET ----------------
+	if special_bullet != null:
+		bullet_scene = special_bullet
+
+		# reset after one shot
+		special_bullet = null
+	else:
+		bullet_scene = JOHNNY_CAGE_BULLET
+
+	var bullet = bullet_scene.instantiate()
+
+	get_tree().current_scene.add_child(bullet)
+
+	bullet.global_position = $JohnnyShoot.global_position
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
+
+	await get_tree().create_timer(0.25).timeout
+
+	is_shooting = false
+	is_attacking = false
+	action_locked = false
+
+	play_anim("idle")
+
+# ---------------- DAMAGE ----------------
+func take_damage(amount: int):
+	if not can_take_damage:
+		return
+	if state == State.DEAD:
+		return
+	if spawn_protection:
+		return
+
+	# BLOCK REDUCTION
+	if is_blocking:
+		amount = max(amount - 1, 0)
+
+	if amount <= 0:
+		return
+
+	health -= amount
+	health = max(health, 0)
+
+	health_changed.emit(health)
+	hit_sound.play()
+
+	# 💀 DEATH FIRST
+	if health <= 0:
+		die()
+		return
+
+	# ⚠️ FINISH STATE (more reliable)
+	if health <= 1 and not is_finish_state:
+		trigger_finish_state()
+
+	# 💥 HURT STATE
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+
+	state = State.IDLE
+	play_anim("hurt")
+
+	# reset movement so you don't float in air after hit
+	velocity.x = 0
+	if is_on_floor():
+		velocity.y = 0
+
+	var blood = BLOOD_EFFECT.instantiate()
+	get_tree().current_scene.add_child(blood)
+	blood.global_position = blood_marker.global_position
+
+	await sprite.animation_finished
+
+	# 🔓 RESTORE CONTROL
+	is_hurting = false
+	hurt_locked = false
+	action_locked = false
+
+	# small invincibility window
+	can_take_damage = false
+	await get_tree().create_timer(0.4).timeout
+	can_take_damage = true
+
+func trigger_finish_state():
+	if is_finish_state:
+		return
+
+	is_finish_state = true
+
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
+
+	action_locked = true
+	hurt_locked = true
+
+	state = State.IDLE
+	velocity = Vector2.ZERO
+
+	finish_label.visible = true
+
+# ---------------- COMBOS ----------------
+func register_input(input: String):
+
+	combo.append(input)
+
+	combo_timer = 0.0
+
+	check_combos()
+
+func spawn_fx(scene: PackedScene):
+
+	var fx = scene.instantiate()
+
+	get_tree().current_scene.call_deferred("add_child", fx)
+
+	await get_tree().process_frame
+
+	if target and is_instance_valid(target):
+		fx.global_position = target.global_position + Vector2(60 * facing, 0)
+	else:
+		fx.global_position = global_position + Vector2(80 * facing, 0)
+
+func check_combos():
+
+	# ---------------- ACID ----------------
+	if combo == ACID_COMBO:
+
+		combo_used.emit("acid")
+
+		special_bullet = ACID_BULLET
+
+		combo.clear()
+		return
+
+	# ---------------- FIRE ----------------
+	elif combo == FIRE_COMBO:
+
+		combo_used.emit("fire")
+
+		spawn_fx(FIRE_DEATH)
+
+		special_bullet = FIRE_BULLET
+
+		combo.clear()
+		return
+
+	# ---------------- ICE ----------------
+	elif combo == ICE_COMBO:
+
+		combo_used.emit("ice")
+
+		spawn_fx(ICE_DEATH)
+
+		special_bullet = ICE_BULLET
+
+		combo.clear()
+		return
+
+	# ---------------- ELECTRIC ----------------
+	elif combo == ELECTRIC_COMBO:
+
+		combo_used.emit("electric")
+
+		spawn_fx(ELECTRIC_DEATH)
+
+		special_bullet = ELECTRIC_BULLET
+
+		combo.clear()
+		return
+
+# ---------------- DEATH ----------------
+func die():
+
+	state = State.DEAD
+
+	velocity = Vector2.ZERO
+
+	var death = BLOOD_DEATH.instantiate()
+
+	get_tree().current_scene.add_child(death)
+
+	death.global_position = global_position
+
+	queue_free()
+
+# ---------------- ANIMATION ----------------
+func play_anim(anim_name: String):
+
+	if current_anim == anim_name:
+		return
+
+	current_anim = anim_name
+
+	sprite.play(anim_name)
+
+# ---------------- HURT BOX ----------------
+func _on_jonny_cage_hurt_box_area_entered(area):
+	take_damage(1)
+	if area.is_in_group("SubzeroBullet"):
+		apply_stun(3.0)
