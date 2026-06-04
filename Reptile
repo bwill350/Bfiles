@@ -475,8 +475,6 @@ func shoot_player():
 	play_anim("idle")
 
 # ---------------- DAMAGE ----------------
-	await sprite.animation_finished
-
 func take_damage(amount: int):
 	if health <= 1:
 		action_locked = true
