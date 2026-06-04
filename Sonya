@@ -92,32 +92,8 @@ func apply_stun(duration: float):
 
 	stunned = false
 
-func _on_health_changed(h):
-
-	if h <= 1 and not is_finish_state:
-
-		is_finish_state = true
-
-		is_attacking = false
-		is_shooting = false
-		is_hurting = false
-
-		action_locked = true
-		hurt_locked = true
-
-		state = State.IDLE
-		velocity = Vector2.ZERO
-
-		finish_label.visible = true
-
-		await get_tree().create_timer(2.0).timeout
-
-		if is_instance_valid(finish_label):
-			finish_label.visible = false
-
 # ---------------- READY ----------------
 func _ready():
-	health_changed.connect(_on_health_changed)
 	spawn_protection = true
 	await get_tree().create_timer(1.0).timeout
 	add_to_group("enemy")
@@ -179,7 +155,7 @@ func _physics_process(delta):
 
 	velocity.y += GRAVITY * delta
 
-	if action_locked or hurt_locked:
+	if action_locked:
 		return
 
 	var input_dir = Input.get_axis("left", "right")
@@ -319,7 +295,7 @@ func cpu_logic(delta):
 		velocity.x = 0
 		move_and_slide()
 
-	if action_locked:
+	if action_locked and not is_hurting:
 		return
 
 	ai_timer -= delta
@@ -330,7 +306,7 @@ func cpu_logic(delta):
 
 	facing = dir
 
-	sprite.flip_h = facing > 0
+	sprite.flip_h = facing < 0
 
 	velocity.y += GRAVITY * delta
 
@@ -457,44 +433,46 @@ func shoot_player():
 	play_anim("idle")
 
 # ---------------- DAMAGE ----------------
-	await sprite.animation_finished
-
 func take_damage(amount: int):
-	if health <= 1:
-		action_locked = true
-		velocity.x = 0
-	if spawn_protection:
+	if not can_take_damage:
 		return
 	if state == State.DEAD:
 		return
+	if spawn_protection:
+		return
 
+	# BLOCK REDUCTION
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
-	if not can_take_damage:
+	if amount <= 0:
 		return
-
-	can_take_damage = false
-
-	is_hurting = true
-	hurt_locked = true
-	action_locked = true
 
 	health -= amount
 	health = max(health, 0)
 
 	health_changed.emit(health)
-
 	hit_sound.play()
 
-	state = State.IDLE
+	# 💀 DEATH FIRST
+	if health <= 0:
+		die()
+		return
 
+	# ⚠️ FINISH STATE (ONLY ONCE)
+	if health == 1 and not is_finish_state:
+		trigger_finish_state()
+
+	# 💥 HURT FX ALWAYS WORKS EXCEPT DEAD
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+
+	state = State.IDLE
 	play_anim("hurt")
 
 	var blood = BLOOD_EFFECT.instantiate()
-
 	get_tree().current_scene.add_child(blood)
-
 	blood.global_position = blood_marker.global_position
 
 	await sprite.animation_finished
@@ -502,12 +480,28 @@ func take_damage(amount: int):
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
+
+	can_take_damage = false
+	await get_tree().create_timer(0.4).timeout
 	can_take_damage = true
 
-	play_anim("idle")
+func trigger_finish_state():
+	if is_finish_state:
+		return
 
-	if health <= 0:
-		die()
+	is_finish_state = true
+
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
+
+	action_locked = true
+	hurt_locked = true
+
+	state = State.IDLE
+	velocity = Vector2.ZERO
+
+	finish_label.visible = true
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
@@ -527,9 +521,9 @@ func spawn_fx(scene: PackedScene):
 	await get_tree().process_frame
 
 	if target and is_instance_valid(target):
-		fx.global_position = target.global_position + Vector2(60 * facing, 0)
+		fx.global_position = target.global_position + Vector2(60 * -facing, 0)
 	else:
-		fx.global_position = global_position + Vector2(80 * facing, 0)
+		fx.global_position = global_position + Vector2(80 * -facing, 0)
 
 func check_combos():
 
@@ -596,7 +590,6 @@ func die():
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
-
 	if current_anim == anim_name:
 		return
 
@@ -606,6 +599,12 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area):
+	if state == State.DEAD:
+		return
+	if spawn_protection:
+		return
+
 	take_damage(1)
-	if area.is_in_group("SubzeroBullet"):
+
+	if health > 1 and area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
