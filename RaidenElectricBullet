@@ -1,0 +1,47 @@
+extends Area2D
+class_name RaidenElectricBullet
+
+@export var speed: float = 1200.0
+@export var lifetime: float = 2.5
+@export var activate_delay: float = 0.03
+
+var velocity: Vector2 = Vector2.ZERO
+var active := false
+
+@onready var sprite: Sprite2D = $Sprite2D
+@onready var particles: CPUParticles2D = $CPUParticles2D
+@onready var collision: CollisionShape2D = $CollisionShape2D
+
+func _ready():
+	add_to_group("RaidenElectricBullet")
+
+	# ---------------- SPAWN INACTIVE ----------------
+	visible = false
+	collision.disabled = true
+
+	if particles:
+		particles.emitting = false
+
+	# small delay like electric materialization
+	await get_tree().create_timer(activate_delay).timeout
+
+	# ---------------- ACTIVATE ----------------
+	active = true
+	visible = true
+	collision.disabled = false
+
+	sprite.modulate = Color(0.4, 0.6, 1.0)
+
+	if particles:
+		particles.emitting = true
+
+	# lifetime
+	await get_tree().create_timer(lifetime).timeout
+	queue_free()
+
+
+func _physics_process(delta):
+	if not active:
+		return
+
+	global_position += velocity * delta
