@@ -1,6 +1,9 @@
 extends CharacterBody2D
 class_name Kano
 
+extends CharacterBody2D
+class_name Kano
+
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -98,6 +101,7 @@ func apply_stun(duration: float):
 
 # ---------------- READY ----------------
 func _ready():
+	add_to_group("Fighter")
 	spawn_protection = true
 	await get_tree().create_timer(1.0).timeout
 	add_to_group("enemy")
@@ -574,6 +578,9 @@ func register_input(input: String):
 func spawn_fx(scene: PackedScene):
 
 	var fx = scene.instantiate()
+
+	# Tell the effect who spawned it
+	fx.owner_character = self
 
 	get_tree().current_scene.call_deferred("add_child", fx)
 
