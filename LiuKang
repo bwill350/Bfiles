@@ -97,6 +97,7 @@ var combo_timer := 0.0
 
 # ---------------- READY ----------------
 func _ready():
+	add_to_group("Fighter")
 	add_to_group("LiuKang")
 
 	health = max_health
@@ -373,8 +374,7 @@ func cpu_logic(delta):
 				4:
 					shoot_fireball()
 
-	# ---------------- AIR STATE ----------------
-	# ---------------- AIR / LAND STATE ----------------
+	# ---------------- AIR/LAND STATE ----------------
 	if state == State.JUMP and not special_move:
 		velocity.y += GRAVITY * delta
 
