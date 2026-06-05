@@ -12,7 +12,8 @@ const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 
 var flicker_on := true
 var finished := false
-var damage_done := false
+var owner_character = null
+
 
 # ---------------- READY ----------------
 func _ready():
@@ -20,8 +21,6 @@ func _ready():
 	$Sprite.play("fade")
 
 	add_to_group("FireDeath")
-
-	area_entered.connect(_on_area_entered)
 
 	self.scale = Vector2.ZERO
 
@@ -43,29 +42,24 @@ func _ready():
 
 	stop_fatality()
 
-	queue_free()
+	await get_tree().process_frame
 
-# ---------------- DAMAGE ----------------
-func _on_area_entered(area: Area2D):
+	for fighter in get_tree().get_nodes_in_group("Reptile"):
+		fighter.remove_meta("firedeath_hit")
+	for fighter in get_tree().get_nodes_in_group("Subzero"):
+		fighter.remove_meta("firedeath_hit")
+	for fighter in get_tree().get_nodes_in_group("Raiden"):
+		fighter.remove_meta("firedeath_hit")
+	for fighter in get_tree().get_nodes_in_group("LiuKang"):
+		fighter.remove_meta("firedeath_hit")
+	for fighter in get_tree().get_nodes_in_group("JohnnyCage"):
+		fighter.remove_meta("firedeath_hit")
+	for fighter in get_tree().get_nodes_in_group("Kano"):
+		fighter.remove_meta("firedeath_hit")
+	for fighter in get_tree().get_nodes_in_group("Sonya"):
+		fighter.remove_meta("firedeath_hit")
 
-	if damage_done:
-		return
-
-	if area == null:
-		return
-
-	# ---------------- HURTBOX DETECTION ----------------
-	if area.is_in_group("RaidenHurtBox") \
-	or area.is_in_group("ReptileHurtBox") \
-	or area.is_in_group("LiuKangHurtBox") \
-	or area.is_in_group("SubzeroHurtBox"):
-
-		var enemy = area.get_parent()
-
-		if enemy and enemy.has_method("take_damage"):
-			enemy.take_damage(1)
-			damage_done = true
-
+		queue_free()
 
 # ---------------- STOP EVERYTHING ----------------
 func stop_fatality():
