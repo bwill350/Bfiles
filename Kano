@@ -1,9 +1,6 @@
 extends CharacterBody2D
 class_name Kano
 
-extends CharacterBody2D
-class_name Kano
-
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
