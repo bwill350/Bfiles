@@ -94,6 +94,7 @@ func apply_stun(duration: float):
 
 # ---------------- READY ----------------
 func _ready():
+	add_to_group("Fighter")
 	spawn_protection = true
 	await get_tree().create_timer(1.0).timeout
 	add_to_group("enemy")
