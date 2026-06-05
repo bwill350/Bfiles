@@ -98,7 +98,8 @@ func apply_stun(duration: float):
 
 # ---------------- READY ----------------
 func _ready():
-	finish_label.visible = false
+	add_to_group("Fighter")
+	$HUD/FinishLabel.visible = false
 	spawn_protection = true
 	await get_tree().create_timer(1.0).timeout
 	add_to_group("enemy")
@@ -565,7 +566,7 @@ func trigger_finish_state():
 	state = State.IDLE
 	velocity = Vector2.ZERO
 
-	finish_label.visible = true
+	$HUD/FinishLabel.visible = true
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
@@ -579,6 +580,9 @@ func register_input(input: String):
 func spawn_fx(scene: PackedScene):
 
 	var fx = scene.instantiate()
+
+	# Tell the effect who spawned it
+	fx.owner_character = self
 
 	get_tree().current_scene.call_deferred("add_child", fx)
 
