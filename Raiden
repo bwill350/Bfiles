@@ -124,6 +124,7 @@ func _on_health_changed(h):
 
 # ---------------- READY ----------------
 func _ready():
+	add_to_group("Fighter")
 	health_changed.connect(_on_health_changed)
 	spawn_protection = true
 	await get_tree().create_timer(1.0).timeout
@@ -385,6 +386,22 @@ func shoot_player():
 
 	play_anim("idle")
 
+func spawn_fx(scene: PackedScene):
+
+	var fx = scene.instantiate()
+
+	# Tell the effect who spawned it
+	fx.owner_character = self
+
+	get_tree().current_scene.call_deferred("add_child", fx)
+
+	await get_tree().process_frame
+
+	if target and is_instance_valid(target):
+		fx.global_position = target.global_position + Vector2(60 * facing, 0)
+	else:
+		fx.global_position = global_position + Vector2(80 * facing, 0)
+
 # ---------------- BURST ----------------
 func spawn_burst():
 
@@ -537,6 +554,11 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
+	take_damage(1)
+	if area.is_in_group("SubzeroBullet"):
+		apply_stun(3.0)
+
+func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 	take_damage(1)
 	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
