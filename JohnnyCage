@@ -671,3 +671,5 @@ func _on_jonny_cage_hurt_box_area_entered(area):
 	take_damage(1)
 	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
+	if area.is_in_group("Fireball"):
+		take_damage(1)
