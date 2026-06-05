@@ -4,11 +4,11 @@ class_name FireBullet
 @export var speed: float = 600.0
 @export var turn_speed: float = 6.0
 @export var lifetime: float = 3.0
+@export var damage: int = 1
 
 var velocity: Vector2 = Vector2.ZERO
 var target: Node2D = null
 
-# ---------------- READY ----------------
 func _ready():
 
 	add_to_group("FireBullet")
@@ -17,21 +17,17 @@ func _ready():
 
 	# auto cleanup
 	await get_tree().create_timer(lifetime).timeout
-
 	queue_free()
 
-	# find player
+	# find target (first Subzero in scene)
 	var players = get_tree().get_nodes_in_group("Subzero")
-
 	if players.size() > 0:
 		target = players[0]
 
-# ---------------- MOVEMENT ----------------
 func _physics_process(delta):
 
 	# straight movement if no target
 	if target == null or not is_instance_valid(target):
-
 		global_position += velocity * delta
 		return
 
@@ -41,38 +37,18 @@ func _physics_process(delta):
 	velocity = velocity.lerp(dir * speed, turn_speed * delta)
 
 	global_position += velocity * delta
-
 	rotation = velocity.angle()
 
-# ---------------- HIT ----------------
 func _on_area_entered(area: Area2D) -> void:
 
 	if area == null:
 		return
 
-	# PLAYER HURTBOX
-	if area.name == "HitBox":
+	var target_player = area.get_parent()
+	if target_player == null:
+		return
 
-		var target_player = area.get_parent()
-
-		if target_player and target_player.is_in_group("Subzero"):
-
-			if target_player.has_method("take_damage"):
-				target_player.take_damage(1)
-			
-		if target_player and target_player.is_in_group("LiuKang"):
-
-			if target_player.has_method("take_damage"):
-				target_player.take_damage(1)
-			
-
-		if target_player and target_player.is_in_group("Raiden"):
-
-			if target_player.has_method("take_damage"):
-				target_player.take_damage(1)
-			
-
-		if target_player and target_player.is_in_group("Reptile"):
-
-			if target_player.has_method("take_damage"):
-				target_player.take_damage(1)
+	# ignore non-fighters safely
+	if target_player.has_method("take_damage"):
+		target_player.take_damage(damage)
+		queue_free()
