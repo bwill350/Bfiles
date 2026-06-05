@@ -3,7 +3,6 @@ class_name Reptilesacid
 
 @export var speed: float = 700.0
 @export var lifetime: float = 3.0
-@export var damage: int = 1
 
 var velocity: Vector2 = Vector2.ZERO
 
@@ -12,7 +11,6 @@ var velocity: Vector2 = Vector2.ZERO
 func _ready():
 	add_to_group("ReptileAcid")
 
-	area_entered.connect(_on_area_entered)
 
 	sprite.modulate = Color(0.2, 1.0, 0.3)
 
@@ -22,25 +20,3 @@ func _ready():
 func _physics_process(delta):
 	global_position += velocity * delta
 
-func _on_area_entered(area: Area2D) -> void:
-
-	if area == null:
-		return
-
-	# ignore other Reptile projectiles
-	if area.is_in_group("ReptileAcid"):
-		return
-
-	var target = area.get_parent()
-	if target == null:
-		return
-
-	# ---------------- UNIVERSAL DAMAGE ----------------
-	if target.has_method("take_damage"):
-
-		# optional acid effect hook (if character supports it)
-		if target.has_method("apply_acid"):
-			target.apply_acid()
-
-		target.take_damage(damage)
-		queue_free()
