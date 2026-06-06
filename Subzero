@@ -80,7 +80,7 @@ const GRAVITY = 5000
 # ---------------- EXPORTS ----------------
 @export var SPEED = 300.0
 @export var SCLIMB_SPEED = 250.0
-@export var max_health: int = 10
+@export var max_health: int = 50
 @export var sjump_velocity = -2200.0
 @export var damage := 1
 @export var shoot_cooldown_time: float = 0.25
@@ -106,6 +106,7 @@ func update_facing_offsets():
 
 # ---------------- READY ----------------
 func _ready():
+	
 	facing = 1
 	sprite.flip_h = false
 	spawn_protection = true
@@ -122,7 +123,7 @@ func _ready():
 
 	state = State.IDLE
 	velocity = Vector2.ZERO
-
+	add_to_group("Fighter")
 	add_to_group("Subzero")
 	add_to_group("ElectricDeath")
 	add_to_group("IceDeath")
@@ -307,15 +308,8 @@ func stop_block():
 # ---------------- CPU LOGIC ----------------
 func cpu_logic(delta):
 
-	if target == null:
-		return
-
-	# STOP ALL ACTIONS AT 1HP
-	if health <= 1:
-		is_attacking = false
-		action_locked = true
-		velocity.x = 0
-		move_and_slide()
+	# HARD LOCK (Liu Kang style behavior)
+	if action_locked:
 		return
 
 	ai_timer -= delta
@@ -324,16 +318,27 @@ func cpu_logic(delta):
 	var dir = sign(dist)
 	var abs_dist = abs(dist)
 
-# ---------------- FACING FIX (ALWAYS MATCH MOVEMENT) ----------------
-	if abs(velocity.x) > 1:
-		facing = sign(velocity.x)
+# FACE TARGET
+	if dir != 0:
+		facing = dir
 
-	sprite.flip_h = -facing < 0
+	sprite.flip_h = facing > 0
 
-# ---------------- GRAVITY ----------------
+# GRAVITY
 	velocity.y += GRAVITY * delta
 
-# ---------------- MOVE ----------------
+	if target == null:
+		return
+
+# STOP ALL ACTIONS AT 1HP
+	if health <= 1:
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
+		move_and_slide()
+		return
+
+# ---------------- MOVEMENT ----------------
 	if abs_dist > 220:
 
 		velocity.x = dir * SPEED * 0.8
@@ -347,15 +352,16 @@ func cpu_logic(delta):
 	else:
 
 		velocity.x = 0
+		velocity.y = 0
 
-		if state != State.IDLE:
-			state = State.IDLE
+	if state != State.IDLE:
+		state = State.IDLE
 
-		if not is_attacking:
-			play_anim("idle")
+	if not is_attacking:
+		play_anim("idle")
 
-	# ---------------- AI ATTACKS ----------------
-	if ai_timer <= 0 and not action_locked:
+	# ---------------- AI ACTIONS ----------------
+	if ai_timer <= 0:
 
 		ai_timer = randf_range(0.4, 0.8)
 
@@ -375,8 +381,6 @@ func cpu_logic(delta):
 
 			4:
 				shoot_player()
-
-	move_and_slide()
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -585,4 +589,6 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
+	if area.get_parent() == self:
+		return
 	take_damage(1)
