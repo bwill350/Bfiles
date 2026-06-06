@@ -58,7 +58,7 @@ const GRAVITY = 5000
 @export var SPEED = 300.0
 @export var JCLIMB_SPEED = 250.0
 @export var jjump_velocity = -1800.0
-@export var max_health: int = 10
+@export var max_health: int = 50
 @export var shoot_cooldown_time := 0.01
 
 # ---------------- PROJECTILES ----------------
@@ -115,7 +115,7 @@ func _on_health_changed(h):
 		state = State.IDLE
 		velocity = Vector2.ZERO
 
-		finish_label.visible = true
+		$HUD/FinishLabel/Sprite2D.visible = true
 
 		await get_tree().create_timer(2.0).timeout
 
@@ -559,6 +559,8 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		apply_stun(3.0)
 
 func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
+	if area.get_parent() == self:
+		return
 	take_damage(1)
-	if area.is_in_group("SubzeroBullet"):
+	if health > 1 and area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
