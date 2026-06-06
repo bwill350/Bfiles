@@ -1,9 +1,6 @@
 extends CharacterBody2D
 class_name JohnnyCage
 
-extends CharacterBody2D
-class_name JohnnyCage
-
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -74,7 +71,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
-@onready var hit_box: Area2D = $JonnyCageHurtBox
+@onready var hit_box: Area2D = $JohnnyCageHurtBox
 @onready var shoot_marker: Marker2D = $JohnnyShoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
@@ -120,8 +117,8 @@ func _ready():
 	play_anim("idle")
 
 	if hit_box:
-		if not hit_box.area_entered.is_connected(_on_jonny_cage_hurt_box_area_entered):
-			hit_box.area_entered.connect(_on_jonny_cage_hurt_box_area_entered)
+		if not hit_box.area_entered.is_connected(_on_johnny_cage_hurt_box_area_entered):
+			hit_box.area_entered.connect(_on_johnny_cage_hurt_box_area_entered)
 
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
@@ -690,10 +687,9 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 # ---------------- HURT BOX ----------------
-func _on_jonny_cage_hurt_box_area_entered(area):
+func _on_johnny_cage_hurt_box_area_entered(area):
 	if area.get_parent() == self:
 		return
 	take_damage(1)
 	if health > 1 and area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
-
