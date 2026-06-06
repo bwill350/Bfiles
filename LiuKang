@@ -51,6 +51,7 @@ var can_take_damage := true
 var is_finish_state := false
 var spawn_protection := false
 var is_flying := false
+var hurt_recovery := false
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -229,12 +230,10 @@ func _physics_process(delta):
 	# ---------------- WALK / IDLE ----------------
 	if is_on_floor():
 		if input_dir != 0:
-			if not is_attacking:
-				state = State.RUN
+			if not is_attacking and not is_hurting and not hurt_recovery:
 				play_anim("walk")
 		else:
-			if not is_attacking:
-				state = State.IDLE
+			if not is_attacking and not is_hurting and not hurt_recovery:
 				play_anim("idle")
 
 	# ---------------- JUMP ----------------
@@ -304,9 +303,21 @@ func stop_block():
 # ---------------- CPU ----------------
 func cpu_logic(delta):
 	if is_hurting:
+		velocity.x = 0
+		move_and_slide()
 		return
-	# HARD LOCK (Liu Kang style behavior)
+	# ---------------- HURT PRIORITY ----------------
+	if is_hurting:
+		velocity.x = 0
+		velocity.y += GRAVITY * delta
+		move_and_slide()
+		return
+
+	# ---------------- HARD LOCK ----------------
 	if action_locked:
+		return
+
+	if target == null:
 		return
 
 	ai_timer -= delta
@@ -315,80 +326,50 @@ func cpu_logic(delta):
 	var dir = sign(dist)
 	var abs_dist = abs(dist)
 
-# FACE TARGET
+	# ---------------- FACE TARGET ----------------
 	if dir != 0:
 		facing = dir
 
-	if not is_hurting:
-		sprite.flip_h = facing < 0
+	sprite.flip_h = facing < 0
 
-# GRAVITY
+	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
-	if target == null:
-		return
-
-# STOP ALL ACTIONS AT 1HP
+	# ---------------- LOW HP STOP ----------------
 	if health <= 1:
 		is_attacking = false
 		action_locked = true
-		velocity.x = 0
+		velocity = Vector2.ZERO
 		move_and_slide()
 		return
 
-# ---------------- MOVEMENT ----------------
-	if abs_dist > 220:
-
-		velocity.x = dir * SPEED * 0.8
-
-	if state != State.RUN:
-		state = State.RUN
-
-	if not is_attacking:
-		play_anim("walk")
-
-	else:
-
-		velocity.x = 0
-		velocity.y = 0
-
-	# STOP if dead or stunned
-	if health <= 1:
-		return
-
-# MOVEMENT
+	# ---------------- MOVEMENT ----------------
 	if abs_dist > 220:
 		velocity.x = dir * SPEED * 0.8
-	if is_on_floor():
-		state = State.RUN
-		if not is_attacking:
-			play_anim("walk")
+
+		if is_on_floor():
+			if not is_attacking and not is_hurting and not hurt_recovery:
+				play_anim("walk")
 	else:
 		velocity.x = 0
-	if is_on_floor():
-		state = State.IDLE
-		if not is_attacking:
-			play_anim("idle")
+
+		if is_on_floor():
+			if not is_attacking and not is_hurting and not hurt_recovery:
+				play_anim("idle")
 
 	# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
-
 		ai_timer = randf_range(0.4, 0.8)
 
 		match randi() % 5:
-
 			0:
 				do_action("punch")
-
 			1:
 				do_action("kick")
-
 			2:
 				do_action("uppercut")
-
 			3:
 				do_action("roundhousekick")
-
 			4:
 				shoot_fireball()
 
@@ -399,8 +380,6 @@ func cpu_logic(delta):
 	if state != State.JUMP:
 		state = State.JUMP
 
-	if not is_attacking:
-		play_anim("idle")
 	else:
 		velocity.y = 0
 
@@ -505,21 +484,20 @@ func shoot_fireball():
 
 	play_anim("idle")
 
-
 func take_damage(amount: int):
+	if spawn_protection:
+		return
+	if state == State.DEAD:
+		return
+	if is_hurting:
+		return
 	if special_move_invincible:
 		return
 	if not can_take_damage:
 		return
 
-	if spawn_protection:
-		return
-
-	if not can_take_damage:
-		return
-
-	if health <= 0:
-		return
+	can_take_damage = false
+	is_hurting = true
 
 	health -= amount
 	health = max(health, 0)
@@ -527,41 +505,28 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
-	can_take_damage = true
+	# stop actions immediately
+	is_attacking = false
+	is_shooting = false
+	action_locked = true
+
+	play_anim("hurt")
 
 	# ---------------- DEATH ----------------
 	if health <= 0:
-		is_attacking = false
-		is_shooting = false
-		is_hurting = false
-		state = State.DEAD
 		die()
 		return
 
-	# ---------------- HURT ANIMATION ----------------
-	is_attacking = false
-	is_shooting = false
-	is_hurting = true
-
-	state = State.IDLE
-	velocity = Vector2.ZERO
-
-	play_anim("hurt")
-	await sprite.animation_finished
+	# ---------------- HURT TIME ----------------
+	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
+	action_locked = false
 
-	# ---------------- FINISH HIM (1 HP STATE) ----------------
-	if health == 1 and not is_finish_state:
-		is_finish_state = true
+	# ---------------- FINISH STATE ----------------
+	is_finish_state = (health == 1)
 
-		action_locked = false
-		hurt_locked = false
-
-		play_anim("idle")
-
-	# ---------------- RECOVERY ----------------
-	await get_tree().create_timer(0.2).timeout
+	await get_tree().create_timer(0.15).timeout
 	can_take_damage = true
 
 # ---------------- ATTACK ----------------
