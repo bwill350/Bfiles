@@ -60,7 +60,7 @@ const GRAVITY = 5000
 # ---------------- EXPORTS ----------------
 @export var SPEED := 300.0
 @export var CLIMB_SPEED := 250.0
-@export var max_health := 10
+@export var max_health := 50
 @export var jump_velocity := -2200.0
 @export var combo_reset_time := 0.6
 
@@ -157,48 +157,79 @@ func start_bicyclekick():
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
+	# ---------------- STUN ----------------
 	if stunned:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
 
+	# ---------------- SPECIAL MOVES ----------------
 	if flyingkick_active:
 		global_position.y = lerp(global_position.y, flyingkick_y, 0.2)
 
 	if special_move:
+
+		# horizontal burst
 		velocity.x = facing * 1300
+
+		# light gravity during special move
+		velocity.y += GRAVITY * delta * 0.4
 
 		move_and_slide()
 
+		# ---------------- COLLISION CHECK ----------------
+		for i in get_slide_collision_count():
+			var col = get_slide_collision(i)
+			var body = col.get_collider()
+
+			if body and body.has_method("take_damage"):
+				body.take_damage(1)
+
+				# HARD STOP ON HIT (IMPORTANT FIX)
+				special_move = false
+				flyingkick_active = false
+				bicyclekick_active = false
+				special_move_timer = 0.0
+
+				velocity = Vector2.ZERO
+				return
+
+		# ---------------- TIMER (ONLY IF NO HIT) ----------------
 		special_move_timer -= delta
 		if special_move_timer <= 0:
 			special_move = false
+			flyingkick_active = false
+			bicyclekick_active = false
+			velocity.x = 0
 
-		return  # 🔥 IMPORTANT: stop everything else
+		return
 
+	# ---------------- NORMAL GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+	# ---------------- COMBOS ----------------
 	combo_timer += delta
 	special_bullet = FIRE_BULLET
 
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
-	if not special_move:
-		velocity.y += GRAVITY * delta
-	else:
-	# still let gravity end the move naturally
-		velocity.y += GRAVITY * delta * 0.4
-
+	# ---------------- CPU ----------------
 	if is_cpu:
 		cpu_logic(delta)
 		move_and_slide()
 		return
 
+	# ---------------- DEAD ----------------
 	if state == State.DEAD:
 		return
 
+	# ---------------- LOCKS ----------------
 	if action_locked or hurt_locked:
+		move_and_slide()
 		return
 
+	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
 
 	if input_dir != 0:
@@ -206,11 +237,10 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing < 0
 
-	if not special_move:
-		velocity.x = input_dir * SPEED
-		flyingkick_active = false
+	# ---------------- MOVEMENT ----------------
+	velocity.x = input_dir * SPEED
 
-# ---------------- WALK ANIMATION ----------------
+	# ---------------- WALK / IDLE ----------------
 	if is_on_floor():
 		if input_dir != 0:
 			if not is_attacking:
@@ -225,43 +255,9 @@ func _physics_process(delta):
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
 
-	if Input.is_action_pressed("shoot"):
-		shoot_fireball()
-
-	if Input.is_action_just_pressed("punch"):
-		do_action("punch")
-
-	# ---------------- STATES ----------------
-	if not is_on_floor():
-
-		if special_move:
-		# FLYING KICK OVERRIDE - DO NOTHING
-			pass
-		else:
-			state = State.JUMP
-
-		if not is_attacking:
-			play_anim("jump")
-
-	elif input_dir != 0:
-
-		state = State.RUN
-
-		if not is_attacking:
-			play_anim("walk")
-
-	else:
-
-		state = State.IDLE
-
-		if not is_attacking:
-			play_anim("idle")
-
-	move_and_slide()
-
 	# ---------------- ATTACKS ----------------
-	if Input.is_action_just_pressed("jumpkick"):
-		do_action("jumpkick")
+	if Input.is_action_just_pressed("jump"):
+		do_action("jump")
 
 	elif Input.is_action_just_pressed("punch"):
 		do_action("punch")
@@ -279,15 +275,18 @@ func _physics_process(delta):
 		shoot_fireball()
 
 	elif Input.is_action_pressed("flyingkick"):
-			do_action("flyingkick")
+		do_action("flyingkick")
 
-	elif Input.is_action_pressed("block"):
-		start_block()
 	elif Input.is_action_pressed("bicyclekick"):
 		do_action("bicyclekick")
 
+	elif Input.is_action_pressed("block"):
+		start_block()
+
 	else:
 		stop_block()
+
+	move_and_slide()
 
 # ---------------- BLOCK ----------------
 func start_block():
@@ -487,6 +486,7 @@ func shoot_fireball():
 
 	play_anim("idle")
 
+
 func take_damage(amount: int):
 
 	if spawn_protection:
@@ -504,7 +504,7 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
-	can_take_damage = false
+	can_take_damage = true
 
 	# ---------------- DEATH ----------------
 	if health <= 0:
@@ -631,25 +631,9 @@ func check_combos():
 		combo.clear()
 		return
 
-
-func _on_health_changed(health):
-
-	if health == 1 and not is_finish_state:
-
-		if finish_label:
-			finish_label.visible = true
-
-			if finish_label.has_method("start_flicker"):
-				finish_label.start_flicker(2.0, 0.05)
-
-		await get_tree().create_timer(2.0).timeout
-
-		if is_instance_valid(finish_label):
-			finish_label.visible = false
-
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D):
 	take_damage(1)
-	if area.is_in_group("SubzeroBullet"):
+	if health > 1 and area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
 
