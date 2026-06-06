@@ -1,11 +1,16 @@
 extends CharacterBody2D
 class_name JohnnyCage
 
+extends CharacterBody2D
+class_name JohnnyCage
+
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
 var special_move := false
 var special_move_timer := 0.0
+var finish_shown := false
+var finish_cooldown := 0.0
 
 # ---------------- STATE ----------------
 enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
@@ -44,7 +49,7 @@ var shoot_cooldown: float = 0.0
 @export var shoot_cooldown_time: float = 0.25
 @export var SPEED = 300.0
 @export var CLIMB_SPEED = 250.0
-@export var max_health: int = 10
+@export var max_health: int = 50
 @export var jump_velocity = -2200.0
 @export var combo_reset_time := 0.6
 
@@ -77,7 +82,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 var combo := []
 var combo_timer := 0.0
 
-@onready var finish_label: Sprite2D = $CanvasLayer/Label/Sprite2D
+@onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
 const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
@@ -96,10 +101,11 @@ func apply_stun(duration: float):
 
 	stunned = false
 
+
 # ---------------- READY ----------------
 func _ready():
 	add_to_group("Fighter")
-	$HUD/FinishLabel.visible = false
+	finish_label.visible = false
 	spawn_protection = true
 	await get_tree().create_timer(1.0).timeout
 	add_to_group("enemy")
@@ -144,6 +150,11 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	if finish_cooldown > 0:
+		finish_cooldown -= delta
+	else:
+		if finish_label:
+			finish_label.visible = false
 	# ---------------- SPECIAL MOVE TIMER ----------------
 	if special_move:
 		special_move_timer -= delta
@@ -330,16 +341,8 @@ func shoot_acid():
 # ---------------- CPU ----------------
 func cpu_logic(delta):
 
-	if target == null:
-		return
-	#STOP ALL ACTIONS AT 1HP
-	if health <= 1:
-		is_attacking = false
-		action_locked = true
-		velocity.x = 0
-		move_and_slide()
-
-	if action_locked and not is_hurting:
+	# HARD LOCK (Liu Kang style behavior)
+	if action_locked:
 		return
 
 	ai_timer -= delta
@@ -348,52 +351,69 @@ func cpu_logic(delta):
 	var dir = sign(dist)
 	var abs_dist = abs(dist)
 
-	facing = dir
+# FACE TARGET
+	if dir != 0:
+		facing = dir
 
 	sprite.flip_h = facing < 0
 
+# GRAVITY
 	velocity.y += GRAVITY * delta
 
+	if target == null:
+		return
+
+# STOP ALL ACTIONS AT 1HP
+	if health <= 1:
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
+		move_and_slide()
+		return
+
+# ---------------- MOVEMENT ----------------
 	if abs_dist > 220:
 
 		velocity.x = dir * SPEED * 0.8
 
-		if state != State.RUN:
-			state = State.RUN
+	if state != State.RUN:
+		state = State.RUN
 
-		if not is_attacking:
-			play_anim("walk")
+	if not is_attacking:
+		play_anim("walk")
 
 	else:
 
 		velocity.x = 0
+		velocity.y = 0
 
-		if state != State.IDLE:
-			state = State.IDLE
+	if state != State.IDLE:
+		state = State.IDLE
 
-		if not is_attacking:
-			play_anim("idle")
+	if not is_attacking:
+		play_anim("idle")
 
-		if ai_timer <= 0:
+	# ---------------- AI ACTIONS ----------------
+	if ai_timer <= 0:
 
-			ai_timer = randf_range(0.4, 0.8)
+		ai_timer = randf_range(0.4, 0.8)
 
-			match randi() % 5:
+		match randi() % 5:
 
-				0:
-					do_action("punch")
+			0:
+				do_action("punch")
 
-				1:
-					do_action("kick")
+			1:
+				do_action("kick")
 
-				2:
-					do_action("uppercut")
+			2:
+				do_action("uppercut")
 
-				3:
-					do_action("roundhousekick")
+			3:
+				do_action("roundhousekick")
 
-				4:
-					shoot_player()
+			4:
+				shoot_player()
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -566,7 +586,10 @@ func trigger_finish_state():
 	state = State.IDLE
 	velocity = Vector2.ZERO
 
-	$HUD/FinishLabel.visible = true
+	if finish_label:
+		finish_label.visible = true
+		finish_shown = true
+		finish_cooldown = 3.0
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
@@ -668,8 +691,9 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_jonny_cage_hurt_box_area_entered(area):
+	if area.get_parent() == self:
+		return
 	take_damage(1)
-	if area.is_in_group("SubzeroBullet"):
+	if health > 1 and area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
-	if area.is_in_group("Fireball"):
-		take_damage(1)
+
