@@ -18,6 +18,11 @@ class_name Raiden
 #│   └── FinishLabel (Label)
 #└── Sprite2D
 
+var spawn_locked := true
+var special_move := false
+var special_move_timer := 0.0
+var electricfly_active := false
+var special_move_invincible := false
 var spawn_protection := false
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
@@ -41,6 +46,7 @@ var can_take_damage := true
 var is_finish_state := false
 var lock_timer := 0.0
 var stunned := false
+
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -60,7 +66,7 @@ const GRAVITY = 5000
 @export var jjump_velocity = -1800.0
 @export var max_health: int = 50
 @export var shoot_cooldown_time := 0.01
-
+@export var combo_reset_time := 0.6
 # ---------------- PROJECTILES ----------------
 const RAIDEN_ELECTRIC_BULLET = preload("res://Projectiles/RaidenElectricBullet.tscn")
 const RAIDEN_ATTACK = preload("res://Projectiles/RaidenAttack.tscn")
@@ -81,11 +87,20 @@ const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 # ---------------- COMBOS ----------------
 var combo := []
 var combo_timer := 0.0
-
+var electricfly_y := 0.0
 const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
+
+func start_electricfly():
+	electricfly_active = true
+	special_move = true
+	special_move_invincible = true
+	special_move_timer = 0.4
+
+	velocity.x = facing * 1800
+	velocity.y = -300
 
 func apply_stun(duration: float):
 	if stunned:
@@ -124,18 +139,37 @@ func _on_health_changed(h):
 
 # ---------------- READY ----------------
 func _ready():
-	add_to_group("Fighter")
-	health_changed.connect(_on_health_changed)
-	spawn_protection = true
-	await get_tree().create_timer(1.0).timeout
-	add_to_group("enemy")
-	add_to_group("Raiden")
+	# ---------------- HARD SPAWN LOCK ----------------
+	spawn_locked = true
+	action_locked = true
+	hurt_locked = true
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
 
+	# Optional but VERY important: prevents early physics/collisions
+	set_physics_process(false)
+	set_process_unhandled_input(false)
+
+	# ---------------- STARTUP DELAY ----------------
+	await get_tree().create_timer(1.0).timeout
+
+	# ---------------- UNLOCK CORE INPUT/PHYSICS ----------------
+	set_physics_process(true)
+	set_process_unhandled_input(true)
+
+	spawn_locked = false
+	action_locked = false
+	hurt_locked = false
+
+	# ---------------- HEALTH INIT (ONLY ONCE) ----------------
 	health = max_health
 	health_changed.emit(health)
 
+	# ---------------- ANIMATION ----------------
 	play_anim("idle")
 
+	# ---------------- HITBOX SAFETY CONNECTION ----------------
 	if hit_box:
 		if not hit_box.area_entered.is_connected(_on_Raiden_Hurt_Box_area_entered):
 			hit_box.area_entered.connect(_on_Raiden_Hurt_Box_area_entered)
@@ -184,6 +218,43 @@ func check_combos():
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	# ---------------- ELECTRIC FLY ----------------
+	if special_move:
+		special_move_timer -= delta
+		velocity.x = facing * 1800
+		move_and_slide()
+
+
+	for i in range(get_slide_collision_count()):
+		var col = get_slide_collision(i)
+		var body = col.get_collider()
+
+		if body and body != self and body.has_method("take_damage"):
+			body.take_damage(1)
+
+			special_move = false
+			electricfly_active = false
+			special_move_invincible = false
+			special_move_timer = 0.0
+
+			velocity = Vector2.ZERO
+			return
+
+	if special_move_timer <= 0:
+		special_move = false
+		electricfly_active = false
+		special_move_invincible = false
+		velocity.x = 0
+
+
+	# ---------------- NORMAL GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+	# ---------------- COMBOS ----------------
+	combo_timer += delta
+
+	if combo_timer > combo_reset_time:
+		combo.clear()
 
 	if stunned:
 		velocity = Vector2.ZERO
@@ -198,7 +269,7 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	velocity.y += GRAVITY * delta
+	
 
 	# ---------------- LOCKED ----------------
 	if action_locked or hurt_locked:
@@ -283,8 +354,19 @@ func _physics_process(delta):
 
 	move_and_slide()
 
-func cpu_logic(delta):
+	# ---------------- SPECIAL MOVES ----------------
+	if special_move:
 
+		if electricfly_active:
+			global_position.y = lerp(global_position.y, electricfly_y, 0.2)
+			special_move_timer -= delta
+			velocity.x = facing * 1300
+			velocity.y += GRAVITY * delta * 0.4
+			move_and_slide()
+
+func cpu_logic(delta):
+	if spawn_locked:
+		return
 	if target == null:
 		return
 
@@ -295,13 +377,12 @@ func cpu_logic(delta):
 	sprite.flip_h = facing < 0
 
 
-
 #STOP ALL ACTIONS AT 1HP
 	if health <= 1:
 		is_attacking = false
-		action_locked = true
-		velocity.x = 0
-		move_and_slide()
+	action_locked = true
+	velocity.x = 0
+	move_and_slide()
 	if action_locked:
 		return
 
@@ -359,7 +440,8 @@ func cpu_logic(delta):
 
 # ---------------- SHOOT ----------------
 func shoot_player():
-
+	if spawn_locked:
+		return
 	if is_shooting:
 		return
 
@@ -434,7 +516,8 @@ func spawn_force_field():
 	is_attacking = false
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
-
+	if spawn_locked:
+		return
 	if action_locked:
 		return
 
@@ -456,8 +539,8 @@ func do_action(anim_name: String):
 
 	# ELECTRIC FLY
 	if anim_name == "electricfly":
-		velocity.x = facing * 1800
-		velocity.y = -300
+		start_electricfly()
+		spawn_attack()
 
 	await sprite.animation_finished
 
@@ -476,6 +559,8 @@ func do_combo():
 
 # ---------------- ATTACK ----------------
 func spawn_attack():
+	if spawn_locked:
+		return
 	var attack = RAIDEN_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 	attack.global_position = attack_marker.global_position
@@ -483,17 +568,25 @@ func spawn_attack():
 	attack.global_position = shoot_marker.global_position + Vector2(0, 3)
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-	if spawn_protection:
+	if spawn_locked:
 		return
+	# HARD BLOCKS FIRST
 	if state == State.DEAD:
 		return
 
-	if is_blocking:
-		amount = max(amount - 1, 0)
+	if spawn_protection:
+		return
+
+	if special_move_invincible:
+		return
+
+	if is_hurting:
+		return
 
 	if not can_take_damage:
 		return
 
+	# NOW APPLY DAMAGE
 	can_take_damage = false
 
 	is_hurting = true
@@ -506,7 +599,6 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 
 	hit_sound.play()
-
 	play_anim("hurt")
 
 	var blood = BLOOD_EFFECT.instantiate()
@@ -524,10 +616,6 @@ func take_damage(amount: int):
 
 	if health <= 0:
 		die()
-	if health <= 1:
-		action_locked = true
-		velocity.x = 0
-
 
 # ---------------- DEATH ----------------
 func die():
@@ -554,13 +642,21 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
-	take_damage(1)
-	if area.is_in_group("SubzeroBullet"):
-		apply_stun(3.0)
-
-func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
+	if spawn_locked:
+		return
 	if area.get_parent() == self:
 		return
+
+	if state == State.DEAD:
+		return
+
+	if spawn_protection or special_move_invincible:
+		return
+
+	if not can_take_damage or is_hurting:
+		return
+
 	take_damage(1)
-	if health > 1 and area.is_in_group("SubzeroBullet"):
+
+	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
