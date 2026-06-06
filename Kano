@@ -1,14 +1,12 @@
 extends CharacterBody2D
 class_name Kano
 
-extends CharacterBody2D
-class_name Kano
-
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
 var special_move := false
 var special_move_timer := 0.0
+var hit_lock := false
 
 # ---------------- STATE ----------------
 enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
@@ -168,7 +166,11 @@ func _unhandled_input(event):
 		register_input("shoot")
 
 # ---------------- PHYSICS ----------------
+# ---------------- PHYSICS ----------------
 func _physics_process(delta):
+
+	# NORMAL GRAVITY MUST ALWAYS RUN
+	velocity.y += GRAVITY * delta
 
 	# ---------------- STUN ----------------
 	if stunned:
@@ -179,28 +181,32 @@ func _physics_process(delta):
 	# ---------------- SPECIAL MOVE (CANNONBALL) ----------------
 	if special_move:
 
-		# timer ends move ONLY if no collision
 		special_move_timer -= delta
+
 		if special_move_timer <= 0:
 			special_move = false
 			cannonball_active = false
 			velocity = Vector2.ZERO
 			return
 
-		# ---------------- AIR CONTROL ----------------
+		# AIR CONTROL
 		if cannonball_active:
 			var input_dir = Input.get_axis("left", "right")
 			velocity.x += input_dir * 40
-			velocity.y = 0  # lock vertical movement
+			velocity.y = 0
 
 		move_and_slide()
 
-		# ---------------- COLLISION CHECK ----------------
-		for i in get_slide_collision_count():
+		# COLLISION CHECK
+		for i in range(get_slide_collision_count()):
 			var col = get_slide_collision(i)
 			var body = col.get_collider()
 
-			if body and body.has_method("take_damage"):
+			if body and body != self and body.has_method("take_damage"):
+
+				if "hit_lock" in body and body.hit_lock:
+					continue
+
 				body.take_damage(1)
 
 				# HARD STOP ON HIT
@@ -208,12 +214,10 @@ func _physics_process(delta):
 				cannonball_active = false
 				special_move_timer = 0.0
 				velocity = Vector2.ZERO
+
 				return
 
 		return
-
-	# ---------------- NORMAL GRAVITY ----------------
-	velocity.y += GRAVITY * delta
 
 	# ---------------- INPUT ----------------
 	if Input.is_action_just_pressed("cannonball"):
@@ -289,6 +293,7 @@ func _physics_process(delta):
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
+		move_and_slide()
 		return
 
 	# ---------------- ATTACKS ----------------
@@ -505,6 +510,7 @@ func start_cannonball():
 	# 🔥 EVERY PRESS ADDS NEW FORWARD BURST
 	velocity.x = facing * 1300
 	velocity.y = 0
+	return
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -550,20 +556,32 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-	if not can_take_damage:
-		return
+
+	# ---------------- HARD SAFETY BLOCKS ----------------
 	if state == State.DEAD:
 		return
+
 	if spawn_protection:
 		return
+
+	if not can_take_damage:
+		return
+
+	if hit_lock:
+		return
+
+	# 🔒 LOCK IMMEDIATELY (prevents multi-hit spam)
+	hit_lock = true
 
 	# BLOCK REDUCTION
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
 	if amount <= 0:
+		hit_lock = false
 		return
 
+	# ---------------- APPLY DAMAGE ----------------
 	health -= amount
 	health = max(health, 0)
 
@@ -573,13 +591,14 @@ func take_damage(amount: int):
 	# 💀 DEATH FIRST
 	if health <= 0:
 		die()
+		hit_lock = false
 		return
 
 	# ⚠️ FINISH STATE (ONLY ONCE)
 	if health == 1 and not is_finish_state:
 		trigger_finish_state()
 
-	# 💥 HURT FX ALWAYS WORKS EXCEPT DEAD
+	# ---------------- HURT STATE ----------------
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
@@ -593,13 +612,18 @@ func take_damage(amount: int):
 
 	await sprite.animation_finished
 
+	# ---------------- CLEAR HURT STATE ----------------
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
 
+	# ---------------- DAMAGE COOLDOWN ----------------
 	can_take_damage = false
 	await get_tree().create_timer(0.4).timeout
 	can_take_damage = true
+
+	# 🔓 RELEASE HIT LOCK LAST (VERY IMPORTANT)
+	hit_lock = false
 
 func trigger_finish_state():
 	if is_finish_state:
@@ -721,8 +745,25 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area):
+	if hit_lock:
+		return
+
 	if area.get_parent() == self:
 		return
-	take_damage(1)
-	if health > 1 and area.is_in_group("SubzeroBullet"):
-		apply_stun(3.0) 
+
+	if state == State.DEAD:
+		return
+
+	# 🔒 lock immediately BEFORE damage
+	hit_lock = true
+
+	# optional bullet validation
+	if area.is_in_group("SubzeroBullet"):
+		take_damage(1)
+		apply_stun(3.0)
+	else:
+		take_damage(1)
+
+	# unlock after short delay (prevents multi-hit spam)
+	await get_tree().create_timer(0.2).timeout
+	hit_lock = false
