@@ -99,17 +99,23 @@ var combo_timer := 0.0
 
 # ---------------- READY ----------------
 func _ready():
-	await get_tree().create_timer(1.0).timeout
-	spawn_protection = false
+
+	spawn_protection = true
+
 	add_to_group("Fighter")
 	add_to_group("LiuKang")
-	spawn_protection = true
+
 	health = max_health
 	health_changed.emit(health)
 
 	play_anim("idle")
+
 	if not hit_box.area_entered.is_connected(_on_liu_kang_hurt_box_area_entered):
 		hit_box.area_entered.connect(_on_liu_kang_hurt_box_area_entered)
+
+	await get_tree().create_timer(1.0).timeout
+
+	spawn_protection = false
 
 func _unhandled_input(event):
 
@@ -276,12 +282,22 @@ func _physics_process(delta):
 	# ---------------- SPECIAL MOVES ----------------
 	if special_move:
 
-		if flyingkick_active:
-			global_position.y = lerp(global_position.y, flyingkick_y, 0.2)
-			special_move_timer -= delta
-			velocity.x = facing * 1300
-			velocity.y += GRAVITY * delta * 0.4
-			move_and_slide()
+		for i in range(get_slide_collision_count()):
+			var col = get_slide_collision(i)
+			var body = col.get_collider()
+
+			if body and body != self and body.has_method("take_damage"):
+
+				body.take_damage(1)
+
+				special_move = false
+				flyingkick_active = false
+				bicyclekick_active = false
+				special_move_invincible = false
+				special_move_timer = 0.0
+
+				velocity = Vector2.ZERO
+				return
 
 # ---------------- BLOCK ----------------
 func start_block():
@@ -409,7 +425,7 @@ func do_action(anim_name: String):
 	if action_locked:
 		return
 
-	action_locked = false
+	action_locked = true
 	is_attacking = true
 
 	play_anim(anim_name)
@@ -523,6 +539,9 @@ func take_damage(amount: int):
 	is_hurting = false
 	action_locked = false
 
+	if state != State.DEAD:
+		play_anim("idle")
+
 	# ---------------- FINISH STATE ----------------
 	is_finish_state = (health == 1)
 
@@ -621,6 +640,10 @@ func check_combos():
 
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D):
+	if area.get_parent() == self:
+		return
+	if state == State.DEAD:
+		return
 	take_damage(1)
 	if health > 1 and area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
