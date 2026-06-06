@@ -19,9 +19,6 @@ LiuKang (CharacterBody2D)
 ├── HitFlashTimer (Timer)
 └── LiuKangAttack (Area2D)
 
-extends CharacterBody2D
-class_name LiuKang
-
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -170,6 +167,29 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+	for i in range(get_slide_collision_count()):
+		var col = get_slide_collision(i)
+		var body = col.get_collider()
+
+		if body and body.has_method("take_damage"):
+			body.take_damage(1)
+
+			special_move = false
+			flyingkick_active = false
+			bicyclekick_active = false
+			special_move_invincible = false
+			special_move_timer = 0.0
+
+			velocity = Vector2.ZERO
+			return
+
+	if special_move_timer <= 0:
+		special_move = false
+		flyingkick_active = false
+		bicyclekick_active = false
+		special_move_invincible = false
+		velocity.x = 0
+
 	# ---------------- NORMAL GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
@@ -264,31 +284,6 @@ func _physics_process(delta):
 			velocity.y += GRAVITY * delta * 0.4
 			move_and_slide()
 
-	for i in range(get_slide_collision_count()):
-		var col = get_slide_collision(i)
-		var body = col.get_collider()
-
-		if body and body.has_method("take_damage"):
-			body.take_damage(1)
-
-			special_move = false
-			flyingkick_active = false
-			bicyclekick_active = false
-			special_move_invincible = false
-			special_move_timer = 0.0
-
-			velocity = Vector2.ZERO
-			return
-
-	if special_move_timer <= 0:
-		special_move = false
-		flyingkick_active = false
-		bicyclekick_active = false
-		special_move_invincible = false
-		velocity.x = 0
-
-	return
-
 # ---------------- BLOCK ----------------
 func start_block():
 
@@ -308,16 +303,9 @@ func stop_block():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-
-	if target == null:
+	if is_hurting:
 		return
-	#STOP ALL ACTIONS AT 1HP
-	if health <= 1:
-		is_attacking = false
-		action_locked = true
-		velocity.x = 0
-		move_and_slide()
-
+	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
 		return
 
@@ -327,52 +315,82 @@ func cpu_logic(delta):
 	var dir = sign(dist)
 	var abs_dist = abs(dist)
 
-	facing = dir
+# FACE TARGET
+	if dir != 0:
+		facing = dir
 
-	sprite.flip_h = -facing > 0
+	if not is_hurting:
+		sprite.flip_h = facing < 0
 
+# GRAVITY
 	velocity.y += GRAVITY * delta
 
+	if target == null:
+		return
+
+# STOP ALL ACTIONS AT 1HP
+	if health <= 1:
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
+		move_and_slide()
+		return
+
+# ---------------- MOVEMENT ----------------
 	if abs_dist > 220:
 
 		velocity.x = dir * SPEED * 0.8
 
-		if state != State.RUN:
-			state = State.RUN
+	if state != State.RUN:
+		state = State.RUN
 
-		if not is_attacking:
-			play_anim("walk")
+	if not is_attacking:
+		play_anim("walk")
 
 	else:
 
 		velocity.x = 0
+		velocity.y = 0
 
-		if state != State.IDLE:
-			state = State.IDLE
+	# STOP if dead or stunned
+	if health <= 1:
+		return
 
+# MOVEMENT
+	if abs_dist > 220:
+		velocity.x = dir * SPEED * 0.8
+	if is_on_floor():
+		state = State.RUN
+		if not is_attacking:
+			play_anim("walk")
+	else:
+		velocity.x = 0
+	if is_on_floor():
+		state = State.IDLE
 		if not is_attacking:
 			play_anim("idle")
 
-		if ai_timer <= 0:
+	# ---------------- AI ACTIONS ----------------
+	if ai_timer <= 0:
 
-			ai_timer = randf_range(0.4, 0.8)
+		ai_timer = randf_range(0.4, 0.8)
 
-			match randi() % 5:
+		match randi() % 5:
 
-				0:
-					do_action("punch")
+			0:
+				do_action("punch")
 
-				1:
-					do_action("kick")
+			1:
+				do_action("kick")
 
-				2:
-					do_action("uppercut")
+			2:
+				do_action("uppercut")
 
-				3:
-					do_action("roundhousekick")
+			3:
+				do_action("roundhousekick")
 
-				4:
-					shoot_fireball()
+			4:
+				shoot_fireball()
 
 	# ---------------- AIR/LAND STATE ----------------
 	if state == State.JUMP and not special_move:
