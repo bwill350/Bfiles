@@ -318,16 +318,15 @@ func stop_block():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-	if is_hurting:
-		velocity.x = 0
-		move_and_slide()
-		return
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
 		move_and_slide()
-		return
+		do_action("punch")
+		do_action("uppercut")
+		do_action("roundhousekick")
+
 
 	# ---------------- HARD LOCK ----------------
 	if action_locked:
