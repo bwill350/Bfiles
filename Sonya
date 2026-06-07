@@ -500,6 +500,14 @@ func take_damage(amount: int):
 	await get_tree().create_timer(0.4).timeout
 	can_take_damage = true
 
+# ⚠️ FINISH HIM AT 1 HP
+	if health == 1:
+		if not is_finish_state:
+			trigger_finish_state()
+		finish_label.visible = true
+	else:
+		finish_label.visible = false
+
 func trigger_finish_state():
 	if is_finish_state:
 		return
