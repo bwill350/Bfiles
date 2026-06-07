@@ -19,9 +19,6 @@ LiuKang (CharacterBody2D)
 ├── HitFlashTimer (Timer)
 └── LiuKangAttack (Area2D)
 
-extends CharacterBody2D
-class_name LiuKang
-
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
 signal combo_used(combo_name: String)
