@@ -23,6 +23,8 @@ Subzero (CharacterBody2D)
 │       └── Sprite2D
 └── SubzeroAttack.tscn
 
+extends CharacterBody2D
+class_name Subzero
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -80,7 +82,7 @@ const GRAVITY = 5000
 # ---------------- EXPORTS ----------------
 @export var SPEED = 300.0
 @export var SCLIMB_SPEED = 250.0
-@export var max_health: int = 50
+@export var max_health: int = 10
 @export var sjump_velocity = -2200.0
 @export var damage := 1
 @export var shoot_cooldown_time: float = 0.25
@@ -311,10 +313,12 @@ func cpu_logic(delta):
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
-		move_and_slide()
 		do_action("punch")
 		do_action("uppercut")
 		do_action("roundhousekick")
+		move_and_slide()
+
+
 	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
 		return
