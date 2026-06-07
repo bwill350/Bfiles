@@ -365,6 +365,14 @@ func _physics_process(delta):
 			move_and_slide()
 
 func cpu_logic(delta):
+	# ---------------- HURT PRIORITY ----------------
+	if is_hurting:
+		velocity.x = 0
+		velocity.y += GRAVITY * delta
+		move_and_slide()
+		do_action("punch")
+		do_action("uppercut")
+		do_action("roundhousekick")
 	if spawn_locked:
 		return
 	if target == null:
