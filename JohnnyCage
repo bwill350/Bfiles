@@ -46,7 +46,7 @@ var shoot_cooldown: float = 0.0
 @export var shoot_cooldown_time: float = 0.25
 @export var SPEED = 300.0
 @export var CLIMB_SPEED = 250.0
-@export var max_health: int = 50
+@export var max_health: int = 10
 @export var jump_velocity = -2200.0
 @export var combo_reset_time := 0.6
 
@@ -341,10 +341,10 @@ func cpu_logic(delta):
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
-		move_and_slide()
 		do_action("punch")
 		do_action("uppercut")
 		do_action("roundhousekick")
+		move_and_slide()
 
 	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
@@ -524,13 +524,10 @@ func take_damage(amount: int):
 	if spawn_protection:
 		return
 
-	# BLOCK REDUCTION
 	if is_blocking:
 		amount = max(amount - 1, 0)
-
-	if amount <= 0:
-		return
-
+		if amount == 0:
+			return  # only fully cancel if blocked completely
 	health -= amount
 	health = max(health, 0)
 
@@ -672,15 +669,25 @@ func check_combos():
 # ---------------- DEATH ----------------
 func die():
 
-	state = State.DEAD
+	if state == State.DEAD:
 
-	velocity = Vector2.ZERO
+		state = State.DEAD
 
 	var death = BLOOD_DEATH.instantiate()
-
 	get_tree().current_scene.add_child(death)
-
 	death.global_position = global_position
+
+	state = State.DEAD
+	velocity = Vector2.ZERO
+
+	is_attacking = false
+	is_shooting = false
+	action_locked = true
+	hurt_locked = true
+
+
+	# 🔥 IMPORTANT: wait 0.1–0.2 sec so FX actually spawns
+	await get_tree().create_timer(0.15).timeout
 
 	queue_free()
 
