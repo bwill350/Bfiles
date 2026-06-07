@@ -1,7 +1,7 @@
 extends CharacterBody2D
 class_name Sonya
 
-var spawn_protection := false
+
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
@@ -10,7 +10,9 @@ enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
-
+var spawn_locked := true
+var spawn_protection := false
+var special_move_invincible := false
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -40,7 +42,7 @@ var shoot_cooldown: float = 0.0
 @export var shoot_cooldown_time: float = 0.25
 @export var SPEED = 300.0
 @export var CLIMB_SPEED = 250.0
-@export var max_health: int = 50
+@export var max_health: int = 10
 @export var jump_velocity = -2200.0
 @export var combo_reset_time := 0.6
 
@@ -81,16 +83,25 @@ const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
 func apply_stun(duration: float):
+	if state == State.DEAD:
+		return
+
+	# already stunned → refresh timer only
 	if stunned:
-		play_anim("freeze")
 		return
 
 	stunned = true
+	action_locked = true
+	is_attacking = false
+	is_shooting = false
 	velocity = Vector2.ZERO
+
+	play_anim("freeze")
 
 	await get_tree().create_timer(duration).timeout
 
 	stunned = false
+	action_locked = false
 
 # ---------------- READY ----------------
 func _ready():
@@ -290,10 +301,12 @@ func cpu_logic(delta):
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
-		move_and_slide()
 		do_action("punch")
 		do_action("uppercut")
 		do_action("roundhousekick")
+		move_and_slide()
+
+
 	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
 		return
@@ -623,6 +636,19 @@ func play_anim(anim_name: String):
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area):
 	take_damage(1)
+	if spawn_locked:
+		return
+	if area.get_parent() == self:
+		return
 
-	if health > 1 and area.is_in_group("SubzeroBullet"):
+	if state == State.DEAD:
+		return
+
+	if spawn_protection or special_move_invincible:
+		return
+
+	if not can_take_damage or is_hurting:
+		return
+
+	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
