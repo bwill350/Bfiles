@@ -56,7 +56,7 @@ var shoot_cooldown: float = 0.0
 @export var shoot_cooldown_time: float = 0.01
 @export var SPEED = 300.0
 @export var CLIMB_SPEED = 250.0
-@export var max_health: int = 50
+@export var max_health: int = 10
 @export var jump_velocity = -2200.0
 @export var combo_reset_time := 0.1
 
@@ -97,17 +97,17 @@ const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
 func apply_stun(duration: float):
-	spawn_protection = true
 	if stunned:
-		play_anim("freeze")
 		return
 
 	stunned = true
+	action_locked = true
 	velocity = Vector2.ZERO
 
 	await get_tree().create_timer(duration).timeout
 
 	stunned = false
+	action_locked = false
 
 func _on_health_changed(h):
 
@@ -333,10 +333,11 @@ func cpu_logic(delta):
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
-		move_and_slide()
 		do_action("punch")
 		do_action("uppercut")
 		do_action("roundhousekick")
+		move_and_slide()
+
 	velocity.y += GRAVITY * delta
 	sprite.flip_h = facing < 0
 	if target == null:
@@ -489,6 +490,10 @@ func take_damage(amount: int):
 	if health <= 1:
 		action_locked = true
 		velocity.x = 0
+		state = State.IDLE
+	if health > 1:
+		action_locked = false
+
 	if spawn_protection:
 		return
 	if state == State.DEAD:
@@ -568,7 +573,7 @@ func check_combos():
 		special_bullet = ACID_BULLET
 
 		combo.clear()
-		return
+
 
 	# ---------------- FIRE ----------------
 	elif combo == FIRE_COMBO:
@@ -580,7 +585,7 @@ func check_combos():
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
-		return
+
 
 	# ---------------- ICE ----------------
 	elif combo == ICE_COMBO:
@@ -592,7 +597,7 @@ func check_combos():
 		special_bullet = ICE_BULLET
 
 		combo.clear()
-		return
+
 
 	# ---------------- ELECTRIC ----------------
 	elif combo == ELECTRIC_COMBO:
@@ -604,7 +609,7 @@ func check_combos():
 		special_bullet = ELECTRIC_BULLET
 
 		combo.clear()
-		return
+
 
 # ---------------- DEATH ----------------
 func die():
