@@ -19,6 +19,9 @@ LiuKang (CharacterBody2D)
 ├── HitFlashTimer (Timer)
 └── LiuKangAttack (Area2D)
 
+extends CharacterBody2D
+class_name LiuKang
+
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -62,7 +65,7 @@ const GRAVITY = 5000
 # ---------------- EXPORTS ----------------
 @export var SPEED := 300.0
 @export var CLIMB_SPEED := 250.0
-@export var max_health := 50
+@export var max_health := 10
 @export var jump_velocity := -2200.0
 @export var combo_reset_time := 0.6
 
@@ -97,10 +100,15 @@ const ELECTRIC_COMBO = ["up", "down", "shoot"]
 var combo := []
 var combo_timer := 0.0
 
+
+
 # ---------------- READY ----------------
 func _ready():
 
 	spawn_protection = true
+
+	if finish_label:
+		finish_label.visible = false
 
 	add_to_group("Fighter")
 	add_to_group("LiuKang")
@@ -150,22 +158,24 @@ func apply_stun(duration: float):
 func start_flyingkick():
 	flyingkick_active = true
 	special_move_invincible = true
-	flyingkick_y = global_position.y - 120  # how high above current position
 	special_move = true
-	special_move_timer = 0.25
+	special_move_timer = 0.6  # NOT 6.25 (that’s way too long)
 
+	# 🔥 stronger upward boost
 	velocity.x = facing * 1300
+	velocity.y = -900
+
 
 func start_bicyclekick():
 	bicyclekick_active = true
 	special_move_invincible = true
-	flyingkick_y = global_position.y - 120
-
 	special_move = true
-	special_move_timer = 0.4
+	special_move_timer = 0.55
 
 	velocity.x = facing * 1300
+	velocity.y = -600
 
+ 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 	# ---------------- STUN ----------------
@@ -180,6 +190,9 @@ func _physics_process(delta):
 
 		if body and body.has_method("take_damage"):
 			body.take_damage(1)
+
+	# only stop move if you actually want hit-stop
+			special_move_timer = 0
 
 			special_move = false
 			flyingkick_active = false
@@ -322,10 +335,10 @@ func cpu_logic(delta):
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
-		move_and_slide()
 		do_action("punch")
 		do_action("uppercut")
 		do_action("roundhousekick")
+		move_and_slide()
 
 
 	# ---------------- HARD LOCK ----------------
@@ -463,10 +476,10 @@ func air_launch(x_speed: float, y_speed: float):
 	action_locked = true
 
 	special_move = true
-	special_move_timer = 0.25
+	special_move_timer = 66.25
 
 	velocity.x = facing * x_speed
-	velocity.y = 0
+	
 
 # ---------------- FIREBALL ----------------
 func shoot_fireball():
@@ -518,6 +531,21 @@ func take_damage(amount: int):
 	health = max(health, 0)
 
 	health_changed.emit(health)
+
+# ---------------- DELAYED FINISH CHECK ----------------
+	if health == 1 and not is_finish_state:
+		is_finish_state = true
+
+	# small delay so it doesn't pop instantly during hit frames
+	await get_tree().create_timer(0.2).timeout
+
+	# double-check still alive and still at 1 HP
+	if health == 1 and state != State.DEAD:
+		finish_label.visible = true
+
+		if finish_label.has_method("start_flicker"):
+			finish_label.start_flicker(2.0, 0.05)
+
 	hit_sound.play()
 
 	# stop actions immediately
@@ -542,8 +570,6 @@ func take_damage(amount: int):
 		play_anim("idle")
 
 	# ---------------- FINISH STATE ----------------
-	is_finish_state = (health == 1)
-
 	await get_tree().create_timer(0.15).timeout
 	can_take_damage = true
 
