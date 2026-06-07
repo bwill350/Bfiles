@@ -64,7 +64,7 @@ const GRAVITY = 5000
 @export var SPEED = 300.0
 @export var JCLIMB_SPEED = 250.0
 @export var jjump_velocity = -1800.0
-@export var max_health: int = 50
+@export var max_health: int = 10
 @export var shoot_cooldown_time := 0.01
 @export var combo_reset_time := 0.6
 # ---------------- PROJECTILES ----------------
@@ -130,15 +130,26 @@ func _on_health_changed(h):
 		state = State.IDLE
 		velocity = Vector2.ZERO
 
-		$HUD/FinishLabel/Sprite2D.visible = true
+		# ---------------- DELAYED CONFIRMATION ----------------
+		await get_tree().create_timer(0.2).timeout
 
-		await get_tree().create_timer(2.0).timeout
+		# double-check health didn’t change again
+		if health == 1 and state != State.DEAD:
 
-		if is_instance_valid(finish_label):
-			finish_label.visible = false
+			if finish_label:
+				finish_label.visible = true
+
+				if finish_label.has_method("start_flicker"):
+					finish_label.start_flicker(2.0, 0.05)
+
+			await get_tree().create_timer(2.0).timeout
+
+			if is_instance_valid(finish_label):
+				finish_label.visible = false
 
 # ---------------- READY ----------------
 func _ready():
+	health_changed.connect(_on_health_changed)
 	# ---------------- HARD SPAWN LOCK ----------------
 	spawn_locked = true
 	action_locked = true
@@ -369,10 +380,11 @@ func cpu_logic(delta):
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
-		move_and_slide()
 		do_action("punch")
 		do_action("uppercut")
 		do_action("roundhousekick")
+		move_and_slide()
+
 	if spawn_locked:
 		return
 	if target == null:
