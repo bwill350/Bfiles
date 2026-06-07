@@ -379,6 +379,15 @@ func shoot_acid():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
+	# ---------------- HURT PRIORITY ----------------
+	if is_hurting:
+		velocity.x = 0
+		velocity.y += GRAVITY * delta
+		move_and_slide()
+		do_action("punch")
+		do_action("uppercut")
+		do_action("roundhousekick")
+
 
 	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
@@ -587,6 +596,7 @@ func take_damage(amount: int):
 
 	health_changed.emit(health)
 	hit_sound.play()
+	return
 
 	# 💀 DEATH FIRST
 	if health <= 0:
