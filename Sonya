@@ -40,7 +40,7 @@ var shoot_cooldown: float = 0.0
 @export var shoot_cooldown_time: float = 0.25
 @export var SPEED = 300.0
 @export var CLIMB_SPEED = 250.0
-@export var max_health: int = 10
+@export var max_health: int = 50
 @export var jump_velocity = -2200.0
 @export var combo_reset_time := 0.6
 
@@ -286,17 +286,16 @@ func shoot_acid():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-
-	if target == null:
-		return
-	#STOP ALL ACTIONS AT 1HP
-	if health <= 1:
-		is_attacking = false
-		action_locked = true
+	# ---------------- HURT PRIORITY ----------------
+	if is_hurting:
 		velocity.x = 0
+		velocity.y += GRAVITY * delta
 		move_and_slide()
-
-	if action_locked and not is_hurting:
+		do_action("punch")
+		do_action("uppercut")
+		do_action("roundhousekick")
+	# HARD LOCK (Liu Kang style behavior)
+	if action_locked:
 		return
 
 	ai_timer -= delta
@@ -305,52 +304,69 @@ func cpu_logic(delta):
 	var dir = sign(dist)
 	var abs_dist = abs(dist)
 
-	facing = dir
+# FACE TARGET
+	if dir != 0:
+		facing = dir
 
 	sprite.flip_h = facing < 0
 
+# GRAVITY
 	velocity.y += GRAVITY * delta
 
+	if target == null:
+		return
+
+# STOP ALL ACTIONS AT 1HP
+	if health <= 1:
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
+		move_and_slide()
+		return
+
+# ---------------- MOVEMENT ----------------
 	if abs_dist > 220:
 
 		velocity.x = dir * SPEED * 0.8
 
-		if state != State.RUN:
-			state = State.RUN
+	if state != State.RUN:
+		state = State.RUN
 
-		if not is_attacking:
-			play_anim("walk")
+	if not is_attacking:
+		play_anim("walk")
 
 	else:
 
 		velocity.x = 0
+		velocity.y = 0
 
-		if state != State.IDLE:
-			state = State.IDLE
+	if state != State.IDLE:
+		state = State.IDLE
 
-		if not is_attacking:
-			play_anim("idle")
+	if not is_attacking:
+		play_anim("idle")
 
-		if ai_timer <= 0:
+	# ---------------- AI ACTIONS ----------------
+	if ai_timer <= 0:
 
-			ai_timer = randf_range(0.4, 0.8)
+		ai_timer = randf_range(0.4, 0.8)
 
-			match randi() % 5:
+		match randi() % 5:
 
-				0:
-					do_action("punch")
+			0:
+				do_action("punch")
 
-				1:
-					do_action("kick")
+			1:
+				do_action("kick")
 
-				2:
-					do_action("uppercut")
+			2:
+				do_action("uppercut")
 
-				3:
-					do_action("roundhousekick")
+			3:
+				do_action("roundhousekick")
 
-				4:
-					shoot_player()
+			4:
+				shoot_player()
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -481,8 +497,6 @@ func take_damage(amount: int):
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
-
-	can_take_damage = false
 	await get_tree().create_timer(0.4).timeout
 	can_take_damage = true
 
@@ -600,11 +614,6 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area):
-	if state == State.DEAD:
-		return
-	if spawn_protection:
-		return
-
 	take_damage(1)
 
 	if health > 1 and area.is_in_group("SubzeroBullet"):
