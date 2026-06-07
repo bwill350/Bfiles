@@ -45,7 +45,7 @@ var shoot_cooldown: float = 0.0
 @export var shoot_cooldown_time: float = 0.25
 @export var SPEED = 300.0
 @export var CLIMB_SPEED = 250.0
-@export var max_health: int = 50
+@export var max_health: int = 10
 @export var jump_velocity = -2200.0
 @export var combo_reset_time := 0.6
 
@@ -755,25 +755,39 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area):
-	if hit_lock:
-		return
 
-	if area.get_parent() == self:
+	if hit_lock:
 		return
 
 	if state == State.DEAD:
 		return
 
-	# 🔒 lock immediately BEFORE damage
+	if area.get_parent() == self:
+		return
+
 	hit_lock = true
 
-	# optional bullet validation
 	if area.is_in_group("SubzeroBullet"):
 		take_damage(1)
 		apply_stun(3.0)
-	else:
+
+	if area.is_in_group("ReptileBullet"):
 		take_damage(1)
 
-	# unlock after short delay (prevents multi-hit spam)
+	if area.is_in_group("SonyaBullet"):
+		take_damage(1)
+
+	if area.is_in_group("Fireball"):
+		take_damage(1)
+
+	if area.is_in_group("ElectricBullet"):
+		take_damage(1)
+
+	if area.is_in_group("ElectricBurst"):
+		take_damage(1)
+
+	if area.is_in_group("JohnnyCageBullet"):
+		take_damage(1)
+
 	await get_tree().create_timer(0.2).timeout
 	hit_lock = false
