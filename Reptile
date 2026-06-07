@@ -97,6 +97,7 @@ const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
 func apply_stun(duration: float):
+	spawn_protection = true
 	if stunned:
 		play_anim("freeze")
 		return
@@ -328,6 +329,14 @@ func shoot_acid():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
+		# ---------------- HURT PRIORITY ----------------
+	if is_hurting:
+		velocity.x = 0
+		velocity.y += GRAVITY * delta
+		move_and_slide()
+		do_action("punch")
+		do_action("uppercut")
+		do_action("roundhousekick")
 	velocity.y += GRAVITY * delta
 	sprite.flip_h = facing < 0
 	if target == null:
