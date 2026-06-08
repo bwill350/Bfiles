@@ -111,7 +111,7 @@ func apply_stun(duration: float):
 
 func _on_health_changed(h):
 
-	if h <= 1 and not is_finish_state:
+	if h == 1 and not is_finish_state:
 
 		is_finish_state = true
 
@@ -119,15 +119,18 @@ func _on_health_changed(h):
 		is_shooting = false
 		is_hurting = false
 
-		action_locked = true
-		hurt_locked = true
+		action_locked = false
+		hurt_locked = false
 
 		state = State.IDLE
 		velocity = Vector2.ZERO
 
 		finish_label.visible = true
 
-		await get_tree().create_timer(1.0).timeout
+		if finish_label.has_method("start_flicker"):
+			finish_label.start_flicker(2.0, 0.05)
+
+		await get_tree().create_timer(2.0).timeout
 
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
@@ -487,22 +490,29 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-	if health <= 1:
-		action_locked = true
-		velocity.x = 0
-		state = State.IDLE
-	if health > 1:
-		action_locked = false
 
-	if spawn_protection:
-		return
+	# already dead
 	if state == State.DEAD:
 		return
 
+	# finish him state
+	if health <= 1:
+		return
+
+	if is_finish_state:
+		return
+
+	if spawn_protection:
+		return
+
+	if not can_take_damage:
+		return
+
+	# block reduction
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
-	if not can_take_damage:
+	if amount <= 0:
 		return
 
 	can_take_damage = false
@@ -518,14 +528,10 @@ func take_damage(amount: int):
 
 	hit_sound.play()
 
-	state = State.IDLE
-
 	play_anim("hurt")
 
 	var blood = BLOOD_EFFECT.instantiate()
-
 	get_tree().current_scene.add_child(blood)
-
 	blood.global_position = blood_marker.global_position
 
 	await sprite.animation_finished
@@ -537,9 +543,14 @@ func take_damage(amount: int):
 
 	play_anim("idle")
 
+	# FINISH HIM
+	if health == 1:
+		is_finish_state = true
+		return
+
+	# BLOOD DEATH
 	if health <= 0:
 		die()
-
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 
@@ -614,15 +625,26 @@ func check_combos():
 # ---------------- DEATH ----------------
 func die():
 
+	if state == State.DEAD:
+		return
+
 	state = State.DEAD
 
 	velocity = Vector2.ZERO
+
+	is_attacking = false
+	is_shooting = false
+	action_locked = true
+	hurt_locked = true
 
 	var death = BLOOD_DEATH.instantiate()
 
 	get_tree().current_scene.add_child(death)
 
 	death.global_position = global_position
+
+	if death.has_method("set"):
+		death.set("facing", facing)
 
 	queue_free()
 
