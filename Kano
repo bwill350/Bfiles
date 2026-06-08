@@ -776,9 +776,6 @@ func play_anim(anim_name: String):
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area):
 
-	if state == State.DEAD:
-		return
-
 	if area.get_parent() == self:
 		return
 
