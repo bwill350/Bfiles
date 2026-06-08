@@ -504,6 +504,10 @@ func shoot_fireball():
 	await get_tree().create_timer(0.25).timeout
 
 	is_shooting = false
+
+	if is_hurting or state == State.DEAD:
+		return
+
 	is_attacking = false
 	action_locked = false
 
