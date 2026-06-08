@@ -4,7 +4,7 @@ class_name Kano
 Kano (CharacterBody2D)
 ├── Sprite (AnimatedSprite2D)
 ├── CollisionShape2D
-├── SubzeroHurtBox (Area2D)
+├── KanoHurtBox (Area2D)
 │   └── CollisionShape2D
 ├── Hit (AudioStreamPlayer2D)
 ├── KanoShoot (Marker2D)
