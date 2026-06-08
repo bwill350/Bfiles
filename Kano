@@ -1,6 +1,28 @@
 extends CharacterBody2D
 class_name Kano
 
+Kano (CharacterBody2D)
+├── Sprite (AnimatedSprite2D)
+├── CollisionShape2D
+├── SubzeroHurtBox (Area2D)
+│   └── CollisionShape2D
+├── Hit (AudioStreamPlayer2D)
+├── KanoShoot (Marker2D)
+├── AttackMarker (Marker2D)
+├── FIRE (Marker2D)
+├── BloodMarker (Marker2D)
+├── SmokeMarker (Marker2D)
+├── ShootTimer (Timer)
+├── PhaseTimer (Timer)
+├── HitFlashTimer (Timer)
+├── Agent (NavigationAgent2D)
+├── Camera2D (optional)
+├── AnimationPlayer (optional)
+├── HUD (CanvasLayer)
+│   └── FinishLabel
+│       └── Sprite2D
+└── KanoAttack.tscn
+
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
