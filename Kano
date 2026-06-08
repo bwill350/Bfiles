@@ -600,7 +600,7 @@ func take_damage(amount: int):
 
 	# finish him state
 	if health <= 1:
-		return
+		die()
 
 	if is_finish_state:
 		return
@@ -750,27 +750,16 @@ func check_combos():
 
 # ---------------- DEATH ----------------
 func die():
-
-	if state == State.DEAD:
-		return
-
 	state = State.DEAD
-
 	velocity = Vector2.ZERO
 
-	is_attacking = false
-	is_shooting = false
-	action_locked = true
-	hurt_locked = true
-
 	var death = BLOOD_DEATH.instantiate()
-
 	get_tree().current_scene.add_child(death)
-
 	death.global_position = global_position
 
-	if death.has_method("set"):
-		death.set("facing", facing)
+	await get_tree().create_timer(1.0).timeout
+
+	get_tree().change_scene_to_file("res://Scenes/CharacterSelect.tscn")
 
 	queue_free()
 
