@@ -397,14 +397,15 @@ func cpu_logic(delta):
 	sprite.flip_h = facing < 0
 
 
-#STOP ALL ACTIONS AT 1HP
+# STOP ALL ACTIONS AT 1HP
 	if health <= 1:
 		is_attacking = false
-	action_locked = true
-	velocity.x = 0
-	move_and_slide()
-	if action_locked:
-		return
+		action_locked = true
+		velocity.x = 0
+		move_and_slide()
+		die()
+
+
 
 	# ---------------- MOVE ----------------
 	if abs(dist) > 140:
