@@ -175,6 +175,12 @@ func start_bicyclekick():
  
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	if is_cpu and is_attacking and target != null:
+		if target == null:
+			return
+			velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
+			move_and_slide()
+
 	# ---------------- STUN ----------------
 	if stunned:
 		velocity = Vector2.ZERO
@@ -338,63 +344,79 @@ func cpu_logic(delta):
 		move_and_slide()
 
 
-	# ---------------- HARD LOCK ----------------
+	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
-		return
-
-	if target == null:
 		return
 
 	ai_timer -= delta
 
 	var dist = target.global_position.x - global_position.x
 	var dir = sign(dist)
-	var abs_dist = abs(dist)
+	velocity.y += GRAVITY * delta
+	facing = dir
+	sprite.flip_h = facing > 0
 
-	# ---------------- FACE TARGET ----------------
+# FACE TARGET
 	if dir != 0:
 		facing = dir
 
-	sprite.flip_h = facing < 0
+	sprite.flip_h = facing > 0
 
-	# ---------------- GRAVITY ----------------
+# GRAVITY
 	velocity.y += GRAVITY * delta
 
-	# ---------------- LOW HP STOP ----------------
+	if target == null:
+		return
+
+# STOP ALL ACTIONS AT 1HP
 	if health <= 1:
 		is_attacking = false
 		action_locked = true
-		velocity = Vector2.ZERO
+		velocity.x = 0
 		move_and_slide()
 		return
 
-	# ---------------- MOVEMENT ----------------
-	if abs_dist > 220:
+# ---------------- MOVEMENT ----------------
+	if abs(dist) > 220:
+
 		velocity.x = dir * SPEED * 0.8
 
-		if is_on_floor():
-			if not is_attacking and not is_hurting and not hurt_recovery:
-				play_anim("walk")
-	else:
-		velocity.x = 0
+	if state != State.RUN:
+		state = State.RUN
 
-		if is_on_floor():
-			if not is_attacking and not is_hurting and not hurt_recovery:
-				play_anim("idle")
+	if not is_attacking:
+		play_anim("walk")
+
+	else:
+
+		velocity.x = 0
+		velocity.y = 0
+
+	if state != State.IDLE:
+		state = State.IDLE
+
+	if not is_attacking:
+		play_anim("idle")
 
 	# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
+
 		ai_timer = randf_range(0.4, 0.8)
 
 		match randi() % 5:
+
 			0:
 				do_action("punch")
+
 			1:
 				do_action("kick")
+
 			2:
 				do_action("uppercut")
+
 			3:
 				do_action("roundhousekick")
+
 			4:
 				shoot_fireball()
 
@@ -413,7 +435,7 @@ func cpu_logic(delta):
 
 	else:
 
-		if abs_dist > 220:
+		if abs(dist) > 220:
 
 			state = State.RUN
 
