@@ -169,6 +169,12 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	if is_cpu and is_attacking and target != null:
+		if target == null:
+			return
+			velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
+			move_and_slide()
+
 	if finish_cooldown > 0:
 		finish_cooldown -= delta
 	else:
@@ -227,7 +233,7 @@ func _physics_process(delta):
 	if input_dir != 0:
 		facing = input_dir
 
-	sprite.flip_h = -facing > 0
+	sprite.flip_h = facing > 0
 
 	# ---------------- MOVEMENT ----------------
 	if not special_move:
@@ -368,7 +374,6 @@ func cpu_logic(delta):
 		do_action("roundhousekick")
 		move_and_slide()
 
-	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
 		return
 
@@ -376,13 +381,15 @@ func cpu_logic(delta):
 
 	var dist = target.global_position.x - global_position.x
 	var dir = sign(dist)
-	var abs_dist = abs(dist)
+	velocity.y += GRAVITY * delta
+	facing = dir
+	sprite.flip_h = facing > 0
 
 # FACE TARGET
 	if dir != 0:
 		facing = dir
 
-	sprite.flip_h = facing < 0
+	sprite.flip_h = facing > 0
 
 # GRAVITY
 	velocity.y += GRAVITY * delta
@@ -399,7 +406,7 @@ func cpu_logic(delta):
 		return
 
 # ---------------- MOVEMENT ----------------
-	if abs_dist > 220:
+	if abs(dist) > 220:
 
 		velocity.x = dir * SPEED * 0.8
 
