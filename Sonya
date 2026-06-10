@@ -1,6 +1,7 @@
 extends CharacterBody2D
 class_name Sonya
 
+
 signal health_changed(health)
 signal combo_used(combo_name: String)
 
@@ -517,8 +518,8 @@ func take_damage(amount: int):
 	await get_tree().create_timer(0.4).timeout
 	can_take_damage = true
 
-# ⚠️ FINISH HIM AT 1 HP
-	if health == 1:
+# ⚠️ FINISH HIM AT 0 HP
+	if health == 0:
 		if not is_finish_state:
 			trigger_finish_state()
 		finish_label.visible = true
@@ -636,6 +637,7 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 
 	sprite.play(anim_name)
+	
 
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area):
