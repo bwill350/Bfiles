@@ -119,32 +119,6 @@ func apply_stun(duration: float):
 
 	stunned = false
 
-func _on_health_changed(h):
-
-	if h == 1 and not is_finish_state:
-
-		is_finish_state = true
-
-		is_attacking = false
-		is_shooting = false
-		is_hurting = false
-
-		action_locked = false
-		hurt_locked = false
-
-		state = State.IDLE
-		velocity = Vector2.ZERO
-
-		finish_label.visible = true
-
-		if finish_label.has_method("start_flicker"):
-			finish_label.start_flicker(2.0, 0.05)
-
-		await get_tree().create_timer(2.0).timeout
-
-		if is_instance_valid(finish_label):
-			finish_label.visible = false
-
 # ---------------- READY ----------------
 func _ready():
 	add_to_group("Fighter")
@@ -431,12 +405,12 @@ func cpu_logic(delta):
 
 
 # STOP ALL ACTIONS AT 1HP
-	if health <= 1:
+	if health == 1:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
 		move_and_slide()
-		die()
+		return
 
 	# ---------------- MOVE ----------------
 	if abs(dist) > 140:
@@ -581,13 +555,6 @@ func take_damage(amount: int):
 	if state == State.DEAD:
 		return
 
-	# finish him state
-	if health <= 1:
-		die()
-
-	if is_finish_state:
-		return
-
 	if spawn_protection:
 		return
 
@@ -609,10 +576,10 @@ func take_damage(amount: int):
 
 	health -= amount
 	health = max(health, 0)
-
 	health_changed.emit(health)
 
-	hit_sound.play()
+	if health == 1 and not is_finish_state:
+		trigger_finish_state()
 
 	play_anim("hurt")
 
@@ -630,31 +597,26 @@ func take_damage(amount: int):
 	play_anim("idle")
 
 	# FINISH HIM
-	if health == 1:
-		is_finish_state = true
-		return
-
-	# BLOOD DEATH
-	if health <= 0:
+	if health == 0:
 		die()
+		is_finish_state = true
 
 func trigger_finish_state():
-	if is_finish_state:
-		return
-
 	is_finish_state = true
-
-	is_attacking = false
-	is_shooting = false
-	is_hurting = false
-
-	action_locked = true
-	hurt_locked = true
 
 	state = State.IDLE
 	velocity = Vector2.ZERO
 
+	action_locked = true
+	hurt_locked = false
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
+
 	finish_label.visible = true
+
+	if finish_label.has_method("start_flicker"):
+		finish_label.start_flicker(2.0, 0.05)
 
 
 
