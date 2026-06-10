@@ -399,12 +399,12 @@ func cpu_logic(delta):
 
 
 # STOP ALL ACTIONS AT 1HP
-	if health <= 1:
+	if health == 1:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
 		move_and_slide()
-		die()
+		return
 
 	# ---------------- MOVE ----------------
 	if abs(dist) > 140:
@@ -575,7 +575,7 @@ func do_action(anim_name: String):
 
 func attack():
 	if health <= 1:
-		return
+		die()
 
 func do_combo():
 	if health <= 1:
@@ -591,25 +591,20 @@ func spawn_attack():
 	attack.global_position = attack_marker.global_position
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-	if spawn_locked:
-		return
-	# HARD BLOCKS FIRST
+	# already dead
 	if state == State.DEAD:
 		return
 
 	if spawn_protection:
 		return
 
-	if special_move_invincible:
-		return
-
-	if is_hurting:
-		return
-
 	if not can_take_damage:
 		return
 
-	# NOW APPLY DAMAGE
+	# block reduction
+	if is_blocking:
+		amount = max(amount - 1, 0)
+
 	can_take_damage = false
 
 	is_hurting = true
@@ -618,10 +613,16 @@ func take_damage(amount: int):
 
 	health -= amount
 	health = max(health, 0)
-
 	health_changed.emit(health)
 
-	hit_sound.play()
+# ---------------- DEATH ONLY AT 0 ----------------
+	if health == 0:
+		die()
+
+
+	if health == 1 and not is_finish_state:
+		trigger_finish_state()
+
 	play_anim("hurt")
 
 	var blood = BLOOD_EFFECT.instantiate()
@@ -637,8 +638,27 @@ func take_damage(amount: int):
 
 	play_anim("idle")
 
-	if health <= 0:
+	# FINISH HIM
+	if health == 0:
 		die()
+		is_finish_state = true
+
+func trigger_finish_state():
+	is_finish_state = true
+
+	state = State.IDLE
+	velocity = Vector2.ZERO
+
+	action_locked = true
+	hurt_locked = false
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
+
+	finish_label.visible = true
+
+	if finish_label.has_method("start_flicker"):
+		finish_label.start_flicker(2.0, 0.05)
 
 # ---------------- DEATH ----------------
 func die():
