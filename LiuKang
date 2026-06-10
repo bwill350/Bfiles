@@ -555,7 +555,7 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 
 # ---------------- DELAYED FINISH CHECK ----------------
-	if health == 1 and not is_finish_state:
+	if health == 1:
 		is_finish_state = true
 
 	# small delay so it doesn't pop instantly during hit frames
@@ -566,10 +566,15 @@ func take_damage(amount: int):
 		finish_label.visible = true
 
 		if finish_label.has_method("start_flicker"):
-			finish_label.start_flicker(2.0, 0.05)
+			finish_label.start_flicker(0.4, 0.05)
+
+	if health == 1:
+		is_finish_state = true
+		finish_label.visible = true
+		await get_tree().create_timer(1.0).timeout
+		finish_label.visible = false
 
 	hit_sound.play()
-
 	# stop actions immediately
 	is_attacking = false
 	is_shooting = false
@@ -578,7 +583,7 @@ func take_damage(amount: int):
 	play_anim("hurt")
 
 	# ---------------- DEATH ----------------
-	if health <= 0:
+	if health == 0:
 		die()
 		return
 
@@ -608,12 +613,10 @@ func spawn_attack():
 func die():
 	state = State.DEAD
 	velocity = Vector2.ZERO
+
 	var death = BLOOD_DEATH.instantiate()
-
 	get_tree().current_scene.add_child(death)
-
 	death.global_position = global_position
-
 	queue_free()
 
 # ---------------- ANIMATION ----------------
@@ -688,8 +691,6 @@ func check_combos():
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D):
 	if area.get_parent() == self:
-		return
-	if state == State.DEAD:
 		return
 	take_damage(1)
 	if health > 1 and area.is_in_group("SubzeroBullet"):
