@@ -62,8 +62,8 @@ const GRAVITY = 5000
 
 # ---------------- EXPORTS ----------------
 @export var SPEED = 300.0
-@export var JCLIMB_SPEED = 250.0
-@export var jjump_velocity = -1800.0
+@export var CLIMB_SPEED = 250.0
+@export var jump_velocity = -1800.0
 @export var max_health: int = 10
 @export var shoot_cooldown_time := 0.01
 @export var combo_reset_time := 0.6
@@ -293,14 +293,14 @@ func _physics_process(delta):
 	if input_dir != 0:
 		facing = input_dir
 
-	sprite.flip_h = facing < 0
+	sprite.flip_h = -facing < 0
 
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jjump_velocity
+		velocity.y = jump_velocity
 		state = State.JUMP
 
 	# ---------------- STATES (ONLY WHEN FREE) ----------------
@@ -394,7 +394,7 @@ func cpu_logic(delta):
 	var dir = sign(dist)
 	velocity.y += GRAVITY * delta
 	facing = dir
-	sprite.flip_h = facing < 0
+	sprite.flip_h = facing > 0
 
 
 # STOP ALL ACTIONS AT 1HP
@@ -404,8 +404,6 @@ func cpu_logic(delta):
 		velocity.x = 0
 		move_and_slide()
 		die()
-
-
 
 	# ---------------- MOVE ----------------
 	if abs(dist) > 140:
