@@ -177,7 +177,7 @@ func _physics_process(delta):
 	if input_dir != 0:
 		facing = input_dir
 
-	sprite.flip_h = -facing > 0
+	sprite.flip_h = facing > 0
 
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
@@ -317,7 +317,6 @@ func cpu_logic(delta):
 	var dir = sign(dist)
 	velocity.y += GRAVITY * delta
 	facing = dir
-	sprite.flip_h = facing > 0
 
 # FACE TARGET
 	if dir != 0:
