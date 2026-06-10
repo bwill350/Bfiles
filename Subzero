@@ -325,7 +325,9 @@ func cpu_logic(delta):
 
 	var dist = target.global_position.x - global_position.x
 	var dir = sign(dist)
-	var abs_dist = abs(dist)
+	velocity.y += GRAVITY * delta
+	facing = dir
+	sprite.flip_h = facing > 0
 
 # FACE TARGET
 	if dir != 0:
@@ -348,7 +350,7 @@ func cpu_logic(delta):
 		return
 
 # ---------------- MOVEMENT ----------------
-	if abs_dist > 220:
+	if abs(dist) > 220:
 
 		velocity.x = dir * SPEED * 0.8
 
