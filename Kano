@@ -23,15 +23,6 @@ Kano (CharacterBody2D)
 │       └── Sprite2D
 └── KanoAttack.tscn
 
-var spawn_protection := false
-signal health_changed(health)
-signal combo_used(combo_name: String)
-var special_move := false
-var special_move_timer := 0.0
-var cannonball_hit_lock := false
-
-# ---------------- STATE ----------------
-enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
@@ -40,14 +31,23 @@ var spawn_locked := true
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
-var stunned := false
-# ---------------- FLAGS ----------------
+var stunned := false-
+# ---------------- FLAGS ---------------
 var is_blocking := false
 var is_hurting := false
 var is_shooting := false
 var is_attacking := false
 var action_locked := false
-var hurt_locked := false
+var hurt_locked := fvar spawn_protection := false
+signal health_changed(health)
+signal combo_used(combo_name: String)
+var special_move := false
+var special_move_timer := 0.0
+var cannonball_hit_lock := false
+
+# ---------------- STATE ----------------
+enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
+alse
 var can_take_damage := true
 var is_finish_state := false
 var lock_timer := 0.0
