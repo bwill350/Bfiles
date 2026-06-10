@@ -47,6 +47,7 @@ var is_finish_state := false
 var lock_timer := 0.0
 var stunned := false
 
+
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -584,11 +585,10 @@ func do_combo():
 func spawn_attack():
 	if spawn_locked:
 		return
+
 	var attack = RAIDEN_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 	attack.global_position = attack_marker.global_position
-	get_tree().current_scene.add_child(attack)
-	attack.global_position = shoot_marker.global_position + Vector2(0, 3)
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 	if spawn_locked:
