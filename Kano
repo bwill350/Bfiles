@@ -35,7 +35,7 @@ enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
-
+var spawn_locked := true
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -155,7 +155,7 @@ func _ready():
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
 	add_to_group("ElectricDeath")
-
+	spawn_locked = false
 	health = max_health
 	health_changed.emit(health)
 
@@ -192,6 +192,11 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	if is_cpu and is_attacking and target != null:
+		if target == null:
+			return
+			velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
+			move_and_slide()
 
 	# NORMAL GRAVITY MUST ALWAYS RUN
 	velocity.y += GRAVITY * delta
@@ -408,33 +413,22 @@ func cpu_logic(delta):
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
-		move_and_slide()
 		do_action("punch")
 		do_action("uppercut")
 		do_action("roundhousekick")
+		move_and_slide()
 
-
-	# HARD LOCK (Liu Kang style behavior)
-	if action_locked:
+	if spawn_locked:
 		return
-
-	ai_timer -= delta
+	if target == null:
+		return
 
 	var dist = target.global_position.x - global_position.x
 	var dir = sign(dist)
-	var abs_dist = abs(dist)
-
-# FACE TARGET
-	if dir != 0:
-		facing = dir
-
-	sprite.flip_h = facing < 0
-
-# GRAVITY
 	velocity.y += GRAVITY * delta
+	facing = dir
+	sprite.flip_h = facing > 0
 
-	if target == null:
-		return
 
 # STOP ALL ACTIONS AT 1HP
 	if health <= 1:
@@ -442,51 +436,40 @@ func cpu_logic(delta):
 		action_locked = true
 		velocity.x = 0
 		move_and_slide()
-		return
+		die()
 
-# ---------------- MOVEMENT ----------------
-	if abs_dist > 220:
+	# ---------------- MOVE ----------------
+	if abs(dist) > 140:
 
-		velocity.x = dir * SPEED * 0.8
+		velocity.x = dir * SPEED * 0.7
 
-	if state != State.RUN:
-		state = State.RUN
-
-	if not is_attacking:
-		play_anim("walk")
+		if is_on_floor():
+			state = State.RUN
 
 	else:
 
 		velocity.x = 0
-		velocity.y = 0
 
-	if state != State.IDLE:
-		state = State.IDLE
+		if is_on_floor():
+			state = State.IDLE
 
-	if not is_attacking:
-		play_anim("idle")
+		ai_timer -= delta
 
-	# ---------------- AI ACTIONS ----------------
-	if ai_timer <= 0:
+		if ai_timer <= 0:
 
-		ai_timer = randf_range(0.4, 0.8)
+			ai_timer = randf_range(0.5, 1.0)
 
-		match randi() % 5:
-
-			0:
-				do_action("punch")
-
-			1:
-				do_action("kick")
-
-			2:
-				do_action("uppercut")
-
-			3:
-				do_action("roundhousekick")
-
-			4:
-				shoot_player()
+			match randi() % 5:
+				0:
+					do_action("punch")
+				1:
+					do_action("kick")
+				2:
+					do_action("uppercut")
+				3:
+					do_action("roundhousekick")
+				4:
+					shoot_player()
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
