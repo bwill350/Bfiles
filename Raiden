@@ -47,7 +47,6 @@ var is_finish_state := false
 var lock_timer := 0.0
 var stunned := false
 
-
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -95,6 +94,7 @@ const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
 func start_electricfly():
+	electricfly_y = global_position.y - 70
 	electricfly_active = true
 	special_move = true
 	special_move_invincible = true
@@ -407,7 +407,7 @@ func cpu_logic(delta):
 		return
 
 	# ---------------- MOVE ----------------
-	if abs(dist) > 140:
+	if abs(dist) > 228:
 
 		velocity.x = dir * SPEED * 0.7
 
