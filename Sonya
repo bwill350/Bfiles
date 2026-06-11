@@ -339,7 +339,7 @@ func cpu_logic(delta):
 		return
 
 # ---------------- MOVEMENT ----------------
-	if abs(dist) > 220:
+	if abs(dist) > 228:
 
 		velocity.x = dir * SPEED * 0.8
 
@@ -471,9 +471,15 @@ func shoot_player():
 func take_damage(amount: int):
 	if not can_take_damage:
 		return
+
+	can_take_damage = false
+
 	if state == State.DEAD:
+		can_take_damage = true
 		return
+
 	if spawn_protection:
+		can_take_damage = true
 		return
 
 	# BLOCK REDUCTION
@@ -481,10 +487,13 @@ func take_damage(amount: int):
 		amount = max(amount - 1, 0)
 
 	if amount <= 0:
+		can_take_damage = true
 		return
 
 	health -= amount
 	health = max(health, 0)
+
+	print("Sonya took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
@@ -515,10 +524,12 @@ func take_damage(amount: int):
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
+
 	await get_tree().create_timer(0.4).timeout
+
 	can_take_damage = true
 
-# ⚠️ FINISH HIM AT 0 HP
+	# ⚠️ FINISH HIM
 	if health == 0:
 		if not is_finish_state:
 			trigger_finish_state()
@@ -641,20 +652,10 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area):
-	take_damage(1)
-	if spawn_locked:
-		return
 	if area.get_parent() == self:
 		return
 
-	if state == State.DEAD:
-		return
-
-	if spawn_protection or special_move_invincible:
-		return
-
-	if not can_take_damage or is_hurting:
-		return
+	take_damage(1)
 
 	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
