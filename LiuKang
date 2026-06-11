@@ -52,6 +52,7 @@ var is_finish_state := false
 var spawn_protection := false
 var is_flying := false
 var hurt_recovery := false
+var lock_timer := 0.0
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -65,6 +66,7 @@ const GRAVITY = 5000
 @export var max_health := 10
 @export var jump_velocity := -2200.0
 @export var combo_reset_time := 0.6
+@export var shoot_cooldown_time: float = 0.01
 
 # ---------------- PRELOADS ----------------
 const LIU_KANG_ATTACK = preload("res://LiuKangAttack.tscn")
@@ -97,6 +99,8 @@ const ELECTRIC_COMBO = ["up", "down", "shoot"]
 var combo := []
 var combo_timer := 0.0
 
+# ---------------- COOLDOWNS ----------------
+var shoot_cooldown: float = 0.0
 
 
 # ---------------- READY ----------------
@@ -175,89 +179,120 @@ func start_bicyclekick():
  
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-	if is_cpu and is_attacking and target != null:
-		if target == null:
-			return
-			velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
-			move_and_slide()
+	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
-	# ---------------- STUN ----------------
-	if stunned:
-		velocity = Vector2.ZERO
-		move_and_slide()
-		return
-
-	for i in range(get_slide_collision_count()):
-		var col = get_slide_collision(i)
-		var body = col.get_collider()
-
-		if body and body.has_method("take_damage"):
-			body.take_damage(1)
-
-	# only stop move if you actually want hit-stop
-			special_move_timer = 0
-
-			special_move = false
-			flyingkick_active = false
-			bicyclekick_active = false
-			special_move_invincible = false
-			special_move_timer = 0.0
-
-			velocity = Vector2.ZERO
-			return
-
-	if special_move_timer <= 0:
-		special_move = false
-		flyingkick_active = false
-		bicyclekick_active = false
-		special_move_invincible = false
-		velocity.x = 0
-
-	# ---------------- NORMAL GRAVITY ----------------
-	velocity.y += GRAVITY * delta
-
-	# ---------------- COMBOS ----------------
 	combo_timer += delta
-	special_bullet = FIRE_BULLET
-
-	if combo_timer > combo_reset_time:
+	if combo_timer > 0.6:
 		combo.clear()
-
-	# ---------------- CPU ----------------
-	if is_cpu:
-		cpu_logic(delta)
-		move_and_slide()
-		return
 
 	# ---------------- DEAD ----------------
 	if state == State.DEAD:
 		return
 
-	# ---------------- LOCKS ----------------
+	# ---------------- FINISH HIM ----------------
+	if is_finish_state:
+
+		velocity.x = 0
+
+		if not is_on_floor():
+			velocity.y += GRAVITY * delta
+		else:
+			velocity.y = 0
+
+		state = State.IDLE
+		play_anim("idle")
+
+		move_and_slide()
+		return
+
+	# ---------------- LOCK TIMER SAFETY ----------------
+	if action_locked:
+		lock_timer -= delta
+		if lock_timer <= 0:
+			action_locked = false
+			is_attacking = false
+			hurt_locked = false
+
+	# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+	# ---------------- LOCKED ----------------
 	if action_locked or hurt_locked:
+		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
+		move_and_slide()
+		return
+
+	# ---------------- CPU ----------------
+	if is_cpu:
+		if target == null:
+			target = get_tree().get_first_node_in_group("Fighter")
+
+		cpu_logic(delta)
 		move_and_slide()
 		return
 
 	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
+	var climb_pressed = Input.is_action_pressed("climb")
 
+	# ---------------- FACING (FIXED LIKE REPTILE) ----------------
 	if input_dir != 0:
-		facing = input_dir
+		facing = sign(input_dir)
 
-	sprite.flip_h = facing > 0
+	sprite.flip_h = -facing < 0
 
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
-	# ---------------- WALK / IDLE ----------------
-	if is_on_floor():
-		if input_dir != 0:
-			if not is_attacking and not is_hurting and not hurt_recovery:
-				play_anim("walk")
+	# ---------------- STATE ----------------
+	if climb_pressed and not is_on_floor() and is_on_wall():
+		state = State.CLIMB
+
+	elif not is_on_floor():
+		state = State.JUMP
+
+	elif input_dir != 0:
+		state = State.RUN
+
+	else:
+		state = State.IDLE
+
+	move_and_slide()
+
+	# ---------------- STATES (ONLY WHEN FREE) ----------------
+	if not is_hurting and not is_attacking:
+		if not is_on_floor():
+			state = State.JUMP
+		elif input_dir != 0:
+			state = State.RUN
 		else:
-			if not is_attacking and not is_hurting and not hurt_recovery:
+			state = State.IDLE
+
+	# ---------------- ANIMS (ONLY ONCE) ----------------
+	if is_hurting:
+		play_anim("hurt")
+	elif is_attacking:
+		pass # attack system controls animation
+	else:
+		match state:
+			State.JUMP:
+				play_anim("jump")
+			State.RUN:
+				play_anim("walk")
+			State.IDLE:
 				play_anim("idle")
 
+	# ---------------- ANIMATION ----------------
+	if not is_attacking:
+		match state:
+			State.CLIMB:
+				play_anim("climb")
+			State.JUMP:
+				play_anim("jump")
+			State.RUN:
+				play_anim("walk")
+			State.IDLE:
+				play_anim("idle")
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
@@ -348,25 +383,6 @@ func cpu_logic(delta):
 	if action_locked:
 		return
 
-	ai_timer -= delta
-
-	var dist = target.global_position.x - global_position.x
-	var dir = sign(dist)
-	velocity.y += GRAVITY * delta
-	facing = dir
-	sprite.flip_h = facing > 0
-
-# FACE TARGET
-	if dir != 0:
-		facing = dir
-
-
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
-	if target == null:
-		return
-
 # STOP ALL ACTIONS AT 1HP
 	if health <= 1:
 		is_attacking = false
@@ -375,10 +391,27 @@ func cpu_logic(delta):
 		move_and_slide()
 		return
 
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
+
+	ai_timer -= delta
+
+	var dist = target.global_position.x - global_position.x
+	var direction = sign(dist)
+
+	velocity.y += GRAVITY * delta
+	facing = direction
+	sprite.flip_h = facing > 0
+
+# GRAVITY
+	velocity.y += GRAVITY * delta
+
+
 # ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
 
-		velocity.x = dir * SPEED * 0.8
+		velocity.x = direction * SPEED * 0.8
 
 	if state != State.RUN:
 		state = State.RUN
