@@ -260,6 +260,29 @@ func _physics_process(delta):
 
 	move_and_slide()
 
+	# ---------------- STATES (ONLY WHEN FREE) ----------------
+	if not is_hurting and not is_attacking:
+		if not is_on_floor():
+			state = State.JUMP
+		elif input_dir != 0:
+			state = State.RUN
+		else:
+			state = State.IDLE
+
+	# ---------------- ANIMS (ONLY ONCE) ----------------
+	if is_hurting:
+		play_anim("hurt")
+	elif is_attacking:
+		pass # attack system controls animation
+	else:
+		match state:
+			State.JUMP:
+				play_anim("jump")
+			State.RUN:
+				play_anim("walk")
+			State.IDLE:
+				play_anim("idle")
+
 	# ---------------- ANIMATION ----------------
 	if not is_attacking:
 		match state:
@@ -295,7 +318,7 @@ func _physics_process(delta):
 		shoot_player()
 
 	elif Input.is_action_pressed("Reptilesacid"):
-			shoot_player()
+			shoot_acid()
 
 	elif Input.is_action_just_pressed("shoot"):
 		if shoot_cooldown <= 0:
