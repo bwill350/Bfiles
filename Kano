@@ -602,6 +602,9 @@ func take_damage(amount: int):
 		is_finish_state = true
 
 func trigger_finish_state():
+	if is_finish_state:
+		return
+
 	is_finish_state = true
 
 	state = State.IDLE
@@ -617,6 +620,14 @@ func trigger_finish_state():
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
+
+	# ⏱ WAIT THEN REMOVE LABEL
+	await get_tree().create_timer(2.0).timeout
+
+	if is_instance_valid(finish_label):
+		finish_label.visible = false
+
+	is_finish_state = false
 
 
 
