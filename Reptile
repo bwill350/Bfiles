@@ -179,50 +179,73 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-	if is_cpu and is_attacking and target != null:
-		if target == null:
-			return
-			velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
-			move_and_slide()
-
-	if stunned:
-		velocity = Vector2.ZERO
-		move_and_slide()
-		return
 
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
 	combo_timer += delta
-
-	if combo_timer > combo_reset_time:
+	if combo_timer > 0.6:
 		combo.clear()
 
+	# ---------------- DEAD ----------------
+	if state == State.DEAD:
+		return
+
+	# ---------------- FINISH HIM ----------------
+	if is_finish_state:
+
+		velocity.x = 0
+
+		if not is_on_floor():
+			velocity.y += GRAVITY * delta
+		else:
+			velocity.y = 0
+
+		state = State.IDLE
+		play_anim("idle")
+
+		move_and_slide()
+		return
+
+	# ---------------- LOCK TIMER SAFETY ----------------
+	if action_locked:
+		lock_timer -= delta
+		if lock_timer <= 0:
+			action_locked = false
+			is_attacking = false
+			hurt_locked = false
+
+	# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+	# ---------------- LOCKED ----------------
+	if action_locked or hurt_locked:
+		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
+		move_and_slide()
+		return
+
+	# ---------------- CPU ----------------
 	if is_cpu:
+		if target == null:
+			target = get_tree().get_first_node_in_group("Fighter")
+
 		cpu_logic(delta)
 		move_and_slide()
 		return
 
-	if state == State.DEAD:
-		return
-
-	velocity.y += GRAVITY * delta
-
-	if action_locked or hurt_locked:
-		return
-
+	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
 
-	# ---------------- FACING ----------------
+	# ---------------- FACING (FIXED LIKE REPTILE) ----------------
 	if input_dir != 0:
-		facing = input_dir
+		facing = sign(input_dir)
 
-	sprite.flip_h = facing > 0
+	sprite.flip_h = -facing < 0
 
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
-	# ---------------- CLIMB ----------------
+	# ---------------- STATE ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.CLIMB
 
@@ -235,33 +258,25 @@ func _physics_process(delta):
 	else:
 		state = State.IDLE
 
-	# ---------------- ANIMS ----------------
-	match state:
+	move_and_slide()
 
-		State.CLIMB:
-			velocity.y = -CLIMB_SPEED
-
-			if not is_attacking:
+	# ---------------- ANIMATION ----------------
+	if not is_attacking:
+		match state:
+			State.CLIMB:
 				play_anim("climb")
-
-		State.JUMP:
-			if not is_attacking:
+			State.JUMP:
 				play_anim("jump")
-
-		State.RUN:
-			if not is_attacking:
+			State.RUN:
 				play_anim("walk")
-
-		State.IDLE:
-			if not is_attacking:
+			State.IDLE:
 				play_anim("idle")
 
-	# ---------------- JUMP ----------------
+	# ---------------- INPUT ACTIONS ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
 
-	# ---------------- ATTACKS ----------------
-	if Input.is_action_just_pressed("jumpkick"):
+	elif Input.is_action_just_pressed("jumpkick"):
 		do_action("jumpkick")
 
 	elif Input.is_action_just_pressed("punch"):
@@ -270,26 +285,26 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
 
-	elif Input.is_action_just_pressed("kick"):
+	elif Input.is_action_pressed("kick"):
 		do_action("kick")
 
-	elif Input.is_action_just_pressed("uppercut"):
+	elif Input.is_action_pressed("uppercut"):
 		do_action("uppercut")
 
 	elif Input.is_action_pressed("shoot"):
 		shoot_player()
 
-	elif Input.is_action_just_pressed("Reptilesacid"):
+	elif Input.is_action_pressed("Reptilesacid"):
+			shoot_player()
+
+	elif Input.is_action_just_pressed("shoot"):
 		if shoot_cooldown <= 0:
-			shoot_acid()
+			shoot_player()
 
 	elif Input.is_action_pressed("block"):
 		start_block()
-
 	else:
 		stop_block()
-
-	move_and_slide()
 
 # ---------------- BLOCK ----------------
 func start_block():
@@ -510,7 +525,6 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-
 	if health <= 1:
 		action_locked = true
 		velocity.x = 0
@@ -525,7 +539,7 @@ func take_damage(amount: int):
 	can_take_damage = false
 
 	is_hurting = true
-	hurt_locked = false
+	hurt_locked = true
 
 	health -= amount
 	health = max(health, 0)
@@ -663,6 +677,8 @@ func play_anim(anim_name: String):
 func _on_Reptile_Hurt_Box_area_entered(area: Area2D) -> void:
 	if area.get_parent() == self:
 		return
+
 	take_damage(1)
-	if health > 1 and area.is_in_group("SubzeroBullet"):
+
+	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
