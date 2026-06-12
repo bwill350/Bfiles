@@ -53,6 +53,7 @@ var spawn_protection := false
 var is_flying := false
 var hurt_recovery := false
 var lock_timer := 0.0
+var special_move_y := 0.0
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -79,6 +80,7 @@ const FIREBALL = preload("res://Fireball.tscn")
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var shoot_marker: Marker2D = $LiuKangshoot
+
 # ---------------- PRELOADS ----------------
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
@@ -117,8 +119,6 @@ func _ready():
 	health = max_health
 	health_changed.emit(health)
 
-	play_anim("idle")
-
 	if not hit_box.area_entered.is_connected(_on_liu_kang_hurt_box_area_entered):
 		hit_box.area_entered.connect(_on_liu_kang_hurt_box_area_entered)
 
@@ -145,106 +145,101 @@ func _unhandled_input(event):
 
 func apply_stun(duration: float):
 	if stunned:
-		play_anim("freeze")
 		return
 
 	stunned = true
+	is_attacking = false
+	action_locked = true
 	velocity = Vector2.ZERO
+	play_anim("hurt") # or "idle" if you don't have freeze
 
 	await get_tree().create_timer(duration).timeout
 
 	stunned = false
+	action_locked = false
 	
 
 func start_flyingkick():
+	play_anim("flyingkick")
 	flyingkick_active = true
 	special_move_invincible = true
 	special_move = true
-	special_move_timer = 0.6  # NOT 6.25 (that’s way too long)
+	special_move_timer = 0.6
 
-	# 🔥 stronger upward boost
+	special_move_y = attack_marker.global_position.y
+
 	velocity.x = facing * 1300
-	velocity.y = -900
+	velocity.y = 0
 
 
 func start_bicyclekick():
+	play_anim("bicyclekick")
 	bicyclekick_active = true
 	special_move_invincible = true
 	special_move = true
 	special_move_timer = 0.55
 
-	velocity.x = facing * 1300
-	velocity.y = -600
+	special_move_y = attack_marker.global_position.y
 
+	velocity.x = facing * 1300
+	velocity.y = 0
+
+func update_animation():
+	if is_hurting:
+		play_anim("hurt")
+		return
+
+	if is_attacking:
+		return
+
+	if not is_on_floor():
+		play_anim("jump")
+	elif abs(velocity.x) > 10:
+		play_anim("walk")
+	else:
+		play_anim("idle")
  
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+
+	if stunned:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
 	combo_timer += delta
-	if combo_timer > 0.6:
+
+	if combo_timer > combo_reset_time:
 		combo.clear()
 
-	# ---------------- DEAD ----------------
-	if state == State.DEAD:
-		return
-
-	# ---------------- FINISH HIM ----------------
-	if is_finish_state:
-
-		velocity.x = 0
-
-		if not is_on_floor():
-			velocity.y += GRAVITY * delta
-		else:
-			velocity.y = 0
-
-		state = State.IDLE
-		play_anim("idle")
-
-		move_and_slide()
-		return
-
-	# ---------------- LOCK TIMER SAFETY ----------------
-	if action_locked:
-		lock_timer -= delta
-		if lock_timer <= 0:
-			action_locked = false
-			is_attacking = false
-			hurt_locked = false
-
-	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
-
-	# ---------------- LOCKED ----------------
-	if action_locked or hurt_locked:
-		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
-		move_and_slide()
-		return
-
-	# ---------------- CPU ----------------
 	if is_cpu:
-		if target == null:
-			target = get_tree().get_first_node_in_group("Fighter")
-
 		cpu_logic(delta)
 		move_and_slide()
 		return
 
-	# ---------------- INPUT ----------------
+	if state == State.DEAD:
+		return
+
+	velocity.y += GRAVITY * delta
+
+	if action_locked:
+		return
+
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
 
-	# ---------------- FACING (FIXED LIKE REPTILE) ----------------
+	# ---------------- FACING ----------------
 	if input_dir != 0:
-		facing = sign(input_dir)
+		facing = input_dir
 
-	sprite.flip_h = -facing < 0
+	sprite.flip_h = facing > 0
 
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
-	# ---------------- STATE ----------------
+	# ---------------- CLIMB ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.CLIMB
 
@@ -257,49 +252,34 @@ func _physics_process(delta):
 	else:
 		state = State.IDLE
 
-	move_and_slide()
+	# ---------------- ANIMS ----------------
+	match state:
 
-	# ---------------- STATES (ONLY WHEN FREE) ----------------
-	if not is_hurting and not is_attacking:
-		if not is_on_floor():
-			state = State.JUMP
-		elif input_dir != 0:
-			state = State.RUN
-		else:
-			state = State.IDLE
+		State.CLIMB:
+			velocity.y = -CLIMB_SPEED
 
-	# ---------------- ANIMS (ONLY ONCE) ----------------
-	if is_hurting:
-		play_anim("hurt")
-	elif is_attacking:
-		pass # attack system controls animation
-	else:
-		match state:
-			State.JUMP:
-				play_anim("jump")
-			State.RUN:
-				play_anim("walk")
-			State.IDLE:
+			if not is_attacking:
 				play_anim("idle")
 
-	# ---------------- ANIMATION ----------------
-	if not is_attacking:
-		match state:
-			State.CLIMB:
-				play_anim("climb")
-			State.JUMP:
-				play_anim("jump")
-			State.RUN:
-				play_anim("walk")
-			State.IDLE:
+		State.JUMP:
+			if not is_attacking:
 				play_anim("idle")
+
+		State.RUN:
+			if not is_attacking:
+				play_anim("walk")
+
+		State.IDLE:
+			if not is_attacking:
+				play_anim("idle")
+
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
 
 	# ---------------- ATTACKS ----------------
-	if Input.is_action_just_pressed("jump"):
-		do_action("jump")
+	if Input.is_action_just_pressed("jumpkick"):
+		do_action("jumpkick")
 
 	elif Input.is_action_just_pressed("punch"):
 		do_action("punch")
@@ -313,14 +293,14 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
 
-	elif Input.is_action_pressed("shoot"):
+	elif Input.is_action_pressed("flyingkick"):
+		start_flyingkick()
+
+	elif Input.is_action_pressed("bicyclekick"):
+		start_bicyclekick()
+
+	elif Input.is_action_just_pressed("shoot"):
 		shoot_fireball()
-
-	elif Input.is_action_just_pressed("flyingkick"):
-		do_action("flyingkick")
-
-	elif Input.is_action_just_pressed("bicyclekick"):
-		do_action("bicyclekick")
 
 	elif Input.is_action_pressed("block"):
 		start_block()
@@ -463,7 +443,7 @@ func cpu_logic(delta):
 		velocity.y = 0
 
 	if not is_attacking:
-		play_anim("idle")
+		play_anim("walk")
 
 	else:
 
@@ -481,10 +461,7 @@ func cpu_logic(delta):
 		if not is_attacking:
 			play_anim("idle")
 
-
-
 func do_action(anim_name: String):
-
 	if action_locked:
 		return
 
