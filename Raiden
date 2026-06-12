@@ -281,7 +281,8 @@ func _physics_process(delta):
 			hurt_locked = false
 
 	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
+	if not electricfly_active:
+		velocity.y += GRAVITY * delta
 
 	# ---------------- LOCKED ----------------
 	if action_locked or hurt_locked:
@@ -330,14 +331,11 @@ func _physics_process(delta):
 	if not is_hurting and not is_attacking:
 		if not is_on_floor():
 			state = State.JUMP
-		elif input_dir != 0:
-			state = State.RUN
-		else:
-			state = State.IDLE
 
 	# ---------------- ANIMS (ONLY ONCE) ----------------
 	if is_hurting:
 		play_anim("hurt")
+		return
 	elif is_attacking:
 		true # attack system controls animation
 	else:
@@ -398,6 +396,10 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("shoot"):
 		shoot_player()
+
+	if Input.is_action_just_pressed("jump") and is_on_floor():
+		velocity.y = jump_velocity
+		state = State.JUMP
 
 	move_and_slide()
 
