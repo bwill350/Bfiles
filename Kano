@@ -122,14 +122,21 @@ func apply_stun(duration: float):
 # ---------------- READY ----------------
 func _ready():
 	add_to_group("Fighter")
+
 	spawn_protection = true
+
 	await get_tree().create_timer(1.0).timeout
+
+	spawn_protection = false
+
 	add_to_group("enemy")
 	add_to_group("Kano")
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
 	add_to_group("ElectricDeath")
+
 	spawn_locked = false
+
 	health = max_health
 	health_changed.emit(health)
 
@@ -166,13 +173,12 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-	if is_cpu and is_attacking and target != null:
-		if target == null:
-			return
-			velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
-			move_and_slide()
 
-	# NORMAL GRAVITY MUST ALWAYS RUN
+	if is_cpu and is_attacking and target != null:
+		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
+		move_and_slide()
+
+	# NORMAL GRAVITY
 	velocity.y += GRAVITY * delta
 
 	# ---------------- STUN ----------------
@@ -182,26 +188,27 @@ func _physics_process(delta):
 		return
 
 	# ---------------- SPECIAL MOVE (CANNONBALL) ----------------
-		if special_move:
 
-			special_move_timer -= delta
+	if special_move:
+
+		special_move_timer -= delta
 
 		if special_move_timer <= 0:
 			special_move = false
 			cannonball_active = false
 			cannonball_hit_lock = false
+			spawn_protection = false
 			velocity = Vector2.ZERO
 			return
 
-		# AIR CONTROL
 		if cannonball_active:
-			var input_dir = Input.get_axis("left", "right")
-			velocity.x += input_dir * 40
+			var cannon_input = Input.get_axis("left", "right")
+			velocity.x += cannon_input * 40
 			velocity.y = 0
 
 		move_and_slide()
 
-		# COLLISION CHECK
+	# COLLISION CHECK
 		for i in range(get_slide_collision_count()):
 			var col = get_slide_collision(i)
 			var body = col.get_collider()
@@ -213,9 +220,10 @@ func _physics_process(delta):
 
 				body.take_damage(1)
 
-				# HARD STOP ON HIT
 				special_move = false
 				cannonball_active = false
+				cannonball_hit_lock = false
+				spawn_protection = false
 				special_move_timer = 0.35
 				velocity = Vector2.ZERO
 
@@ -231,6 +239,7 @@ func _physics_process(delta):
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
 	combo_timer += delta
+
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
@@ -258,10 +267,15 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing > 0
 
+	# ---------------- JUMP ----------------
+	if Input.is_action_just_pressed("jump") and is_on_floor():
+		velocity.y = jump_velocity
+		state = State.JUMP
+
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
-	# ---------------- CLIMB ----------------
+	# ---------------- STATES ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.CLIMB
 
@@ -284,7 +298,10 @@ func _physics_process(delta):
 
 		State.JUMP:
 			if not is_attacking:
-				play_anim("jump")
+				if velocity.y < 0:
+					play_anim("jump")
+				else:
+					play_anim("jump")
 
 		State.RUN:
 			if not is_attacking:
@@ -294,17 +311,8 @@ func _physics_process(delta):
 			if not is_attacking:
 				play_anim("idle")
 
-	# ---------------- JUMP ----------------
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jump_velocity
-		move_and_slide()
-		return
-
 	# ---------------- ATTACKS ----------------
-	if Input.is_action_just_pressed("jump"):
-		do_action("jump")
-
-	elif Input.is_action_just_pressed("punch"):
+	if Input.is_action_just_pressed("punch"):
 		do_action("punch")
 
 	elif Input.is_action_just_pressed("roundhousekick"):
@@ -330,7 +338,6 @@ func _physics_process(delta):
 		stop_block()
 
 	move_and_slide()
-
 # ---------------- BLOCK ----------------
 func start_block():
 
@@ -454,8 +461,8 @@ func do_action(anim_name: String):
 	if action_locked:
 		return
 
-	action_locked = true
 	is_attacking = true
+	action_locked = true
 
 	play_anim(anim_name)
 
@@ -473,7 +480,8 @@ func do_action(anim_name: String):
 	is_attacking = false
 	action_locked = false
 
-	play_anim("idle")
+	if not is_hurting and state != State.DEAD:
+		play_anim("idle")
 
 
 # ---------------- ATTACK ----------------
@@ -492,6 +500,7 @@ func start_cannonball():
 		return
 
 	cannonball_hit_lock = true
+	spawn_protection = true
 
 	cannonball_active = true
 	special_move = true
