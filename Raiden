@@ -94,7 +94,7 @@ const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
 func start_electricfly():
-	electricfly_y = global_position.y - 70
+	electricfly_y = global_position.y - 30
 	electricfly_active = true
 	special_move = true
 	special_move_invincible = true
@@ -177,9 +177,8 @@ func _ready():
 	# ---------------- HEALTH INIT (ONLY ONCE) ----------------
 	health = max_health
 	health_changed.emit(health)
-
-	# ---------------- ANIMATION ----------------
-	play_anim("idle")
+	add_to_group("Raiden")
+	add_to_group("Fighter")
 
 	# ---------------- HITBOX SAFETY CONNECTION ----------------
 	if hit_box:
@@ -230,79 +229,102 @@ func check_combos():
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-	# ---------------- ELECTRIC FLY ----------------
-	if special_move:
+	if electricfly_active:
+		play_anim("electricfly")
+		global_position.y = lerp(global_position.y, electricfly_y, 0.2)
 		special_move_timer -= delta
-		velocity.x = facing * 1800
+	# ---------------- ELECTRIC FLY ----------------
+	if electricfly_active:
+		play_anim("electricfly")
+
+		special_move_timer -= delta
+
+		velocity.x = facing * 1300
+		velocity.y = 0
+
 		move_and_slide()
 
-
-	for i in range(get_slide_collision_count()):
-		var col = get_slide_collision(i)
-		var body = col.get_collider()
-
-		if body and body != self and body.has_method("take_damage"):
-			body.take_damage(1)
-
-			special_move = false
+		if special_move_timer <= 0:
 			electricfly_active = false
+			special_move = false
 			special_move_invincible = false
-			special_move_timer = 0.0
-
 			velocity = Vector2.ZERO
-			return
 
-	if special_move_timer <= 0:
-		special_move = false
-		electricfly_active = false
-		special_move_invincible = false
+		return
+
+	# ---------------- DEAD ----------------
+	if state == State.DEAD:
+		return
+
+	# ---------------- FINISH HIM ----------------
+	if is_finish_state:
+
 		velocity.x = 0
 
+		if not is_on_floor():
+			velocity.y += GRAVITY * delta
+		else:
+			velocity.y = 0
 
-	# ---------------- NORMAL GRAVITY ----------------
-	velocity.y += GRAVITY * delta
+		state = State.IDLE
+		play_anim("idle")
 
-	# ---------------- COMBOS ----------------
-	combo_timer += delta
-
-	if combo_timer > combo_reset_time:
-		combo.clear()
-
-	if stunned:
-		velocity = Vector2.ZERO
 		move_and_slide()
 		return
 
+	# ---------------- LOCK TIMER SAFETY ----------------
+	if action_locked:
+		lock_timer -= delta
+		if lock_timer <= 0:
+			action_locked = false
+			is_attacking = false
+			hurt_locked = false
+
+	# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+	# ---------------- LOCKED ----------------
+	if action_locked or hurt_locked:
+		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
+		move_and_slide()
+		return
+
+	# ---------------- CPU ----------------
 	if is_cpu:
+		if target == null:
+			target = get_tree().get_first_node_in_group("Fighter")
+
 		cpu_logic(delta)
 		move_and_slide()
 		return
 
-	if state == State.DEAD:
-		return
-
-	
-
-	# ---------------- LOCKED ----------------
-	if action_locked or hurt_locked:
-		move_and_slide()
-		return
-
+	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
+	var climb_pressed = Input.is_action_pressed("climb")
 
-	# ---------------- FACING ----------------
+	# ---------------- FACING (FIXED LIKE REPTILE) ----------------
 	if input_dir != 0:
-		facing = input_dir
+		facing = sign(input_dir)
 
 	sprite.flip_h = -facing < 0
 
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
-	# ---------------- JUMP ----------------
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jump_velocity
+	# ---------------- STATE ----------------
+	if climb_pressed and not is_on_floor() and is_on_wall():
+		state = State.CLIMB
+
+	elif not is_on_floor():
 		state = State.JUMP
+
+	elif input_dir != 0:
+		state = State.RUN
+
+	else:
+		state = State.IDLE
+
+	move_and_slide()
 
 	# ---------------- STATES (ONLY WHEN FREE) ----------------
 	if not is_hurting and not is_attacking:
@@ -317,9 +339,21 @@ func _physics_process(delta):
 	if is_hurting:
 		play_anim("hurt")
 	elif is_attacking:
-		pass # attack system controls animation
+		true # attack system controls animation
 	else:
 		match state:
+			State.JUMP:
+				play_anim("jump")
+			State.RUN:
+				play_anim("walk")
+			State.IDLE:
+				play_anim("idle")
+
+	# ---------------- ANIMATION ----------------
+	if not is_attacking:
+		match state:
+			State.CLIMB:
+				play_anim("climb")
 			State.JUMP:
 				play_anim("jump")
 			State.RUN:
@@ -351,6 +385,7 @@ func _physics_process(delta):
 		spawn_burst()
 
 	elif Input.is_action_just_pressed("doublepalmshocker"):
+		play_anim("doublepalmshocker")
 		do_action("doublepalmshocker")
 		var bullet = RAIDEN_ELECTRIC_BULLET.instantiate()
 		get_tree().current_scene.add_child(bullet)
@@ -475,7 +510,7 @@ func shoot_player():
 	get_tree().current_scene.add_child(bullet)
 
 	# 🔥 SPAWN FROM MARKER
-	bullet.global_position = shoot_marker.global_position
+	bullet.global_position = $Raidenshoot.global_position
 
 	# 🔥 FIXED DIRECTION
 	bullet.velocity = Vector2.RIGHT * sign(facing) * bullet.speed
@@ -547,11 +582,10 @@ func do_action(anim_name: String):
 
 	action_locked = true
 	is_attacking = true
+	lock_timer = 0.3
 
 	play_anim(anim_name)
 
-
-	# ONLY melee attacks spawn attack hitbox
 	if anim_name in [
 		"punch",
 		"kick",
@@ -561,25 +595,9 @@ func do_action(anim_name: String):
 	]:
 		spawn_attack()
 
-	# ELECTRIC FLY
 	if anim_name == "electricfly":
 		start_electricfly()
 		spawn_attack()
-
-	await sprite.animation_finished
-
-	is_attacking = false
-	action_locked = false
-
-	play_anim("idle")
-
-func attack():
-	if health <= 1:
-		die()
-
-func do_combo():
-	if health <= 1:
-		return
 
 # ---------------- ATTACK ----------------
 func spawn_attack():
