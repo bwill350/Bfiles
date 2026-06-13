@@ -92,8 +92,8 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
-@onready var hit_box: Area2D = $ReptileHurtBox
-@onready var shoot_marker: Marker2D = $Reptileshoot
+@onready var hit_box: Area2D = $KanoHurtBox
+@onready var shoot_marker: Marker2D = $KanoShoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
 # ---------------- COMBOS ----------------
@@ -327,6 +327,9 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("shoot"):
 		shoot_player()
 
+	elif Input.is_action_just_pressed("fatality"):
+		do_action("fatality")
+
 	elif Input.is_action_just_pressed("Reptilesacid"):
 		if shoot_cooldown <= 0:
 			shoot_acid()
@@ -394,63 +397,62 @@ func cpu_logic(delta):
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
-		do_action("punch")
-		do_action("uppercut")
-		do_action("roundhousekick")
 		move_and_slide()
+		return
 
-	if spawn_locked:
-		return
-	if target == null:
-		return
+# GRAVITY
+	velocity.y += GRAVITY * delta
 
 	var dist = target.global_position.x - global_position.x
-	var dir = sign(dist)
-	velocity.y += GRAVITY * delta
-	facing = dir
-	sprite.flip_h = facing > 0
+	var direction = sign(dist)
 
+	# HARD LOCK (Liu Kang style behavior)
+	if action_locked:
+		return
 
 # STOP ALL ACTIONS AT 1HP
-	if health == 1:
+	if health <= 1:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
 		move_and_slide()
 		return
 
-	# ---------------- MOVE ----------------
-	if abs(dist) > 140:
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
 
-		velocity.x = dir * SPEED * 0.7
+	ai_timer -= delta
 
-		if is_on_floor():
-			state = State.RUN
+	velocity.y += GRAVITY * delta
+	facing = direction
+	sprite.flip_h = facing > 0
+
+# GRAVITY
+	velocity.y += GRAVITY * delta
+
+
+# ---------------- MOVEMENT ----------------
+	if abs(dist) > 220:
+
+		velocity.x = direction * SPEED * 0.8
+
+	if state != State.RUN:
+		state = State.RUN
+
+	if not is_attacking:
+		play_anim("walk")
 
 	else:
 
 		velocity.x = 0
+		velocity.y = 0
 
-		if is_on_floor():
-			state = State.IDLE
+	if state != State.IDLE:
+		state = State.IDLE
 
-		ai_timer -= delta
-
-		if ai_timer <= 0:
-
-			ai_timer = randf_range(0.5, 1.0)
-
-			match randi() % 5:
-				0:
-					do_action("punch")
-				1:
-					do_action("kick")
-				2:
-					do_action("uppercut")
-				3:
-					do_action("roundhousekick")
-				4:
-					shoot_player()
+	if not is_attacking:
+		play_anim("walk")
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -471,7 +473,8 @@ func do_action(anim_name: String):
 		"kick",
 		"roundhousekick",
 		"uppercut",
-		"jumpkick"
+		"jumpkick",
+		"fatality"
 	]:
 		spawn_attack()
 
@@ -559,7 +562,8 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-
+	if spawn_protection:
+		return
 	# already dead
 	if state == State.DEAD:
 		return
@@ -741,12 +745,66 @@ func play_anim(anim_name: String):
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area):
 
-	if area.get_parent() == self:
+# ignore self / invalid
+	if area == null:
 		return
 
-	# Every attack and bullet damages Kano
-	take_damage(1)
+	# ignore spawn overlap bullets already gone
+	if not is_instance_valid(area):
+		return
 
-	# Special effects
+	if area.is_in_group("HitBox"):
+		take_damage(1)
+
+	# bullet checks FIRST (important)
 	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
+		take_damage(1)
+		return
+
+	if area.is_in_group("ReptileBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ReptileAcid"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("RaidenElectricBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricForceField"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricBurst"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricForceHurtBox"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("KanoBullet"):
+		return
+
+	if area.is_in_group("IceBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("JohnnyCageBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("SonyaBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("FireBullet"):
+		take_damage(1)
+		return
