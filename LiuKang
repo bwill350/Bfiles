@@ -386,21 +386,30 @@ func _physics_process(delta):
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
+
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
-		do_action("punch")
-		do_action("uppercut")
-		do_action("roundhousekick")
 		move_and_slide()
+		return
 
+	# GRAVITY
+	velocity.y += GRAVITY * delta
 
-	# HARD LOCK (Liu Kang style behavior)
+	# ---------------- SAFE TARGET CHECK FIRST ----------------
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
+
+	var dist = target.global_position.x - global_position.x
+	var direction = sign(dist)
+
+	# HARD LOCK
 	if action_locked:
 		return
 
-# STOP ALL ACTIONS AT 1HP
+	# STOP AT LOW HP
 	if health <= 1:
 		is_attacking = false
 		action_locked = true
@@ -408,44 +417,22 @@ func cpu_logic(delta):
 		move_and_slide()
 		return
 
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		return
-
 	ai_timer -= delta
 
-	var dist = target.global_position.x - global_position.x
-	var direction = sign(dist)
-
-	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
 
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
-
-# ---------------- MOVEMENT ----------------
+	# ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
-
 		velocity.x = direction * SPEED * 0.8
-
-	if state != State.RUN:
 		state = State.RUN
 
 	if not is_attacking:
 		play_anim("walk")
 
 	else:
-
 		velocity.x = 0
 		velocity.y = 0
-
-	if state != State.IDLE:
-		state = State.IDLE
-
-	if not is_attacking:
-		play_anim("idle")
 
 	# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
@@ -453,52 +440,19 @@ func cpu_logic(delta):
 		ai_timer = randf_range(0.4, 0.8)
 
 		match randi() % 5:
-
 			0:
 				do_action("punch")
-
 			1:
 				do_action("kick")
-
 			2:
 				do_action("uppercut")
-
 			3:
 				do_action("roundhousekick")
-
 			4:
 				shoot_fireball()
 
-	# ---------------- AIR/LAND STATE ----------------
-	if state == State.JUMP and not special_move:
-		velocity.y += GRAVITY * delta
-
-	if state != State.JUMP:
-		state = State.JUMP
-
-	else:
-		velocity.y = 0
-
-	if not is_attacking:
-		play_anim("walk")
-
-	else:
-
-		if abs(dist) > 220:
-
-			state = State.RUN
-
-		if not is_attacking:
-			play_anim("walk")
-
-		else:
-
-			state = State.IDLE
-
-		if not is_attacking:
-			play_anim("idle")
-
 func do_action(anim_name: String):
+
 	if action_locked:
 		return
 
@@ -507,7 +461,7 @@ func do_action(anim_name: String):
 
 	play_anim(anim_name)
 
-	# melee attacks
+	# ---------------- MELEE ATTACKS ----------------
 	if anim_name in [
 		"punch",
 		"kick",
@@ -515,19 +469,14 @@ func do_action(anim_name: String):
 		"roundhousekick",
 		"jumpkick"
 	]:
-		var attack = LIU_KANG_ATTACK.instantiate()
-		get_tree().current_scene.add_child(attack)
-		attack.global_position = attack_marker.global_position
+		spawn_attack(anim_name)
 
-# ---------------- BICYCLE KICK ----------------
-	if anim_name == "flyingkick":
+	# ---------------- SPECIALS ----------------
+	elif anim_name == "flyingkick":
 		start_flyingkick()
-		spawn_attack()
 
-	# ---------------- BICYCLE KICK ----------------
 	elif anim_name == "bicyclekick":
 		start_bicyclekick()
-		spawn_attack()
 
 	await sprite.animation_finished
 
@@ -648,13 +597,13 @@ func take_damage(amount: int):
 	can_take_damage = true
 
 # ---------------- ATTACK ----------------
-func spawn_attack():
-
+func spawn_attack(anim_name: String):
 	var attack = LIU_KANG_ATTACK.instantiate()
-
 	get_tree().current_scene.add_child(attack)
 
 	attack.global_position = attack_marker.global_position
+	attack.scale.x = facing
+
 
 # ---------------- DEATH ----------------
 func die():
@@ -754,9 +703,72 @@ func stop_block():
 
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D):
-	if area.get_parent() == self:
+
+# ignore self / invalid
+	if area == null:
 		return
-	take_damage(1)
-	if health > 1 and area.is_in_group("SubzeroBullet"):
+
+	# ignore spawn overlap bullets already gone
+	if not is_instance_valid(area):
+		return
+
+	# ignore if already in damage cooldown
+	if not can_take_damage:
+		return
+
+	if area.is_in_group("HitBox"):
+		take_damage(1)
+
+	# bullet checks FIRST (important)
+	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
+		take_damage(1)
+		return
+
+	if area.is_in_group("ReptileBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ReptileAcid"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("RaidenElectricBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricForceField"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricBurst"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricForceHurtBox"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("KanoBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("IceBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("JohnnyCageBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("SonyaBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("FireBullet"):
+		return
 
