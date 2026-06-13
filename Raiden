@@ -421,7 +421,7 @@ func cpu_logic(delta):
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
 		move_and_slide()
-		return
+		
 
 	# ---------------- VALID TARGET ----------------
 	if target == null or !is_instance_valid(target):
