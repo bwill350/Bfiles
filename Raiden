@@ -421,7 +421,7 @@ func cpu_logic(delta):
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
 		move_and_slide()
-		
+
 
 	# ---------------- VALID TARGET ----------------
 	if target == null or !is_instance_valid(target):
@@ -681,6 +681,7 @@ func take_damage(amount: int):
 		trigger_finish_state()
 
 	play_anim("hurt")
+
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
