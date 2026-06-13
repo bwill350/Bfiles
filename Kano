@@ -23,9 +23,6 @@ Kano (CharacterBody2D)
 │       └── Sprite2D
 └── KanoAttack.tscn
 
-extends CharacterBody2D
-class_name Kano
-
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -80,9 +77,9 @@ const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
-
+const KANO_BULLET = preload("res://Projectiles/KanoBullet.tscn")
 const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
-const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
+const KANO_ATTACK = preload("res://KanoAttack.tscn")
 
 const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
 
@@ -125,7 +122,6 @@ func apply_stun(duration: float):
 # ---------------- READY ----------------
 func _ready():
 	add_to_group("Fighter")
-
 	spawn_protection = true
 
 	await get_tree().create_timer(1.0).timeout
@@ -270,6 +266,15 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing > 0
 
+	# ---------------- FACING ----------------
+	if input_dir != 0:
+		facing = input_dir
+
+	sprite.flip_h = facing > 0
+
+	$AttackMarker.position = Vector2(-3.9 * facing, -14.6)
+	$KanoShoot.position = Vector2(-3.9 * facing, -14.6)
+
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
@@ -374,18 +379,27 @@ func shoot_acid():
 
 	play_anim("shoot")
 
-	var bullet = REPTILES_ACID.instantiate()
+	# 🔥 SET SHOOT POSITION FIRST
+	$KanoShoot.position = Vector2(-3.9 * facing, -14.6)
 
+	# 🟢 SPAWN BULLET
+	var bullet = KANO_BULLET.instantiate()
 	get_tree().current_scene.add_child(bullet)
 
+	# IMPORTANT: spawn at marker GLOBAL position
 	bullet.global_position = $KanoShoot.global_position
+
+	# 🔫 direction
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-	# 🔴 ONLY KANO'S VERSION IS RED
-	if bullet.has_node("Sprite2D"):
-		bullet.get_node("Sprite2D").modulate = Color(1, 0.2, 0.2)
-	elif bullet.has_node("AnimatedSprite2D"):
-		bullet.get_node("AnimatedSprite2D").modulate = Color(1, 0.2, 0.2)
+	# 🔴 RED ONLY FOR KANO BULLET
+	var sprite = bullet.get_node_or_null("Sprite2D")
+	if sprite:
+		sprite.modulate = Color(1, 0.2, 0.2)
+
+	var anim = bullet.get_node_or_null("AnimatedSprite2D")
+	if anim:
+		anim.modulate = Color(1, 0.2, 0.2)
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -475,6 +489,7 @@ func do_action(anim_name: String):
 
 	play_anim(anim_name)
 
+	# spawn attack immediately OR sync via frame event (better below)
 	if anim_name in [
 		"punch",
 		"kick",
@@ -483,8 +498,9 @@ func do_action(anim_name: String):
 		"jumpkick",
 		"fatality"
 	]:
-		spawn_attack()
+		spawn_attack(anim_name)
 
+	# safer animation wait
 	await sprite.animation_finished
 
 	is_attacking = false
@@ -495,13 +511,51 @@ func do_action(anim_name: String):
 
 
 # ---------------- ATTACK ----------------
-func spawn_attack():
+func spawn_attack(anim_name: String):
 
-	var attack = REPTILE_ATTACK.instantiate()
+	if anim_name not in [
+		"punch",
+		"kick",
+		"uppercut",
+		"roundhousekick",
+		"jumpkick"
+	]:
+		return
 
+	var attack = KANO_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 
-	attack.global_position = attack_marker.global_position
+	# ---------------- FIX: proper facing placement ----------------
+	var pos = $AttackMarker.global_position
+
+	if facing == -1:
+		pos.x = global_position.x - abs($AttackMarker.position.x)
+	else:
+		pos.x = global_position.x + abs($AttackMarker.position.x)
+
+	attack.global_position = pos
+
+	# direction
+	if "direction" in attack:
+		attack.direction = facing
+
+	# ---------------- DAMAGE ----------------
+	var dmg := 1
+
+	match anim_name:
+		"uppercut":
+			dmg = 1
+		"roundhousekick":
+			dmg = 1
+		"jumpkick":
+			dmg = 1
+		_:
+			dmg = 1
+
+	if "damage" in attack:
+		attack.damage = dmg
+	elif attack.has_method("set_damage"):
+		attack.set_damage(dmg)
 
 func start_cannonball():
 	if state == State.DEAD:
@@ -551,6 +605,8 @@ func shoot_player():
 	var bullet = bullet_scene.instantiate()
 
 	get_tree().current_scene.add_child(bullet)
+
+	$KanoShoot.position = Vector2(-3.9 * facing, -14.6)
 
 	bullet.global_position = $KanoShoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
@@ -815,3 +871,6 @@ func _on_kano_hurt_box_area_entered(area):
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
 		return
+
+		if area.has_method("take_damage"):
+			area.take_damage(1)
