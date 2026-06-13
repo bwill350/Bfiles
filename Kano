@@ -23,6 +23,9 @@ Kano (CharacterBody2D)
 │       └── Sprite2D
 └── KanoAttack.tscn
 
+extends CharacterBody2D
+class_name Kano
+
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -393,24 +396,30 @@ func shoot_acid():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
+
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
 		move_and_slide()
-		return
 
-# GRAVITY
+
+	# GRAVITY
 	velocity.y += GRAVITY * delta
+
+	# ---------------- SAFE TARGET CHECK FIRST ----------------
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
 
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
-	# HARD LOCK (Liu Kang style behavior)
+	# HARD LOCK
 	if action_locked:
 		return
 
-# STOP ALL ACTIONS AT 1HP
+	# STOP AT LOW HP
 	if health <= 1:
 		is_attacking = false
 		action_locked = true
@@ -418,41 +427,39 @@ func cpu_logic(delta):
 		move_and_slide()
 		return
 
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		return
-
 	ai_timer -= delta
 
-	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
 
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
-
-# ---------------- MOVEMENT ----------------
+	# ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
-
 		velocity.x = direction * SPEED * 0.8
-
-	if state != State.RUN:
 		state = State.RUN
 
 	if not is_attacking:
 		play_anim("walk")
 
 	else:
-
 		velocity.x = 0
 		velocity.y = 0
 
-	if state != State.IDLE:
-		state = State.IDLE
+	# ---------------- AI ACTIONS ----------------
+	if ai_timer <= 0:
 
-	if not is_attacking:
-		play_anim("walk")
+		ai_timer = randf_range(0.4, 0.8)
+
+		match randi() % 5:
+			0:
+				do_action("punch")
+			1:
+				do_action("kick")
+			2:
+				do_action("uppercut")
+			3:
+				do_action("roundhousekick")
+			4:
+				shoot_player()
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
