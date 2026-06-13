@@ -19,6 +19,9 @@ LiuKang (CharacterBody2D)
 ├── HitFlashTimer (Timer)
 └── LiuKangAttack (Area2D)
 
+extends CharacterBody2D
+class_name LiuKang
+
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -392,7 +395,7 @@ func cpu_logic(delta):
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
 		move_and_slide()
-		return
+
 
 	# GRAVITY
 	velocity.y += GRAVITY * delta
