@@ -334,34 +334,17 @@ func cpu_logic(delta):
 	if is_hurting:
 		velocity.x = 0
 		velocity.y += GRAVITY * delta
-		do_action("punch")
-		do_action("uppercut")
-		do_action("roundhousekick")
 		move_and_slide()
-
-
-	# HARD LOCK (Liu Kang style behavior)
-	if action_locked:
 		return
-
-	ai_timer -= delta
-
-	var dist = target.global_position.x - global_position.x
-	var dir = sign(dist)
-	velocity.y += GRAVITY * delta
-	facing = dir
-	sprite.flip_h = facing > 0
-
-# FACE TARGET
-	if dir != 0:
-		facing = dir
-
-	sprite.flip_h = facing > 0
 
 # GRAVITY
 	velocity.y += GRAVITY * delta
 
-	if target == null:
+	var dist = target.global_position.x - global_position.x
+	var direction = sign(dist)
+
+	# HARD LOCK (Liu Kang style behavior)
+	if action_locked:
 		return
 
 # STOP ALL ACTIONS AT 1HP
@@ -372,10 +355,24 @@ func cpu_logic(delta):
 		move_and_slide()
 		return
 
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
+
+	ai_timer -= delta
+
+	velocity.y += GRAVITY * delta
+	facing = direction
+	sprite.flip_h = facing > 0
+
+# GRAVITY
+	velocity.y += GRAVITY * delta
+
+
 # ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
 
-		velocity.x = dir * SPEED * 0.8
+		velocity.x = direction * SPEED * 0.8
 
 	if state != State.RUN:
 		state = State.RUN
@@ -392,7 +389,7 @@ func cpu_logic(delta):
 		state = State.IDLE
 
 	if not is_attacking:
-		play_anim("idle")
+		play_anim("walk")
 
 	# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
@@ -418,8 +415,10 @@ func cpu_logic(delta):
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
+
 	if is_finish_state:
 		return
+
 	if state == State.DEAD:
 		return
 
@@ -432,8 +431,19 @@ func do_action(anim_name: String):
 
 	play_anim(anim_name)
 
-	if anim_name in ["punch", "kick", "roundhousekick", "uppercut"]:
+	# ---------------- NORMAL ATTACKS ----------------
+	if anim_name in [
+		"punch",
+		"kick",
+		"uppercut",
+		"roundhousekick",
+		"jumpkick"
+	]:
 		spawn_attack(anim_name)
+
+	# ---------------- SUBZERO SPECIAL (NO NEW NAME) ----------------
+	if has_node("AttackMarker"):
+		$AttackMarker.call_deferred("emit_signal", "trigger_attack")
 
 	await sprite.animation_finished
 
@@ -472,30 +482,35 @@ func check_combos():
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
 
+	if anim_name not in [
+		"punch",
+		"kick",
+		"uppercut",
+		"roundhousekick",
+		"jumpkick"
+	]:
+		return
+
 	var attack = SUBZERO_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 
 	attack.global_position = attack_marker.global_position
+	attack.scale.x = facing  # THIS replaces facing system
 
 	var dmg := 1
 
 	match anim_name:
-		"roundhousekick":
-			dmg = 1
 		"uppercut":
-			dmg = 1
-		"kick":
-			dmg = 1
-		"punch":
-			dmg = 1
+			dmg = 2
+		"roundhousekick":
+			dmg = 2
 
 	if attack.has_method("set_damage"):
 		attack.set_damage(dmg)
 	else:
-		attack.set("damage", dmg)
+		attack.damage = dmg
 
-	attack.set("owner", self)
-	attack.set("facing", facing)
+	attack.owner = self
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -531,18 +546,17 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
+	if spawn_protection:
+		return
 	if health <= 1:
 		action_locked = true
 		velocity.x = 0
-	if spawn_protection:
-		return
+
 	if state == State.DEAD:
 		return
 
 	if not can_take_damage:
 		return
-
-	can_take_damage = false
 
 	is_hurting = true
 	hurt_locked = true
@@ -627,6 +641,68 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
-	if area.get_parent() == self:
+# ignore self / invalid
+	if area == null:
 		return
-	take_damage(1)
+
+	# ignore spawn overlap bullets already gone
+	if not is_instance_valid(area):
+		return
+
+	# ignore if already in damage cooldown
+	if not can_take_damage:
+		return
+
+	if area.is_in_group("HitBox"):
+		take_damage(1)
+
+	if area.is_in_group("SubzeroBullet"):
+		return
+
+	if area.is_in_group("ReptileBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ReptileAcid"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("RaidenElectricBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricForceField"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricBurst"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("ElectricForceHurtBox"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("KanoBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("IceBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("FireBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("JohnnyCageBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("SonyaBullet"):
+		take_damage(1)
+		return
