@@ -45,6 +45,9 @@ const LIU_KANG = preload("res://LiuKang.tscn")
 const REPTILE = preload("res://Scenes/Boss/Reptile.tscn")
 const SUBZERO = preload("res://Scenes/Boss/Subzero.tscn")
 const RAIDEN = preload("res://Scenes/Boss/Raiden.tscn")
+const SONYA = preload("res://Scenes/Boss/Sonya.tscn")
+const KANO = preload("res://Scenes/Boss/Kano.tscn")
+const JOHNNYCAGE = preload("res://JohnnyCage.tscn")
 
 var p1
 var p2
@@ -77,6 +80,12 @@ func spawn_p1():
 				p1 = SUBZERO.instantiate()
 			"Raiden":
 				p1 = RAIDEN.instantiate()
+			"Sonya":
+				p1 = SONYA.instantiate()
+			"Kano":
+				p1 = KANO.instantiate()
+			"JohnnyCage":
+				p1 = JOHNNYCAGE.instantiate()
 
 	if p1:
 		p1.position = P1_SPAWN
@@ -96,6 +105,12 @@ func spawn_p2():
 				p2 = SUBZERO.instantiate()
 			"Raiden":
 				p2 = RAIDEN.instantiate()
+			"Sonya":
+				p2 = SONYA.instantiate()
+			"Kano":
+				p2 = KANO.instantiate()
+			"JohnnyCage":
+				p2 = JOHNNYCAGE.instantiate()
 
 	if p2:
 		p2.position = P2_SPAWN
