@@ -1,45 +1,50 @@
 extends Area2D
-class_name Fireball
+class_name SonyaBullet
+
+@export var speed: float = 900.0
+@export var damage: int = 1
+@export var lifetime: float = 3.0
 
 var velocity: Vector2 = Vector2.ZERO
-var direction := 1
 var has_hit := false
 
-@export var speed := 900.0
-@export var lifetime := 2.0
-@export var damage := 1
+@onready var sprite: AnimatedSprite2D = $Sprite
+
 
 func _ready():
-	add_to_group("Fireball")
+
+	if sprite:
+		sprite.play("SonyaBullet")
+
+	add_to_group("SonyaBullet")
 
 	area_entered.connect(_on_area_entered)
+
+	# safety: always move forward even if spawn forgot velocity
+	if velocity == Vector2.ZERO:
+		velocity = Vector2.RIGHT * speed
 
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
 
-func _physics_process(delta):
-	velocity = Vector2(direction, 0) * speed
-	position += velocity * delta
 
-func _on_area_entered(area):
+func _physics_process(delta):
+	global_position += velocity * delta
+
+
+func _on_area_entered(area: Area2D) -> void:
 
 	if has_hit:
 		return
 
-	if area.is_in_group("Fireball"):
+	# ignore self bullets
+	if area.is_in_group("SonyaBullet"):
 		return
 
-	var fighter = area.get_parent()
-
-	if fighter == null:
+	# OPTIONAL: ignore other bullets
+	if area.is_in_group("SubzeroBullet") or area.is_in_group("ReptileBullet"):
 		return
 
-	if not fighter.is_in_group("Fighter"):
-		return
-
+	# apply hit once then remove
 	has_hit = true
-
-	if fighter.has_method("take_damage"):
-		fighter.take_damage(damage)
-
 	queue_free()
