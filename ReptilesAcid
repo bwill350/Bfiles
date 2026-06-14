@@ -3,20 +3,42 @@ class_name Reptilesacid
 
 @export var speed: float = 700.0
 @export var lifetime: float = 3.0
+@export var damage: int = 1
 
 var velocity: Vector2 = Vector2.ZERO
+var has_hit := false
 
 @onready var sprite: Sprite2D = $Sprite2D
 
+
 func _ready():
+
 	add_to_group("ReptileAcid")
 
-
 	sprite.modulate = Color(0.2, 1.0, 0.3)
+
+	# 🔥 safety: ensure it ALWAYS moves even if spawn forgets velocity
+	if velocity == Vector2.ZERO:
+		velocity = Vector2.RIGHT * speed
 
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
 
+	area_entered.connect(_on_area_entered)
+
+
 func _physics_process(delta):
 	global_position += velocity * delta
 
+
+func _on_area_entered(area: Area2D) -> void:
+
+	if has_hit:
+		return
+
+	# ignore itself
+	if area.is_in_group("ReptileAcid"):
+		return
+
+	has_hit = true
+	queue_free()
