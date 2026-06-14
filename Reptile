@@ -115,7 +115,7 @@ func apply_stun(duration: float):
 	is_shooting = false
 	velocity = Vector2.ZERO
 
-	play_anim("freeze")
+
 
 	await get_tree().create_timer(duration).timeout
 
@@ -124,6 +124,8 @@ func apply_stun(duration: float):
 
 # ---------------- READY ----------------
 func _ready():
+	await get_tree().process_frame
+	global_position.y += 0
 	add_to_group("Fighter")
 
 	spawn_protection = true
@@ -193,6 +195,8 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing > 0
 
+	$AttackMarker.position = Vector2(63 * facing, -155)
+	$Reptileshoot.position = Vector2(63 * facing, -155)
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
@@ -229,6 +233,10 @@ func _physics_process(delta):
 		State.IDLE:
 			if not is_attacking:
 				play_anim("idle")
+
+
+	if is_hurting and hurt_locked:
+		return
 
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
@@ -302,12 +310,11 @@ func shoot_acid():
 	bullet.global_position = $Reptileshoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-	await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(0.2).timeout
 
 	is_attacking = false
 	action_locked = false
 
-	play_anim("idle")
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
@@ -404,8 +411,6 @@ func do_action(anim_name: String):
 	is_attacking = false
 	action_locked = false
 
-	play_anim("idle")
-
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
 
@@ -443,6 +448,7 @@ func spawn_attack(anim_name: String):
 func shoot_player():
 	if is_finish_state:
 		return
+
 	if is_shooting:
 		return
 
@@ -454,24 +460,30 @@ func shoot_player():
 
 	var bullet_scene: PackedScene
 
-	# ---------------- SPECIAL BULLET ----------------
 	if special_bullet != null:
-
 		bullet_scene = special_bullet
-
-		# reset after one shot
 		special_bullet = null
-
 	else:
-
 		bullet_scene = BULLET_SCENE
 
 	var bullet = bullet_scene.instantiate()
-
 	get_tree().current_scene.add_child(bullet)
 
+	# Marker follows facing
+	$Reptileshoot.position = Vector2(88.9 * facing, -14.6)
+
+	# Spawn from marker
 	bullet.global_position = $Reptileshoot.global_position
+
+	# Move in facing direction
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
+
+	# Optional sprite flip
+	if bullet.has_node("Sprite2D"):
+		bullet.get_node("Sprite2D").flip_h = facing > 0
+
+	if bullet.has_node("AnimatedSprite2D"):
+		bullet.get_node("AnimatedSprite2D").flip_h = facing > 0
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -487,72 +499,39 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-	
+
+	if spawn_protection:
+		return
+
+	if state == State.DEAD:
+		return
+
 	if not can_take_damage:
 		return
 
 	can_take_damage = false
 
-	if state == State.DEAD:
-		can_take_damage = true
-		return
-
-	if spawn_protection:
-		can_take_damage = true
-		return
-
-	# BLOCK REDUCTION
-	if is_blocking:
-		amount = max(amount - 1, 0)
-
-	if amount <= 0:
-		can_take_damage = true
-		return
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
 
 	health -= amount
 	health = max(health, 0)
 
 	health_changed.emit(health)
+
 	hit_sound.play()
-
-	# 💀 DEATH FIRST
-	if health <= 0:
-		die()
-		return
-
-	# ⚠️ FINISH STATE (ONLY ONCE)
-	if health == 1 and not is_finish_state:
-		trigger_finish_state()
-
-	# 💥 HURT FX ALWAYS WORKS EXCEPT DEAD
-	is_hurting = true
-	hurt_locked = true
-	action_locked = true
-
-	state = State.IDLE
 	play_anim("hurt")
 
-	var blood = BLOOD_EFFECT.instantiate()
-	get_tree().current_scene.add_child(blood)
-	blood.global_position = blood_marker.global_position
-
-	await sprite.animation_finished
+	await get_tree().create_timer(0.15).timeout
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
-
-	await get_tree().create_timer(0.4).timeout
-
 	can_take_damage = true
 
-	# ⚠️ FINISH HIM
-	if health == 0:
-		if not is_finish_state:
-			trigger_finish_state()
-		finish_label.visible = true
-	else:
-		finish_label.visible = false
+	if health <= 0:
+		die()
 
 func trigger_finish_state():
 	if is_finish_state:
@@ -565,7 +544,7 @@ func trigger_finish_state():
 	is_hurting = false
 
 	action_locked = true
-	hurt_locked = true
+	hurt_locked = false
 
 	state = State.IDLE
 	velocity = Vector2.ZERO
@@ -646,7 +625,7 @@ func check_combos():
 func die():
 
 	state = State.DEAD
-
+	health <= 0
 	velocity = Vector2.ZERO
 
 	var death = BLOOD_DEATH.instantiate()
@@ -682,6 +661,7 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 
 	if area.is_in_group("HitBox"):
 		take_damage(1)
+		return
 
 	# bullet checks FIRST (important)
 	if area.is_in_group("SubzeroBullet"):
