@@ -44,6 +44,7 @@ var hurt_locked := false
 var can_take_damage := true
 var is_finish_state := false
 var lock_timer := 0.0
+var finish_triggered := false
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -518,6 +519,16 @@ func take_damage(amount: int):
 	health -= amount
 	health = max(health, 0)
 
+# ---------------- FINISH HIM STATE ----------------
+	if health == 1 and not finish_triggered:
+		finish_triggered = true
+		trigger_finish_state()
+
+# ---------------- DEATH ----------------
+	if health <= 0:
+		die()
+		return
+
 	health_changed.emit(health)
 
 	hit_sound.play()
@@ -530,21 +541,15 @@ func take_damage(amount: int):
 	action_locked = false
 	can_take_damage = true
 
-	if health <= 0:
-		die()
-
 func trigger_finish_state():
 	if is_finish_state:
 		return
 
 	is_finish_state = true
-
+	action_locked = true
 	is_attacking = false
 	is_shooting = false
 	is_hurting = false
-
-	action_locked = true
-	hurt_locked = false
 
 	state = State.IDLE
 	velocity = Vector2.ZERO
@@ -624,14 +629,19 @@ func check_combos():
 # ---------------- DEATH ----------------
 func die():
 
+	if state == State.DEAD:
+		return
+
 	state = State.DEAD
-	health <= 0
+	health = 0
 	velocity = Vector2.ZERO
 
+	trigger_finish_state() # 👈 THIS is what you were missing
+
+	await get_tree().create_timer(1.2).timeout
+
 	var death = BLOOD_DEATH.instantiate()
-
 	get_tree().current_scene.add_child(death)
-
 	death.global_position = global_position
 
 	queue_free()
