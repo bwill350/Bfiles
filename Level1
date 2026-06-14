@@ -1,43 +1,5 @@
 extends Node2D
 
-# =========================================================
-# LEVEL TREE
-# =========================================================
-#
-# Level1 (Node2D)
-# └── HUD (CanvasLayer)
-#     ├── DukeLabel (Label)
-#     ├── RaidenLabel (Label)
-#     ├── ReptileLabel (Label)
-#     ├── SubzeroLabel (Label)
-#     │
-#     ├── DukeHealthBar (Control / TextureProgressBar)
-#     ├── RaidenHealthBar (Control / TextureProgressBar)
-#     ├── ReptileHealthBar (Control / TextureProgressBar)
-#     ├── SubzeroHealthBar (Control / TextureProgressBar)
-#     │
-#     ├── Points (Label)
-#     ├── Health (Label)
-#     │
-#     ├── Seg1 (TextureRect)
-#     ├── Seg2 (TextureRect)
-#     ├── Seg3 (TextureRect)
-#     ├── Seg4 (TextureRect)
-#     ├── Seg5 (TextureRect)
-#     ├── Seg6 (TextureRect)
-#     ├── Seg7 (TextureRect)
-#     ├── Seg8 (TextureRect)
-#     ├── Seg9 (TextureRect)
-#     ├── Seg10 (TextureRect)
-#     ├── Seg11 (TextureRect)
-#     ├── Seg12 (TextureRect)
-#     ├── Seg13 (TextureRect)
-#     ├── Seg14 (TextureRect)
-#     ├── Seg15 (TextureRect)
-#     └── Seg16 (TextureRect)
-#
-# =========================================================
-
 const P1_SPAWN := Vector2(603, 496)
 const P2_SPAWN := Vector2(840, 496)
 
@@ -66,6 +28,37 @@ func spawn_players():
 	spawn_p1()
 	spawn_p2()
 
+func _on_p1_health_changed(health):
+
+	$HUD/DukeLabel.text = "%s: %d" % [Game.p1_character, health]
+	$HUD/DukeHealthBar.value = health
+
+	update_p1_segments(health, $HUD/DukeHealthBar.max_value)
+
+func _on_p2_health_changed(health):
+
+	$HUD/ReptileLabel.text = "%s: %d" % [Game.p2_character, health]
+	$HUD/ReptileHealthBar.value = health
+
+	update_p2_segments(health, $HUD/ReptileHealthBar.max_value)
+
+func update_p1_segments(health, max_hp):
+	var percent = float(health) / float(max_hp)
+
+	$HUD/Seg5.visible = percent > 0.00
+	$HUD/Seg6.visible = percent > 0.01
+	$HUD/Seg7.visible = percent > 0.02
+	$HUD/Seg8.visible = percent > 0.03
+
+
+func update_p2_segments(health, max_hp):
+	var percent = float(health) / float(max_hp)
+
+	$HUD/Seg1.visible = percent > 0.00
+	$HUD/Seg2.visible = percent > 0.01
+	$HUD/Seg3.visible = percent > 0.02
+	$HUD/Seg4.visible = percent > 0.03
+
 func spawn_p1():
 
 	if Game.p1_data != null:
@@ -91,6 +84,8 @@ func spawn_p1():
 		p1.position = P1_SPAWN
 		add_child(p1)
 
+		p1.health_changed.connect(_on_p1_health_changed)
+
 func spawn_p2():
 
 	if Game.p2_data != null:
@@ -115,6 +110,8 @@ func spawn_p2():
 	if p2:
 		p2.position = P2_SPAWN
 		add_child(p2)
+
+		p2.health_changed.connect(_on_p2_health_changed)
 
 # ---------------- SETUP ----------------
 func setup():
