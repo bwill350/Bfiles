@@ -1,21 +1,45 @@
 extends Area2D
 class_name Fireball
 
-# ---------------- MOVEMENT ----------------
 var velocity: Vector2 = Vector2.ZERO
 var direction := 1
+var has_hit := false
 
 @export var speed := 900.0
 @export var lifetime := 2.0
+@export var damage := 1
 
-# ---------------- READY ----------------
 func _ready():
 	add_to_group("Fireball")
+
+	area_entered.connect(_on_area_entered)
 
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
 
-# ---------------- PHYSICS ----------------
 func _physics_process(delta):
 	velocity = Vector2(direction, 0) * speed
 	position += velocity * delta
+
+func _on_area_entered(area):
+
+	if has_hit:
+		return
+
+	if area.is_in_group("Fireball"):
+		return
+
+	var fighter = area.get_parent()
+
+	if fighter == null:
+		return
+
+	if not fighter.is_in_group("Fighter"):
+		return
+
+	has_hit = true
+
+	if fighter.has_method("take_damage"):
+		fighter.take_damage(damage)
+
+	queue_free()
