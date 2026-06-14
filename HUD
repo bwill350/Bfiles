@@ -6,6 +6,9 @@ extends CanvasLayer
 @onready var subzero_label = $SubzeroLabel
 @onready var raiden_label = $RaidenLabel
 @onready var liu_kang_label = $LiuKangLabel
+@onready var sonya_label = $SonyaLabel
+@onready var kano_label = $KanoLabel
+@onready var johnnycage_label = $JohnnyCageLabel
 
 @onready var points_label = $Points
 
@@ -14,6 +17,9 @@ extends CanvasLayer
 @onready var subzero_bar: TextureProgressBar = $SubzeroHealthBar
 @onready var raiden_bar: TextureProgressBar = $RaidenHealthBar
 @onready var liu_kang_bar: TextureProgressBar = $LiuKangHealthBar
+@onready var sonya_bar: TextureProgressBar = $SonyaHealthBar
+@onready var kano_bar: TextureProgressBar = $KanoHealthBar
+@onready var johnny_cage_bar: TextureProgressBar = $JohnnyCageHealthBar
 
 # ---------------- SEGMENTS ----------------
 @onready var seg1 = $Seg1
@@ -41,102 +47,185 @@ extends CanvasLayer
 @onready var seg19 = $Seg19
 @onready var seg20 = $Seg20
 
-const P1_SPAWN := Vector2(603, 496)
-const P2_SPAWN := Vector2(840, 496)
+@onready var seg21 = $Seg21
+@onready var seg22 = $Seg22
+@onready var seg23 = $Seg23
+@onready var seg24 = $Seg24
 
-const LIU_KANG = preload("res://LiuKang.tscn")
-const REPTILE = preload("res://Scenes/Boss/Reptile.tscn")
-const SUBZERO = preload("res://Scenes/Boss/Subzero.tscn")
-const RAIDEN = preload("res://Scenes/Boss/Raiden.tscn")
+@onready var seg25 = $Seg25
+@onready var seg26 = $Seg26
+@onready var seg27 = $Seg27
+@onready var seg28 = $Seg28
 
-var p1
-var p2
+@onready var seg29 = $Seg29
+@onready var seg30 = $Seg30
+@onready var seg31 = $Seg31
+@onready var seg32 = $Seg32
 
-# ---------------- READY ----------------
+# ---------------- REFERENCES ----------------
+var reptile
+var subzero
+var duke
+var raiden
+var liu_kang
+var sonya
+var kano
+var johnny_cage
+
 func _ready():
-	spawn_players()
-	setup()
-	assign_targets()
+	if Game.has_signal("points_changed"):
+		Game.points_changed.connect(_on_points_changed)
 
-	await get_tree().create_timer(0.1).timeout
-	enable_spawn_protection()
+	_find_fighters()
 
-# ---------------- SPAWN ----------------
-func spawn_players():
-	spawn_p1()
-	spawn_p2()
+func _find_fighters():
 
-func spawn_p1():
+	duke = get_tree().get_first_node_in_group("Duke")
+	reptile = get_tree().get_first_node_in_group("Reptile")
+	subzero = get_tree().get_first_node_in_group("Subzero")
+	raiden = get_tree().get_first_node_in_group("Raiden")
+	liu_kang = get_tree().get_first_node_in_group("LiuKang")
+	sonya = get_tree().get_first_node_in_group("Sonya")
+	kano = get_tree().get_first_node_in_group("Kano")
+	johnny_cage = get_tree().get_first_node_in_group("JohnnyCage")
 
-	if Game.p1_data != null:
-		p1 = Game.p1_data.scene.instantiate()
-	else:
-		match Game.p1_character:
-			"LiuKang":
-				p1 = LIU_KANG.instantiate()
-			"Reptile":
-				p1 = REPTILE.instantiate()
-			"Subzero":
-				p1 = SUBZERO.instantiate()
-			"Raiden":
-				p1 = RAIDEN.instantiate()
+	# HUD names from character select
+	duke_label.text = Game.p1_character
+	reptile_label.text = Game.p2_character
 
-	if p1:
-		p1.position = P1_SPAWN
-		add_child(p1)
 
-func spawn_p2():
 
-	if Game.p2_data != null:
-		p2 = Game.p2_data.scene.instantiate()
-	else:
-		match Game.p2_character:
-			"LiuKang":
-				p2 = LIU_KANG.instantiate()
-			"Reptile":
-				p2 = REPTILE.instantiate()
-			"Subzero":
-				p2 = SUBZERO.instantiate()
-			"Raiden":
-				p2 = RAIDEN.instantiate()
+func _process(_delta):
+	if reptile == null \
+	or subzero == null \
+	or duke == null \
+	or raiden == null \
+	or liu_kang == null \
+	or sonya == null \
+	or kano == null \
+	or johnny_cage == null:
+		_find_fighters()
 
-	if p2:
-		p2.position = P2_SPAWN
-		add_child(p2)
+func update_p1_segments(health, max_hp):
+	var percent = float(health) / float(max_hp)
 
-# ---------------- SETUP ----------------
-func setup():
-	if p1:
-		p1.add_to_group("player")
+	seg5.visible = percent > 0.00
+	seg6.visible = percent > 0.01
+	seg7.visible = percent > 0.02
+	seg8.visible = percent > 0.03
 
-	if p2:
-		p2.add_to_group("player")
 
-# ---------------- TARGETS ----------------
-func assign_targets():
+func update_p2_segments(health, max_hp):
+	var percent = float(health) / float(max_hp)
 
-	if Game.vs_cpu and p2:
-		p2.is_cpu = true
-		p2.target = p1
+	seg1.visible = percent > 0.00
+	seg2.visible = percent > 0.01
+	seg3.visible = percent > 0.02
+	seg4.visible = percent > 0.03
 
-	if p1 and p2:
-		p1.target = p2
-		p2.target = p1
+# ---------------- DUKE ----------------
+func _on_duke_health_changed(health):
+	duke_label.text = "%s: %d" % [Game.p1_character, health]
+	duke_bar.value = health
 
-# ---------------- SPAWN PROTECTION ----------------
-func enable_spawn_protection():
+	var max_hp = duke_bar.max_value
+	if max_hp <= 0:
+		return
 
-	if p1:
-		p1.spawn_protection = true
+	var percent = float(health) / float(max_hp)
 
-	if p2:
-		p2.spawn_protection = true
+# ---------------- REPTILE ----------------
+func _on_reptile_health_changed(health):
+	reptile_label.text = "%s: %d" % [Game.p2_character, health]
+	reptile_bar.value = health
+	
 
-	await get_tree().create_timer(1.0).timeout
+	update_p2_segments(health, reptile_bar.max_value)
 
-	if p1:
-		p1.spawn_protection = false
+	var max_hp = reptile_bar.max_value
+	if max_hp <= 0:
+		return
 
-	if p2:
-		p2.spawn_protection = false
+	var percent = float(health) / float(max_hp)
 
+# ---------------- SUBZERO ----------------
+func _on_subzero_health_changed(health):
+	subzero_label.text = "%s: %d" % [Game.p1_character, health]
+	subzero_bar.value = health
+
+	update_p1_segments(health, subzero_bar.max_value)
+
+	var max_hp = subzero_bar.max_value
+	if max_hp <= 0:
+		return
+
+	var percent = float(health) / float(max_hp)
+
+# ---------------- RAIDEN ----------------
+func _on_raiden_health_changed(health):
+	raiden_label.text = "%s: %d" % [Game.p1_character, health]
+	raiden_bar.value = health
+
+	update_p1_segments(health, raiden_bar.max_value)
+
+	var max_hp = raiden_bar.max_value
+	if max_hp <= 0:
+		return
+
+	var percent = float(health) / float(max_hp)
+
+# ---------------- LIU KANG ----------------
+func _on_liu_kang_health_changed(health):
+	liu_kang_label.text = "%s: %d" % [Game.p1_character, health]
+	liu_kang_bar.value = health
+
+	update_p1_segments(health, liu_kang_bar.max_value)
+
+	var max_hp = liu_kang_bar.max_value
+	if max_hp <= 0:
+		return
+
+	var percent = float(health) / float(max_hp)
+
+# ---------------- SONYA ----------------
+func _on_sonya_health_changed(health):
+	sonya_label.text = "%s: %d" % [Game.p1_character, health]
+	sonya_bar.value = health
+
+	update_p1_segments(health, sonya_bar.max_value)
+
+	var max_hp = sonya_bar.max_value
+	if max_hp <= 0:
+		return
+
+	var percent = float(health) / float(max_hp)
+
+# ---------------- KANO ----------------
+func _on_kano_health_changed(health):
+	kano_label.text = "%s: %d" % [Game.p1_character, health]
+	kano_bar.value = health
+
+	update_p1_segments(health, kano_bar.max_value)
+
+	var max_hp = kano_bar.max_value
+	if max_hp <= 0:
+		return
+
+	var percent = float(health) / float(max_hp)
+
+# ---------------- JOHNNY CAGE ----------------
+func _on_johnny_cage_health_changed(health):
+	johnnycage_label.text = "%s: %d" % [Game.p1_character, health]
+	johnny_cage_bar.value = health
+
+	update_p1_segments(health, johnny_cage_bar.max_value)
+
+	var max_hp = johnny_cage_bar.max_value
+	if max_hp <= 0:
+		return
+
+	var percent = float(health) / float(max_hp)
+
+# ---------------- POINTS ----------------
+func _on_points_changed(points):
+	points_label.text = "Points: %d" % points
