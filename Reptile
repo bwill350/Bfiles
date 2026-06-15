@@ -555,6 +555,8 @@ func trigger_finish_state():
 	velocity = Vector2.ZERO
 
 	finish_label.visible = true
+	await get_tree().create_timer(1.0).timeout
+	finish_label.visible = false
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
