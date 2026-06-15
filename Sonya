@@ -117,7 +117,7 @@ func _ready():
 	health = max_health
 	health_changed.emit(health)
 
-	play_anim("idle")
+
 
 
 
@@ -179,6 +179,8 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing > 0
 
+	$AttackMarker.position = Vector2(63 * facing, -155)
+	$SonyaShoot.position = Vector2(63 * facing, -155)
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
@@ -382,40 +384,45 @@ func cpu_logic(delta):
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
-
-	if spawn_locked:
+	# can't act if dead
+	if state == State.DEAD:
 		return
 
+	# prevent spam actions
 	if action_locked:
 		return
 
 	action_locked = true
 	is_attacking = true
-	lock_timer = 0.3
 
 	play_anim(anim_name)
 
-	# ---------------- NORMAL ATTACKS ----------------
+	# ---------------- MELEE ATTACKS ----------------
 	if anim_name in [
 		"punch",
 		"kick",
-		"jumpkick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"jumpkick"
 	]:
-		if has_node("AttackMarker"):
+		# main hitbox system
+		spawn_attack(anim_name)
+
+		# OPTIONAL extra projectile/marker attack (only if Sonya uses it)
+		if has_node("AttackMarker") and SONYA_ATTACK:
 			var attack = SONYA_ATTACK.instantiate()
 			get_tree().current_scene.add_child(attack)
 
 			attack.global_position = $AttackMarker.global_position
 			attack.scale.x = facing
 
+	# wait for animation to finish
 	await sprite.animation_finished
 
+	# reset states safely
 	is_attacking = false
 	action_locked = false
 	hurt_locked = false
-
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
 
@@ -431,7 +438,7 @@ func spawn_attack(anim_name: String):
 	var attack = SONYA_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 
-	attack.global_position = attack_marker.global_position
+	attack.global_position = $AttackMarker.global_position
 	attack.scale.x = facing  # THIS replaces facing system
 
 	var dmg := 1
@@ -694,6 +701,7 @@ func _on_sonya_hurt_box_area_entered(area):
 
 	if area.is_in_group("HitBox"):
 		take_damage(1)
+		return
 
 	if area.is_in_group("ReptileBullet"):
 		take_damage(1)
