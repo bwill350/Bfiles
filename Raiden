@@ -150,6 +150,8 @@ func _on_health_changed(h):
 
 # ---------------- READY ----------------
 func _ready():
+	await get_tree().process_frame
+	global_position.y += 0
 	ai_timer = 2.0
 	health_changed.connect(_on_health_changed)
 	# ---------------- HARD SPAWN LOCK ----------------
@@ -242,7 +244,7 @@ func _physics_process(delta):
 		special_move_timer -= delta
 
 		velocity.x = facing * 1300
-		velocity.y = 0
+		velocity.y += GRAVITY * delta
 
 		move_and_slide()
 
@@ -311,6 +313,8 @@ func _physics_process(delta):
 
 	sprite.flip_h = -facing < 0
 
+	$AttackMarker.position = Vector2(63 * facing, -155)
+	$Raidenshoot.position = Vector2(63 * facing, -155)
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
@@ -648,11 +652,9 @@ func spawn_attack(anim_name: String):
 func take_damage(amount: int):
 	if spawn_protection:
 		return
+
 	# already dead
 	if state == State.DEAD:
-		return
-
-	if spawn_protection:
 		return
 
 	if not can_take_damage:
@@ -662,7 +664,7 @@ func take_damage(amount: int):
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
-	can_take_damage = false
+	can_take_damage = true
 
 	is_hurting = true
 	hurt_locked = true
@@ -757,6 +759,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 
 	if area.is_in_group("HitBox"):
 		take_damage(1)
+		return
 
 	# bullet checks FIRST (important)
 	if area.is_in_group("SubzeroBullet"):
@@ -792,6 +795,10 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		return
 
 	if area.is_in_group("IceBullet"):
+		take_damage(1)
+		return
+
+	if area.is_in_group("Fireball"):
 		take_damage(1)
 		return
 
