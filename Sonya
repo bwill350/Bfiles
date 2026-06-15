@@ -1,6 +1,23 @@
 extends CharacterBody2D
 class_name Sonya
 
+Sonya (CharacterBody2D)
+├── CollisionShape2D
+├── SonyaHurtBox (Area2D)
+│   └── CollisionShape2D
+├── Sprite (AnimatedSprite2D)
+├── AttackMarker (Marker2D)
+├── BloodMarker (Marker2D)
+├── SonyaShoot (Marker2D)
+├── Hit (AudioStreamPlayer2D)
+├── Agent (NavigationAgent2D)
+├── HUD (CanvasLayer)
+│   └── FinishLabel (Label)
+│       └── Sprite2D
+├── PhaseTimer (Timer)
+├── ShootTimer (Timer)
+├── HitFlashTimer (Timer)
+└── SonyaAttack (Area2D)
 
 signal health_changed(health)
 signal combo_used(combo_name: String)
