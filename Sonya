@@ -330,9 +330,19 @@ func cpu_logic(delta):
 
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
-		velocity.x = 0
-		velocity.y += GRAVITY * delta
-		move_and_slide()
+
+		velocity.x = knockback_x
+
+	# gradually reduce knockback
+		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
+
+		if abs(knockback_x) < 10:
+			knockback_x = 0
+			is_hurting = false
+
+			velocity.y += GRAVITY * delta
+			move_and_slide()
+			return
 
 
 # GRAVITY
@@ -729,72 +739,51 @@ func play_anim(anim_name: String):
 
 
 # ---------------- HURT BOX ----------------
-# ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area):
 
-	# ignore invalid first
-	if area == null or not is_instance_valid(area):
+	if area == null or !is_instance_valid(area):
 		return
 
-	# ---------------- REPTILE SPEAR SPECIAL ----------------
-	if area.is_in_group("ReptileSpear"):
-
-		is_hurting = true
-		action_locked = true
-		is_attacking = false
-		take_damage(1)
-		play_anim("hurt") # or "walk" if you want fake stun walk
-		print("SPEAR HIT:", name)
-		if is_hurting:
-			velocity.x = -11888
-			move_and_slide()
-
-
-	var dist = target.global_position.x - global_position.x
-	var direction = sign(dist)
-
-	# HARD LOCK (Liu Kang style behavior)
-	if action_locked:
-		return
-
-# STOP ALL ACTIONS AT 1HP
-	if health <= 1:
-		is_attacking = false
-		action_locked = true
-		velocity.x = 0
-		move_and_slide()
-		return
-
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		return
-	facing = direction
-	sprite.flip_h = facing > 0
-
-# ---------------- MOVEMENT ----------------
-	if is_hurting:
-		velocity.x = 0
-		play_anim("hurt")
-		move_and_slide()
-		return
-
-	# ---------------- DAMAGE COOLDOWN ----------------
 	if not can_take_damage:
 		return
 
-	# ---------------- HITBOX ----------------
+	# SPEAR
+	if area.is_in_group("ReptileSpear"):
+		take_damage(1)
+		is_hurting = true
+		velocity.x = -1200
+
+		await get_tree().create_timer(0.25).timeout
+
+		velocity.x = 0
+		is_hurting = false
+		return
+
+	# MELEE
 	if area.is_in_group("HitBox"):
 		take_damage(1)
 		is_hurting = true
-	# knockback away from attacker
 		velocity.x = -facing * 600
-		velocity.y = -200
-		play_anim("hurt")
+
+		await get_tree().create_timer(0.25).timeout
+
+		velocity.x = 0
+		is_hurting = false
 		return
 
-	# ---------------- BULLETS ----------------
+	# BULLET
 	if area.is_in_group("ReptileBullet"):
 		take_damage(1)
+
+		var dir = sign(global_position.x - area.global_position.x)
+
+		is_hurting = true
+		velocity.x = dir * 600
+
+		await get_tree().create_timer(0.25).timeout
+
+		velocity.x = 0
+		is_hurting = false
 		return
 
 	if area.is_in_group("SubzeroBullet"):
