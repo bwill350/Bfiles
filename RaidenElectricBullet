@@ -4,16 +4,21 @@ class_name RaidenElectricBullet
 @export var speed: float = 1200.0
 @export var lifetime: float = 2.5
 @export var activate_delay: float = 0.03
+@export var damage: int = 1
 
 var velocity: Vector2 = Vector2.ZERO
 var active := false
+var has_hit := false
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var particles: CPUParticles2D = $CPUParticles2D
 @onready var collision: CollisionShape2D = $CollisionShape2D
 
+
 func _ready():
 	add_to_group("RaidenElectricBullet")
+
+	area_entered.connect(_on_area_entered)
 
 	# ---------------- SPAWN INACTIVE ----------------
 	visible = false
@@ -45,3 +50,24 @@ func _physics_process(delta):
 		return
 
 	global_position += velocity * delta
+
+
+func _on_area_entered(area: Area2D) -> void:
+
+	if has_hit:
+		return
+
+	# ignore other electric bullets
+	if area.is_in_group("RaidenElectricBullet"):
+		return
+
+	# ONLY hit fighters
+	if not area.get_parent().is_in_group("Fighter"):
+		return
+
+	has_hit = true
+
+	if area.get_parent().has_method("take_damage"):
+		area.get_parent().take_damage(damage)
+
+	queue_free()
