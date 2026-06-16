@@ -1,20 +1,16 @@
-Area2d
-CollisionShape2D
-Signal
-
 extends Area2D
 
 @onready var collision: CollisionShape2D = $CollisionShape2D
 
-@export var active_time := 66.1
-@export var lifetime := 66.25
+@export var active_time := 0.2
+@export var lifetime := 0.6
 var active := false
 var has_hit := false
 var damage := 1
 
 func _ready():
 
-	add_to_group("RaidenAttack")
+	add_to_group("ReptileAttack")
 
 	await get_tree().process_frame
 
