@@ -23,11 +23,12 @@ Subzero (CharacterBody2D)
 │       └── Sprite2D
 └── SubzeroAttack.tscn
 
-var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
 var combo := []
 var combo_timer := 0.0
+var spawn_locked := true
+var spawn_protection := false
 # ---------------- STATE ----------------
 enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
@@ -40,7 +41,7 @@ var target: Node2D = null
 var ai_timer := 0.0
 
 var hit_from_reptileacid := false
-
+@onready var character = get_parent()
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
 func _unhandled_input(event):
@@ -107,27 +108,20 @@ func update_facing_offsets():
 # ---------------- READY ----------------
 func _ready():
 	
-	facing = 1
-	sprite.flip_h = false
-	spawn_protection = true
-	await get_tree().create_timer(1.0).timeout
-	action_locked = false
-	hurt_locked = false
-	is_attacking = false
-	is_shooting = false
-	is_hurting = false
-	hit_from_reptileacid = false
-	can_take_damage = true
-
-	lock_timer = 0.0
-
-	state = State.IDLE
-	velocity = Vector2.ZERO
 	add_to_group("Fighter")
+	spawn_protection = true
+
+	
+
+	spawn_protection = false
+
+	add_to_group("enemy")
 	add_to_group("Subzero")
-	add_to_group("ElectricDeath")
-	add_to_group("IceDeath")
 	add_to_group("FireDeath")
+	add_to_group("IceDeath")
+	add_to_group("ElectricDeath")
+
+	spawn_locked = false
 
 	health = max_health
 	health_changed.emit(health)
@@ -135,7 +129,6 @@ func _ready():
 	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
-	health_changed.connect(_on_health_changed)
 
 func _on_health_changed(h):
 
@@ -228,6 +221,9 @@ func _physics_process(delta):
 
 	sprite.flip_h = -facing < 0
 
+		# Attack marker side
+	$AttackMarker.position = Vector2(63 * facing, -155)
+	$Subzeroshoot.position = Vector2(63 * facing, -155)
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
@@ -451,8 +447,6 @@ func do_action(anim_name: String):
 	action_locked = false
 	hurt_locked = false
 
-	play_anim("idle")
-
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 
@@ -569,12 +563,11 @@ func take_damage(amount: int):
 
 	hit_sound.play()
 	play_anim("hurt")
-
+	can_take_damage = false
 	await get_tree().create_timer(0.15).timeout
-
+	can_take_damage = true
 	is_hurting = false
 	hurt_locked = false
-	can_take_damage = true
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
@@ -618,18 +611,18 @@ func spawn_fx(scene: PackedScene):
 
 	var fx = scene.instantiate()
 
-	get_tree().current_scene.add_child(fx)
+	# IMPORTANT: set owner BEFORE it can collide
+	fx.owner_character = self
+	fx.damage_done = false
 
-	if target:
-		fx.global_position = target.global_position
+	get_tree().current_scene.call_deferred("add_child", fx)
 
+	await get_tree().process_frame
+
+	if target and is_instance_valid(target):
+		fx.global_position = target.global_position + Vector2(60 * facing, 0)
 	else:
-		fx.global_position = global_position + Vector2(80, 0)
-
-	get_tree().create_timer(1.0).timeout.connect(func():
-		if is_instance_valid(fx):
-			fx.queue_free()
-	)
+		fx.global_position = global_position + Vector2(80 * facing, 0)
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
@@ -641,7 +634,18 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
-# ignore self / invalid
+	if area.is_in_group("ReptileSpear"):
+		is_hurting = true
+		action_locked = true
+		is_attacking = false
+		take_damage(1) # or "walk" if you want fake stun walk
+		print("SPEAR HIT:", name)
+		if is_hurting:
+			velocity.x = -11888
+			move_and_slide()
+			return
+
+	# ignore self / invalid
 	if area == null:
 		return
 
@@ -649,12 +653,16 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if not is_instance_valid(area):
 		return
 
+	if area.is_in_group("HurttBox"):
+		pass
+
 	# ignore if already in damage cooldown
 	if not can_take_damage:
 		return
 
 	if area.is_in_group("HitBox"):
 		take_damage(1)
+		return
 
 	if area.is_in_group("SubzeroBullet"):
 		return
@@ -699,6 +707,10 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		take_damage(1)
 		return
 
+	if area.is_in_group("Fireball"):
+		take_damage(1)
+		return
+
 	if area.is_in_group("JohnnyCageBullet"):
 		take_damage(1)
 		return
@@ -706,3 +718,5 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("SonyaBullet"):
 		take_damage(1)
 		return
+
+
