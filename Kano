@@ -101,7 +101,7 @@ var combo := []
 var combo_timer := 0.0
 
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
-
+@onready var character = get_parent()
 const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
@@ -121,10 +121,11 @@ func apply_stun(duration: float):
 
 # ---------------- READY ----------------
 func _ready():
+	
 	add_to_group("Fighter")
 	spawn_protection = true
 
-	await get_tree().create_timer(1.0).timeout
+	
 
 	spawn_protection = false
 
@@ -141,13 +142,10 @@ func _ready():
 
 	play_anim("idle")
 
-	if hit_box:
-		if not hit_box.area_entered.is_connected(_on_kano_hurt_box_area_entered):
-			hit_box.area_entered.connect(_on_kano_hurt_box_area_entered)
+	ai_timer = randf_range(0.2, 0.6)
 
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
-
 	if is_cpu:
 		return
 
@@ -172,7 +170,14 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+	if target and is_instance_valid(target):
+		var direction = sign(target.global_position.x - global_position.x)
 
+		facing = direction
+		sprite.flip_h = facing > 0
+
+		velocity.x = direction * SPEED
+		play_anim("walk")
 	if is_cpu and is_attacking and target != null:
 		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
 		move_and_slide()
@@ -383,7 +388,7 @@ func shoot_acid():
 	$KanoShoot.position = Vector2(-3.9 * facing, -14.6)
 
 	# 🟢 SPAWN BULLET
-	var bullet = KANO_BULLET.instantiate()
+	var bullet = REPTILES_ACID.instantiate()
 	get_tree().current_scene.add_child(bullet)
 
 	# IMPORTANT: spawn at marker GLOBAL position
@@ -410,7 +415,6 @@ func shoot_acid():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 		velocity.x = 0
@@ -418,45 +422,58 @@ func cpu_logic(delta):
 		move_and_slide()
 
 
-	# GRAVITY
+# GRAVITY
 	velocity.y += GRAVITY * delta
-
-	# ---------------- SAFE TARGET CHECK FIRST ----------------
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		return
 
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
-	# HARD LOCK
+	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
 		return
 
-	# STOP AT LOW HP
+# STOP ALL ACTIONS AT 1HP
 	if health <= 1:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
-		move_and_slide()
+		return
+
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
 		return
 
 	ai_timer -= delta
 
+	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
 
-	# ---------------- MOVEMENT ----------------
+# GRAVITY
+	velocity.y += GRAVITY * delta
+
+
+# ---------------- MOVEMENT ----------------
+	if is_hurting:
+		velocity.x = 0
+		play_anim("hurt")
+		move_and_slide()
+		return
+
+
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
+
+
 	if abs(dist) > 220:
 		velocity.x = direction * SPEED * 0.8
 		state = State.RUN
-
-	if not is_attacking:
 		play_anim("walk")
-
 	else:
-		velocity.x = 0
-		velocity.y = 0
+		velocity.x = direction * SPEED * 0.8
+		state = State.RUN
+		play_anim("walk")
 
 	# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
@@ -477,7 +494,6 @@ func cpu_logic(delta):
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
-
 	if state == State.DEAD:
 		return
 
@@ -512,7 +528,6 @@ func do_action(anim_name: String):
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
-
 	if anim_name not in [
 		"punch",
 		"kick",
@@ -709,7 +724,6 @@ func trigger_finish_state():
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
-
 	combo.append(input)
 
 	combo_timer = 0.0
@@ -717,11 +731,11 @@ func register_input(input: String):
 	check_combos()
 
 func spawn_fx(scene: PackedScene):
-
 	var fx = scene.instantiate()
 
-	# Tell the effect who spawned it
+	# IMPORTANT: set owner BEFORE it can collide
 	fx.owner_character = self
+	fx.damage_done = false
 
 	get_tree().current_scene.call_deferred("add_child", fx)
 
@@ -733,7 +747,6 @@ func spawn_fx(scene: PackedScene):
 		fx.global_position = global_position + Vector2(80 * facing, 0)
 
 func check_combos():
-
 	# ---------------- ACID ----------------
 	if combo == ACID_COMBO:
 
@@ -797,7 +810,6 @@ func die():
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
-
 	if current_anim == anim_name:
 		return
 
@@ -807,9 +819,23 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area):
+	if area.is_in_group("ReptileSpear"):
+
+		is_hurting = true
+		action_locked = true
+		is_attacking = false
+		take_damage(1)
+		play_anim("hurt") # or "walk" if you want fake stun walk
+		print("SPEAR HIT:", name)
+		if is_hurting:
+			velocity.x = -11888
+			move_and_slide()
 
 # ignore self / invalid
 	if area == null:
+		return
+
+	if character == null:
 		return
 
 	# ignore spawn overlap bullets already gone
@@ -818,6 +844,7 @@ func _on_kano_hurt_box_area_entered(area):
 
 	if area.is_in_group("HitBox"):
 		take_damage(1)
+		return
 
 	# bullet checks FIRST (important)
 	if area.is_in_group("SubzeroBullet"):
