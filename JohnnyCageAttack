@@ -3,27 +3,31 @@ CollisionShape2D
 Signal
 
 extends Area2D
+class_name JohnnyCageAttack
 
 @onready var collision: CollisionShape2D = $CollisionShape2D
-@export var active_time := 66.1
-@export var lifetime := 66.25
+
+@export var active_time := 0.2
+@export var lifetime := 0.6
+
 var active := false
 var has_hit := false
 var damage := 1
 
-# Called when the node enters the scene tree for the first time.
 func _ready():
 	add_to_group("JohnnyCageAttack")
+
 	await get_tree().process_frame
+
+	area_entered.connect(_on_area_entered)
+
 	enable_hitbox()
+
 	await get_tree().create_timer(active_time).timeout
 	disable_hitbox()
+
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
-
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta):
-	pass
 
 func enable_hitbox():
 	active = true
@@ -35,8 +39,13 @@ func disable_hitbox():
 	monitoring = false
 	collision.disabled = true
 
+
 func _on_area_entered(area):
+
 	if not active:
+		return
+
+	if has_hit:
 		return
 
 	if area == null:
@@ -53,5 +62,8 @@ func _on_area_entered(area):
 	if target == get_parent():
 		return
 
-	if target.has_method("take_damage"):
-		target.take_damage(damage)
+	if not target.has_method("take_damage"):
+		return
+
+	has_hit = true
+	target.take_damage(damage)
