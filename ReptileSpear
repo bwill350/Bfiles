@@ -1,0 +1,64 @@
+extends Area2D
+
+@export var speed := 2000.0
+var velocity := Vector2.ZERO
+var owner_character = null
+var hit := false
+
+func _ready():
+	add_to_group("ReptileSpear")
+	area_entered.connect(_on_area_entered)
+
+func _physics_process(delta):
+	position += velocity * delta
+
+func _on_area_entered(area):
+
+	if area == null:
+		return
+
+	var enemy = area.get_parent()
+
+	if enemy == null:
+		return
+
+	if enemy == owner_character:
+		return
+
+	if enemy.is_in_group("Fighter"):
+
+		queue_free()
+
+		if enemy.has_method("spear_pulled_to_p1"):
+			enemy.spear_pulled_to_p1()
+
+		return
+
+func on_hit_fighter(enemy):
+	if enemy == null:
+		return
+
+	# make sure it's a valid fighter
+	if not enemy.is_in_group("Fighter"):
+		return
+
+	# decide direction toward Player 1
+	var p1 = get_tree().get_first_node_in_group("P1")
+	if p1 == null:
+		return
+
+	var dir = sign(p1.global_position.x - enemy.global_position.x)
+
+	# OPTIONAL: if CPU or normal fighter, apply different strength
+	if enemy.is_cpu:
+		enemy.velocity.x = dir * 1200
+	else:
+		enemy.velocity.x = dir * 800
+
+	enemy.velocity.y = -120
+
+	# now trigger pull state if it exists
+	if enemy.has_method("spear_pulled_to_p1"):
+		enemy.spear_pulled_to_p1()
+
+	queue_free()
