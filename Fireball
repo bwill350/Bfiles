@@ -1,50 +1,54 @@
 extends Area2D
-class_name SonyaBullet
+class_name Fireball
 
 @export var speed: float = 900.0
-@export var damage: int = 1
 @export var lifetime: float = 3.0
-
+@export var damage: int = 1
+@onready var sprite: Sprite2D = $Sprite2D
 var velocity: Vector2 = Vector2.ZERO
+var direction := 1
 var has_hit := false
-
-@onready var sprite: AnimatedSprite2D = $Sprite
-
 
 func _ready():
 
-	if sprite:
-		sprite.play("SonyaBullet")
-
-	add_to_group("SonyaBullet")
+	add_to_group("Fireball")
 
 	area_entered.connect(_on_area_entered)
 
-	# safety: always move forward even if spawn forgot velocity
-	if velocity == Vector2.ZERO:
-		velocity = Vector2.RIGHT * speed
-
 	await get_tree().create_timer(lifetime).timeout
-	queue_free()
 
+	if is_instance_valid(self):
+		queue_free()
 
 func _physics_process(delta):
-	global_position += velocity * delta
+	position.x += direction * speed * delta
+	rotation = velocity.angle()
 
+func set_direction(dir: Vector2):
+	velocity = dir.normalized() * speed
 
 func _on_area_entered(area: Area2D) -> void:
-
 	if has_hit:
 		return
 
-	# ignore self bullets
-	if area.is_in_group("SonyaBullet"):
+	var fighter = area.get_parent()
+
+	# Ignore other Kano bullets
+	if area.is_in_group("Fireball"):
+		fighter.take_damage(1)
+
+	if fighter == null:
 		return
 
-	# OPTIONAL: ignore other bullets
-	if area.is_in_group("SubzeroBullet") or area.is_in_group("ReptileBullet"):
+	# Only hit fighters
+	if not fighter.is_in_group("Fighter"):
 		return
 
-	# apply hit once then remove
+	# Don't hit Kano himself
+	if fighter.is_in_group("LiuKang"):
+		return
+
 	has_hit = true
-	queue_free()
+
+	if fighter.has_method("take_damage"):
+		fighter.take_damage(damage)
