@@ -19,7 +19,7 @@ Reptile (CharacterBody2D)
 
 signal health_changed(health)
 signal combo_used(combo_name: String)
-
+@onready var character = get_parent()
 # ---------------- STATE ----------------
 enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
@@ -45,6 +45,10 @@ var can_take_damage := true
 var is_finish_state := false
 var lock_timer := 0.0
 var finish_triggered := false
+var is_pulled := false
+var pull_target: Node2D = null
+var pull_timer := 0.0
+
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -72,7 +76,7 @@ const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
-
+const SPEAR_SCENE = preload("res://ReptileSpear.tscn")
 const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 
@@ -125,19 +129,28 @@ func apply_stun(duration: float):
 
 # ---------------- READY ----------------
 func _ready():
-	await get_tree().process_frame
-	global_position.y += 0
+	
 	add_to_group("Fighter")
-
 	spawn_protection = true
+
+	
+
+	spawn_protection = false
+
+	add_to_group("enemy")
+	add_to_group("Kano")
+	add_to_group("FireDeath")
+	add_to_group("IceDeath")
+	add_to_group("ElectricDeath")
+
+	spawn_locked = false
 
 	health = max_health
 	health_changed.emit(health)
 
-	await get_tree().create_timer(1.0).timeout
+	play_anim("idle")
 
-	spawn_protection = false
-
+	ai_timer = randf_range(0.2, 0.6)
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
 
@@ -175,6 +188,12 @@ func _physics_process(delta):
 		combo.clear()
 
 	if is_cpu:
+		
+		if is_pulled:
+			run_pull_logic(delta)
+			move_and_slide()
+			return
+		
 		cpu_logic(delta)
 		move_and_slide()
 		return
@@ -269,6 +288,9 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("block"):
 		start_block()
 
+	elif Input.is_action_just_pressed("spear"):
+		do_action("spear")
+
 	else:
 		stop_block()
 
@@ -319,7 +341,6 @@ func shoot_acid():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 		velocity.x = 0
@@ -327,45 +348,58 @@ func cpu_logic(delta):
 		move_and_slide()
 
 
-	# GRAVITY
+# GRAVITY
 	velocity.y += GRAVITY * delta
-
-	# ---------------- SAFE TARGET CHECK FIRST ----------------
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		return
 
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
-	# HARD LOCK
+	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
 		return
 
-	# STOP AT LOW HP
+# STOP ALL ACTIONS AT 1HP
 	if health <= 1:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
-		move_and_slide()
+		return
+
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
 		return
 
 	ai_timer -= delta
 
+	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
 
-	# ---------------- MOVEMENT ----------------
-	if abs(dist) > 220:
+# GRAVITY
+	velocity.y += GRAVITY * delta
+
+
+# ---------------- MOVEMENT ----------------
+	if is_hurting:
+		velocity.x = 0
+		play_anim("hurt")
+		move_and_slide()
+		return
+
+
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
+
+
+	if abs(dist) > 300:
 		velocity.x = direction * SPEED * 0.8
 		state = State.RUN
-
-	if not is_attacking:
 		play_anim("walk")
-
 	else:
-		velocity.x = 0
-		velocity.y = 0
+		velocity.x = direction * SPEED * 0.8
+		state = State.RUN
+		play_anim("walk")
 
 	# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
@@ -398,7 +432,11 @@ func do_action(anim_name: String):
 
 	play_anim(anim_name)
 
-	if anim_name in [
+	# 🔥 SPAWN SPEAR EARLY (IMPORTANT)
+	if anim_name == "spear":
+		spawn_spear()
+
+	elif anim_name in [
 		"punch",
 		"kick",
 		"roundhousekick",
@@ -412,38 +450,172 @@ func do_action(anim_name: String):
 	is_attacking = false
 	action_locked = false
 
+func pull_enemy(enemy: Node2D):
+
+	if enemy == null:
+		return
+
+	if not is_instance_valid(enemy):
+		return
+
+	enemy.velocity = Vector2.ZERO
+	enemy.action_locked = true
+	enemy.is_attacking = false
+	enemy.is_hurting = true
+
+	var pull_time := 0.25
+	var t := 0.0
+
+	while t < pull_time and is_instance_valid(enemy):
+
+		var dir = sign(global_position.x - enemy.global_position.x)
+
+		enemy.velocity.x = dir * 900
+		enemy.velocity.y = -120
+
+		enemy.move_and_slide()
+
+		await get_tree().process_frame
+		t += get_process_delta_time()
+
+	# SNAP to attacker (Scorpion grab finish)
+	enemy.global_position = global_position + Vector2(40 * facing, 0)
+
+	enemy.is_hurting = false
+	enemy.action_locked = false
+
+	# OPTIONAL: force hit after pull
+	enemy.take_damage(1)
+
+func start_spear():
+
+	if state == State.DEAD:
+		return
+
+	if action_locked:
+		return
+
+	action_locked = true
+	is_attacking = true
+
+	play_anim("spear")
+
+	await get_tree().create_timer(0.15).timeout
+
+	spawn_spear()
+
+	await sprite.animation_finished
+
+	is_attacking = false
+	action_locked = false
+
+func spawn_spear():
+
+	var spear = SPEAR_SCENE.instantiate()
+	get_tree().current_scene.add_child(spear)
+
+	spear.global_position = $Reptileshoot.global_position
+	spear.velocity = Vector2(facing, 0) * 2000
+
+	spear.owner_character = self
+
+
+
+func spear_pulled_to_p1():
+	is_pulled = true
+	pull_timer = 0.35
+	stunned = true
+	action_locked = true
+	pull_target = get_tree().get_first_node_in_group("P1")
+
+func run_pull_logic(delta):
+
+	if pull_target == null or !is_instance_valid(pull_target):
+		is_pulled = false
+		stunned = false
+		action_locked = false
+		return
+
+	var dir = sign(pull_target.global_position.x - global_position.x)
+
+	velocity.x = dir * 900
+	velocity.y = -120
+
+	pull_timer -= delta
+
+	if pull_timer <= 0.0:
+
+		is_pulled = false
+
+		# SNAP to Reptile AttackMarker (THIS IS MK MOMENT)
+		global_position = pull_target.attack_marker.global_position + Vector2(40 * pull_target.facing, 0)
+
+		stunned = false
+		is_hurting = false
+		action_locked = false
+		is_attacking = true
+
+		pull_target = null
+
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
 
-	if anim_name not in [
+	# ---------------- NORMAL MELEE ----------------
+	if anim_name in [
 		"punch",
 		"kick",
 		"uppercut",
 		"roundhousekick",
 		"jumpkick"
 	]:
+
+		var attack = REPTILE_ATTACK.instantiate()
+		get_tree().current_scene.add_child(attack)
+
+		attack.global_position = $AttackMarker.global_position
+		attack.scale.x = facing
+
+		var dmg := 1
+
+		match anim_name:
+			"uppercut":
+				dmg = 1
+			"roundhousekick":
+				dmg = 1
+			"punch":
+				dmg = 1
+
+		if attack.has_method("set_damage"):
+			attack.set_damage(dmg)
+		else:
+			attack.damage = dmg
+
+		attack.owner = self
 		return
 
-	var attack = REPTILE_ATTACK.instantiate()
-	get_tree().current_scene.add_child(attack)
 
-	attack.global_position = $AttackMarker.global_position
-	attack.scale.x = facing  # THIS replaces facing system
+	# ---------------- SPEAR ATTACK ----------------
+	if anim_name == "spear":
 
-	var dmg := 1
+		var spear = SPEAR_SCENE.instantiate()
+		get_tree().current_scene.add_child(spear)
 
-	match anim_name:
-		"uppercut":
-			dmg = 1
-		"roundhousekick":
-			dmg = 1
+		# spawn from marker (important for MK feel)
+		spear.global_position = $Reptileshoot.global_position
 
-	if attack.has_method("set_damage"):
-		attack.set_damage(dmg)
-	else:
-		attack.damage = dmg
+		spear.scale.x = facing
 
-	attack.owner = self
+		# damage
+		if spear.has_method("set_damage"):
+			spear.set_damage(1)
+		else:
+			spear.damage = 1
+
+		# optional movement
+		if spear.has_variable("velocity"):
+			spear.velocity = Vector2(facing, 0) * 1200
+
+		spear.owner = self
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -571,14 +743,18 @@ func spawn_fx(scene: PackedScene):
 
 	var fx = scene.instantiate()
 
+	# IMPORTANT: set owner BEFORE it can collide
+	fx.owner_character = self
+	fx.damage_done = false
+
 	get_tree().current_scene.call_deferred("add_child", fx)
 
 	await get_tree().process_frame
 
 	if target and is_instance_valid(target):
-		fx.global_position = target.global_position + Vector2(60 * -facing, 0)
+		fx.global_position = target.global_position + Vector2(60 * facing, 0)
 	else:
-		fx.global_position = global_position + Vector2(80 * -facing, 0)
+		fx.global_position = global_position + Vector2(80 * facing, 0)
 
 func check_combos():
 
@@ -656,26 +832,26 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 
 	sprite.play(anim_name)
+	return
 
 
 func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
-# ignore self / invalid
-	if area == null:
+	if character == null:
 		return
-
-	# ignore spawn overlap bullets already gone
-	if not is_instance_valid(area):
+	# ignore invalid
+	if area == null or not is_instance_valid(area):
 		return
 
 	# ignore if already in damage cooldown
 	if not can_take_damage:
 		return
 
+	# ---------------- HITBOX (melee) ----------------
 	if area.is_in_group("HitBox"):
 		take_damage(1)
 		return
 
-	# bullet checks FIRST (important)
+	# ---------------- BULLETS ----------------
 	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
 		take_damage(1)
