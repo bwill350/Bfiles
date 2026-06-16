@@ -6,8 +6,9 @@ extends Area2D
 
 @onready var collision: CollisionShape2D = $CollisionShape2D
 
-@export var active_time := 66.1
-@export var lifetime := 66.25
+@export var active_time := 60.1
+@export var lifetime := 60.25
+
 var active := false
 var has_hit := false
 var damage := 1
@@ -25,6 +26,7 @@ func _ready():
 	disable_hitbox()
 
 	await get_tree().create_timer(lifetime).timeout
+
 	queue_free()
 
 func enable_hitbox():
@@ -42,10 +44,15 @@ func _on_area_entered(area: Area2D) -> void:
 	if not active:
 		return
 
+	if has_hit:
+		return
+
 	if area == null:
 		return
 
 	var target = area.get_parent()
 
 	if target and target.has_method("take_damage"):
+		has_hit = true
 		target.take_damage(damage)
+		return
