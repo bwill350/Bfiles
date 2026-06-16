@@ -57,7 +57,7 @@ var cannonball_timer := 0.0
 var facing := 1
 var current_anim := ""
 var health: int
-
+var knockback_x := 0.0
 const GRAVITY = 5000
 
 # ---------------- COOLDOWNS ----------------
@@ -455,10 +455,19 @@ func cpu_logic(delta):
 
 # ---------------- MOVEMENT ----------------
 	if is_hurting:
-		velocity.x = 0
-		play_anim("hurt")
-		move_and_slide()
-		return
+
+		velocity.x = knockback_x
+
+	# gradually reduce knockback
+		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
+
+		if abs(knockback_x) < 10:
+			knockback_x = 0
+			is_hurting = false
+
+			velocity.y += GRAVITY * delta
+			move_and_slide()
+			return
 
 
 	if target == null or !is_instance_valid(target):
@@ -844,6 +853,11 @@ func _on_kano_hurt_box_area_entered(area):
 
 	if area.is_in_group("HitBox"):
 		take_damage(1)
+		is_hurting = true
+	# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+		play_anim("hurt")
 		return
 
 	# bullet checks FIRST (important)
