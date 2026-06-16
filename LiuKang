@@ -82,7 +82,7 @@ const FIREBALL = preload("res://Fireball.tscn")
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var shoot_marker: Marker2D = $LiuKangshoot
-
+@onready var character = get_parent()
 # ---------------- PRELOADS ----------------
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
@@ -109,24 +109,28 @@ var shoot_cooldown: float = 0.0
 
 # ---------------- READY ----------------
 func _ready():
-
+	
+	add_to_group("Fighter")
 	spawn_protection = true
 
-	if finish_label:
-		finish_label.visible = false
+	
 
-	add_to_group("Fighter")
+	spawn_protection = false
+
+	add_to_group("enemy")
 	add_to_group("LiuKang")
+	add_to_group("FireDeath")
+	add_to_group("IceDeath")
+	add_to_group("ElectricDeath")
+
+	spawn_locked = false
 
 	health = max_health
 	health_changed.emit(health)
 
-	if not hit_box.area_entered.is_connected(_on_liu_kang_hurt_box_area_entered):
-		hit_box.area_entered.connect(_on_liu_kang_hurt_box_area_entered)
+	play_anim("idle")
 
-	await get_tree().create_timer(1.0).timeout
-
-	spawn_protection = false
+	ai_timer = randf_range(0.2, 0.6)
 
 func _unhandled_input(event):
 
@@ -208,7 +212,6 @@ func _physics_process(delta):
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
-
 	if flyingkick_active:
 		play_anim("flyingkick")
 		global_position.y = lerp(global_position.y, flyingkick_y, 0.2)
@@ -394,7 +397,6 @@ func _physics_process(delta):
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 		velocity.x = 0
@@ -402,45 +404,58 @@ func cpu_logic(delta):
 		move_and_slide()
 
 
-	# GRAVITY
+# GRAVITY
 	velocity.y += GRAVITY * delta
-
-	# ---------------- SAFE TARGET CHECK FIRST ----------------
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		return
 
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
-	# HARD LOCK
+	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
 		return
 
-	# STOP AT LOW HP
+# STOP ALL ACTIONS AT 1HP
 	if health <= 1:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
-		move_and_slide()
+		return
+
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
 		return
 
 	ai_timer -= delta
 
+	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
 
-	# ---------------- MOVEMENT ----------------
-	if abs(dist) > 220:
+# GRAVITY
+	velocity.y += GRAVITY * delta
+
+
+# ---------------- MOVEMENT ----------------
+	if is_hurting:
+		velocity.x = 0
+		play_anim("hurt")
+		move_and_slide()
+		return
+
+
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
+
+
+	if abs(dist) > 300:
 		velocity.x = direction * SPEED * 0.8
 		state = State.RUN
-
-	if not is_attacking:
 		play_anim("walk")
-
 	else:
-		velocity.x = 0
-		velocity.y = 0
+		velocity.x = direction * SPEED * 0.8
+		state = State.RUN
+		play_anim("walk")
 
 	# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
@@ -670,6 +685,10 @@ func spawn_fx(scene: PackedScene):
 
 	var fx = scene.instantiate()
 
+	# IMPORTANT: set owner BEFORE it can collide
+	fx.owner_character = self
+	fx.damage_done = false
+
 	get_tree().current_scene.call_deferred("add_child", fx)
 
 	await get_tree().process_frame
@@ -736,9 +755,23 @@ func stop_block():
 
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
+	if area.is_in_group("ReptileSpear"):
+
+		is_hurting = true
+		action_locked = true
+		is_attacking = false
+		take_damage(1)
+		play_anim("hurt") # or "walk" if you want fake stun walk
+		print("SPEAR HIT:", name)
+		if is_hurting:
+			velocity.x = -11888
+			move_and_slide()
 
 # ignore self / invalid
 	if area == null:
+		return
+
+	if character == null:
 		return
 
 	# ignore spawn overlap bullets already gone
