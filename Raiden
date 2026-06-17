@@ -217,15 +217,32 @@ func check_combos():
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+
 	if stunned:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
 
-	if electricfly_active:
-		play_anim("electricfly")
-		global_position.y = lerp(global_position.y, electricfly_y, 0.2)
-		special_move_timer -= delta
+	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
+
+	combo_timer += delta
+
+	if combo_timer > combo_reset_time:
+		combo.clear()
+
+	if is_cpu:
+		cpu_logic(delta)
+		move_and_slide()
+		return
+
+	if state == State.DEAD:
+		return
+
+	velocity.y += GRAVITY * delta
+
+	if action_locked:
+		return
+
 	# ---------------- ELECTRIC FLY ----------------
 	if electricfly_active:
 		play_anim("electricfly")
@@ -248,6 +265,9 @@ func _physics_process(delta):
 	# ---------------- DEAD ----------------
 	if state == State.DEAD:
 		return
+
+	# NORMAL GRAVITY
+	velocity.y += GRAVITY * delta
 
 	# ---------------- FINISH HIM ----------------
 	if is_finish_state:
@@ -409,10 +429,11 @@ func _physics_process(delta):
 			move_and_slide()
 
 func cpu_logic(delta):
+
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -460,7 +481,8 @@ func cpu_logic(delta):
 # ---------------- MOVEMENT ----------------
 	if is_hurting:
 
-		velocity.x = -facing * 400
+		
+		velocity.x = -facing * 600
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -479,7 +501,7 @@ func cpu_logic(delta):
 		return
 
 
-	if abs(dist) > 300:
+	if abs(dist) > 220:
 		velocity.x = direction * SPEED * 0.8
 		state = State.RUN
 		play_anim("walk")
@@ -801,7 +823,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -814,7 +836,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -825,7 +847,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -836,7 +858,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -862,7 +884,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -873,7 +895,18 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
+
+	if area.is_in_group("Fireball"):
+		take_damage(1)
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -884,7 +917,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -895,7 +928,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -906,7 +939,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
