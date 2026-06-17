@@ -208,10 +208,12 @@ func update_animation():
  
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
+		# ---------------- FACE + CHASE (ONLY PLAYER CONTROLLED LOGIC HERE) ----------------
 	if stunned:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
+
 	if flyingkick_active:
 		play_anim("flyingkick")
 		global_position.y = lerp(global_position.y, flyingkick_y, 0.2)
@@ -397,10 +399,11 @@ func _physics_process(delta):
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
+
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -444,22 +447,22 @@ func cpu_logic(delta):
 # GRAVITY
 	velocity.y += GRAVITY * delta
 
-
 # ---------------- MOVEMENT ----------------
 	if is_hurting:
 
-		velocity.x = -facing * 400
+		
+		velocity.x = -facing * 600
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
 		if abs(knockback_x) < 10:
-				knockback_x = 0
-				is_hurting = false
+			knockback_x = 0
+			is_hurting = false
 
-				velocity.y += GRAVITY * delta
-				move_and_slide()
-				return
+			velocity.y += GRAVITY * delta
+			move_and_slide()
+			return
 
 
 	if target == null or !is_instance_valid(target):
@@ -468,11 +471,11 @@ func cpu_logic(delta):
 
 
 	if abs(dist) > 220:
-		velocity.x = direction * SPEED
+		velocity.x = direction * SPEED * 0.8
 		state = State.RUN
 		play_anim("walk")
 	else:
-		velocity.x = direction * SPEED
+		velocity.x = direction * SPEED * 0.8
 		state = State.RUN
 		play_anim("walk")
 
@@ -573,70 +576,91 @@ func shoot_fireball():
 	play_anim("idle")
 
 func take_damage(amount: int):
-	if spawn_protection:
-		return
-	if state == State.DEAD:
-		return
-	if is_hurting:
-		return
-	if special_move_invincible:
-		return
 	if not can_take_damage:
 		return
 
 	can_take_damage = false
-	is_hurting = true
+
+	if state == State.DEAD:
+		can_take_damage = true
+		return
+
+	if spawn_protection:
+		can_take_damage = true
+		return
+
+	# BLOCK REDUCTION
+	if is_blocking:
+		amount = max(amount - 1, 0)
+
+	if amount <= 0:
+		can_take_damage = true
+		return
 
 	health -= amount
 	health = max(health, 0)
 
+	print("Sonya took damage: ", amount, " HP=", health)
+
 	health_changed.emit(health)
-
-# ---------------- DELAYED FINISH CHECK ----------------
-	if health == 1:
-		is_finish_state = true
-
-	# small delay so it doesn't pop instantly during hit frames
-	await get_tree().create_timer(0.2).timeout
-
-	# double-check still alive and still at 1 HP
-	if health == 1 and state != State.DEAD:
-		finish_label.visible = true
-
-		if finish_label.has_method("start_flicker"):
-			finish_label.start_flicker(0.4, 0.05)
-
-	if health == 1:
-		is_finish_state = true
-		finish_label.visible = true
-		await get_tree().create_timer(1.0).timeout
-		finish_label.visible = false
-
 	hit_sound.play()
-	# stop actions immediately
-	is_attacking = false
-	is_shooting = false
-	action_locked = true
 
-	play_anim("hurt")
-
-	# ---------------- DEATH ----------------
-	if health == 0:
+	# 💀 DEATH FIRST
+	if health <= 0:
 		die()
 		return
 
-	# ---------------- HURT TIME ----------------
-	await get_tree().create_timer(0.6).timeout
+	# ⚠️ FINISH STATE (ONLY ONCE)
+	if health == 1 and not is_finish_state:
+		trigger_finish_state()
+
+	# 💥 HURT FX ALWAYS WORKS EXCEPT DEAD
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+
+	state = State.IDLE
+	play_anim("hurt")
+
+	var blood = BLOOD_EFFECT.instantiate()
+	get_tree().current_scene.add_child(blood)
+	blood.global_position = $BloodMarker.global_position
+
+	await sprite.animation_finished
 
 	is_hurting = false
+	hurt_locked = false
 	action_locked = false
 
-	if state != State.DEAD:
-		play_anim("idle")
+	await get_tree().create_timer(0.4).timeout
 
-	# ---------------- FINISH STATE ----------------
-	await get_tree().create_timer(0.15).timeout
 	can_take_damage = true
+
+	# ⚠️ FINISH HIM
+	if health == 0:
+		if not is_finish_state:
+			trigger_finish_state()
+		finish_label.visible = true
+	else:
+		finish_label.visible = false
+
+func trigger_finish_state():
+	if is_finish_state:
+		return
+
+	is_finish_state = true
+
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
+
+	action_locked = true
+	hurt_locked = true
+
+	state = State.IDLE
+	velocity = Vector2.ZERO
+
+	finish_label.visible = true
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
@@ -798,7 +822,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 2600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -811,7 +835,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -822,7 +846,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -837,7 +861,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -870,7 +894,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -892,7 +916,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -903,7 +927,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -914,7 +938,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -925,7 +949,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -936,7 +960,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 400
+		velocity.x = -facing * 600
 		velocity.y = -200
 
 		play_anim("hurt")
