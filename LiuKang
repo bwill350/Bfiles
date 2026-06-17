@@ -420,10 +420,17 @@ func cpu_logic(delta):
 # GRAVITY
 	velocity.y += GRAVITY * delta
 
+	if target == null or !is_instance_valid(target):
+		target = get_tree().get_first_node_in_group("Fighter")
+
+		if target == null or !is_instance_valid(target):
+			velocity.x = 0
+			return
+
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
-	# HARD LOCK (Liu Kang style behavior)
+# HARD LOCK
 	if action_locked:
 		return
 
@@ -446,6 +453,7 @@ func cpu_logic(delta):
 
 # GRAVITY
 	velocity.y += GRAVITY * delta
+
 
 # ---------------- MOVEMENT ----------------
 	if is_hurting:
