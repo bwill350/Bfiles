@@ -331,7 +331,7 @@ func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		velocity.x = knockback_x
+		velocity.x = -facing * 600
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -762,74 +762,148 @@ func _on_sonya_hurt_box_area_entered(area):
 	# MELEE
 	if area.is_in_group("HitBox"):
 		take_damage(1)
+
 		is_hurting = true
+
+		# knockback away from attacker
 		velocity.x = -facing * 600
+		velocity.y = -200
 
-		await get_tree().create_timer(0.25).timeout
-
-		velocity.x = 0
-		is_hurting = false
-		return
+		play_anim("hurt")
 
 	# BULLET
 	if area.is_in_group("ReptileBullet"):
 		take_damage(1)
 
-		var dir = sign(global_position.x - area.global_position.x)
-
 		is_hurting = true
-		velocity.x = dir * 600
 
-		await get_tree().create_timer(0.25).timeout
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
 
-		velocity.x = 0
-		is_hurting = false
-		return
+		play_anim("hurt")
 
 	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ReptileAcid"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("RaidenElectricBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ElectricForceField"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ElectricBurst"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ElectricBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ElectricForceHurtBox"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("KanoBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("IceBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("JohnnyCageBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 600
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("SonyaBullet"):
 		return
