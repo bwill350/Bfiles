@@ -654,7 +654,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		take_damage(1) # or "walk" if you want fake stun walk
 		print("SPEAR HIT:", name)
 		if is_hurting:
-			velocity.x = -11888
+			velocity.x = -10444
 			move_and_slide()
 			return
 
@@ -679,7 +679,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -693,7 +693,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -704,7 +704,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -715,7 +715,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -726,7 +726,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 0
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -737,7 +737,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 0
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -748,7 +748,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -759,7 +759,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 0
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -770,21 +770,13 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
 
 	if area.is_in_group("IceBullet"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 600
-		velocity.y = -200
-
-		play_anim("hurt")
+		return
 
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
@@ -792,7 +784,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -803,7 +795,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -814,7 +806,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -825,7 +817,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
