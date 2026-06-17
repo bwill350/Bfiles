@@ -417,7 +417,7 @@ func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		velocity.x = -facing * 1900
+		velocity.x = -facing * 400
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -466,7 +466,7 @@ func cpu_logic(delta):
 # ---------------- MOVEMENT ----------------
 	if is_hurting:
 
-		velocity.x = -facing * 1900
+		velocity.x = -facing * 400
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -868,7 +868,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 1700
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -882,7 +882,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -893,7 +893,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 1700
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -904,7 +904,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -915,7 +915,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -926,7 +926,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 0
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -937,7 +937,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 0
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -948,7 +948,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -959,7 +959,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 0
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -973,7 +973,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -984,7 +984,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -995,7 +995,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -1006,7 +1006,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 600
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
@@ -1017,7 +1017,7 @@ func _on_kano_hurt_box_area_entered(area):
 		is_hurting = true
 
 		# knockback away from attacker
-		velocity.x = -facing * 700
+		velocity.x = -facing * 400
 		velocity.y = -200
 
 		play_anim("hurt")
