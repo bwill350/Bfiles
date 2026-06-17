@@ -175,6 +175,28 @@ func _unhandled_input(event):
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
+# ---------------- FACE + CHASE (ONLY PLAYER CONTROLLED LOGIC HERE) ----------------
+	if not is_cpu and target and is_instance_valid(target) and !is_attacking and !is_hurting:
+		var dist = target.global_position.x - global_position.x
+
+		if abs(dist) > 10:
+			var direction = sign(dist)
+
+			facing = direction
+			sprite.flip_h = facing > 0
+
+			velocity.x = direction * SPEED
+			play_anim("walk")
+		else:
+			velocity.x = move_toward(knockback_x, 0, 1500 * delta)
+			play_anim("idle")
+
+
+
+	# NORMAL GRAVITY
+	velocity.y += GRAVITY * delta
+
+	# ---------------- STUN ----------------
 	if stunned:
 		velocity = Vector2.ZERO
 		move_and_slide()
@@ -343,9 +365,19 @@ func shoot_acid():
 func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
-		velocity.x = 0
-		velocity.y += GRAVITY * delta
-		move_and_slide()
+
+		velocity.x = -facing * 400
+
+	# gradually reduce knockback
+		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
+
+		if abs(knockback_x) < 10:
+			knockback_x = 0
+			is_hurting = false
+
+			velocity.y += GRAVITY * delta
+			move_and_slide()
+			return
 
 
 # GRAVITY
@@ -382,7 +414,7 @@ func cpu_logic(delta):
 # ---------------- MOVEMENT ----------------
 	if is_hurting:
 
-		velocity.x = knockback_x
+		velocity.x = -facing * 400
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -401,7 +433,7 @@ func cpu_logic(delta):
 		return
 
 
-	if abs(dist) > 300:
+	if abs(dist) > 220:
 		velocity.x = direction * SPEED * 0.8
 		state = State.RUN
 		play_anim("walk")
@@ -845,23 +877,24 @@ func play_anim(anim_name: String):
 
 
 func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
-	if character == null:
-		return
-	# ignore invalid
-	if area == null or not is_instance_valid(area):
+
+	if area == null or !is_instance_valid(area):
 		return
 
-	# ignore if already in damage cooldown
 	if not can_take_damage:
 		return
+
 
 	# ---------------- HITBOX (melee) ----------------
 	if area.is_in_group("HitBox"):
 		take_damage(1)
+
 		is_hurting = true
-	# knockback away from attacker
-		velocity.x = -facing * 600
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
 		velocity.y = -200
+
 		play_anim("hurt")
 		return
 
@@ -869,7 +902,14 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ReptileBullet"):
 		return
@@ -879,36 +919,99 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 
 	if area.is_in_group("RaidenElectricBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ElectricForceField"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 0
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ElectricBurst"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 0
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ElectricBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ElectricForceHurtBox"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 0
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("KanoBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("IceBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("JohnnyCageBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
