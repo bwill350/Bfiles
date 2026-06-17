@@ -411,9 +411,19 @@ func _physics_process(delta):
 func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
-		velocity.x = 0
-		velocity.y += GRAVITY * delta
-		move_and_slide()
+
+		velocity.x = -facing * 400
+
+	# gradually reduce knockback
+		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
+
+		if abs(knockback_x) < 10:
+			knockback_x = 0
+			is_hurting = false
+
+			velocity.y += GRAVITY * delta
+			move_and_slide()
+			return
 
 
 # GRAVITY
@@ -450,7 +460,7 @@ func cpu_logic(delta):
 # ---------------- MOVEMENT ----------------
 	if is_hurting:
 
-		velocity.x = knockback_x
+		velocity.x = -facing * 400
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -766,6 +776,12 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
+	if area == null or !is_instance_valid(area):
+		return
+
+	if not can_take_damage:
+		return
+
 	if area.is_in_group("ReptileSpear"):
 
 		is_hurting = true
@@ -778,41 +794,52 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 			velocity.x = -11888
 			move_and_slide()
 
-
-# ignore self / invalid
-	if area == null:
-			return
-
-	# ignore spawn overlap bullets already gone
-	if not is_instance_valid(area):
-		return
-
-	# ignore if already in damage cooldown
-	if not can_take_damage:
-		return
-
+	# MELEE
 	if area.is_in_group("HitBox"):
 		take_damage(1)
+
 		is_hurting = true
-	# knockback away from attacker
-		velocity.x = -facing * 600
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
 		velocity.y = -200
+
 		play_anim("hurt")
-		return
 
 	# bullet checks FIRST (important)
 	if area.is_in_group("SubzeroBullet"):
 		apply_stun(3.0)
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ReptileBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("ReptileAcid"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("RaidenElectricBullet"):
 		return
@@ -831,20 +858,55 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 
 	if area.is_in_group("KanoBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("IceBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("FireBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("Sonyaullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
 
 	if area.is_in_group("JohnnyCageBullet"):
 		take_damage(1)
-		return
+
+		is_hurting = true
+
+		# knockback away from attacker
+		velocity.x = -facing * 400
+		velocity.y = -200
+
+		play_anim("hurt")
