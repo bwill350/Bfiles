@@ -831,6 +831,7 @@ func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
 		if area.is_in_group(source):
 
 			if source == "SubzeroBullet":
+				knockback_x = -facing * 600
 				apply_stun(3.0)
 
 			take_damage(1)
