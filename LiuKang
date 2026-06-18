@@ -208,67 +208,23 @@ func update_animation():
  
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-		# ---------------- FACE + CHASE (ONLY PLAYER CONTROLLED LOGIC HERE) ----------------
-	if stunned:
-		velocity = Vector2.ZERO
-		move_and_slide()
-		return
-
-	if flyingkick_active:
-		play_anim("flyingkick")
-		global_position.y = lerp(global_position.y, flyingkick_y, 0.2)
-		special_move_timer -= delta
-	# ---------------- FLYINGKICK ----------------
-	if flyingkick_active:
-		play_anim("flyingkick")
-
-		special_move_timer -= delta
-
-		velocity.x = facing * 1900
-		velocity.y = 8800
-
-		move_and_slide()
-
-		if special_move_timer <= 0:
-			flyingkick_active = false
-			special_move = false
-			special_move_invincible = false
-			velocity = Vector2.ZERO
-
-	if bicyclekick_active:
-		play_anim("bicyclekick")
-		global_position.y = lerp(global_position.y, bicyclekick_y, 0.2)
-		special_move_timer -= delta
-	# ---------------- FLYINGKICK ----------------
-	if bicyclekick_active:
-		play_anim("bicyclekick")
-
-		special_move_timer -= delta
-
-		velocity.x = facing * 1900
-		velocity.y = 8800
-
-		move_and_slide()
-
-		if special_move_timer <= 0:
-			bicyclekick_active = false
-			special_move = false
-			special_move_invincible = false
-			velocity = Vector2.ZERO
-
-		return
-	if stunned:
-		velocity = Vector2.ZERO
-		move_and_slide()
-		return
 
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
-
 	combo_timer += delta
 
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
+	# ---------------- SPECIAL MOVES FIRST ----------------
+	if flyingkick_active:
+		start_flyingkick()
+		return
+
+	if bicyclekick_active:
+		start_bicyclekick()
+		return
+
+	# ---------------- CPU ----------------
 	if is_cpu:
 		cpu_logic(delta)
 		move_and_slide()
@@ -277,15 +233,16 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
+	# gravity ONCE
 	velocity.y += GRAVITY * delta
 
 	if action_locked:
+		move_and_slide()
 		return
 
 	var input_dir = Input.get_axis("left", "right")
-	var climb_pressed = Input.is_action_pressed("climb")
 
-	# ---------------- FACING ----------------
+	# facing
 	if input_dir != 0:
 		facing = input_dir
 
@@ -293,62 +250,43 @@ func _physics_process(delta):
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$LiuKangshoot.position = Vector2(63 * facing, -155)
-	# ---------------- MOVEMENT ----------------
+
 	velocity.x = input_dir * SPEED
 
-	# ---------------- CLIMB ----------------
-	if climb_pressed and not is_on_floor() and is_on_wall():
-		state = State.CLIMB
-
-	elif not is_on_floor():
+	# states
+	if not is_on_floor():
 		state = State.JUMP
-
 	elif input_dir != 0:
 		state = State.RUN
-
 	else:
 		state = State.IDLE
 
-	# ---------------- ANIMS ----------------
 	match state:
-
-		State.CLIMB:
-			velocity.y = -CLIMB_SPEED
-
-			if not is_attacking:
-				play_anim("walk")
-
-		State.JUMP:
-			if not is_attacking:
-				play_anim("jump")
-
 		State.RUN:
 			if not is_attacking:
 				play_anim("walk")
-
+		State.JUMP:
+			if not is_attacking:
+				play_anim("jump")
 		State.IDLE:
 			if not is_attacking:
 				play_anim("idle")
 
-	# ---------------- JUMP ----------------
+	# jump
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
 
-	# ---------------- ATTACKS ----------------
-	if Input.is_action_just_pressed("jumpkick"):
-		do_action("jumpkick")
-
-	elif Input.is_action_just_pressed("punch"):
+	# attacks
+	if Input.is_action_just_pressed("punch"):
 		do_action("punch")
-
-	elif Input.is_action_just_pressed("roundhousekick"):
-		do_action("roundhousekick")
-
 	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
-
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
+	elif Input.is_action_just_pressed("roundhousekick"):
+		do_action("roundhousekick")
+	elif Input.is_action_just_pressed("jumpkick"):
+		do_action("jumpkick")
 
 	elif Input.is_action_pressed("flyingkick"):
 		start_flyingkick()
@@ -361,11 +299,13 @@ func _physics_process(delta):
 
 	elif Input.is_action_pressed("block"):
 		start_block()
-
 	else:
 		stop_block()
 
 	move_and_slide()
+
+	# special collision hit check
+	handle_special_hit()
 
 	# ---------------- SPECIAL MOVES ----------------
 	if special_move:
@@ -394,16 +334,15 @@ func _physics_process(delta):
 			global_position.y = lerp(global_position.y, flyingkick_y, 0.2)
 			special_move_timer -= delta
 			velocity.x = facing * 1300
-			velocity.y += GRAVITY * delta * 0.4
+			velocity.y +GRAVITY * delta * 0.4
 			move_and_slide()
-
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		velocity.x = -facing * 600
+		
+		velocity.x = knockback_x
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -420,17 +359,10 @@ func cpu_logic(delta):
 # GRAVITY
 	velocity.y += GRAVITY * delta
 
-	if target == null or !is_instance_valid(target):
-		target = get_tree().get_first_node_in_group("Fighter")
-
-		if target == null or !is_instance_valid(target):
-			velocity.x = 0
-			return
-
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
-# HARD LOCK
+	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
 		return
 
@@ -439,6 +371,7 @@ func cpu_logic(delta):
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
+		move_and_slide()
 		return
 
 	if target == null or !is_instance_valid(target):
@@ -456,27 +389,15 @@ func cpu_logic(delta):
 
 
 # ---------------- MOVEMENT ----------------
-	if is_hurting:
+	if abs(dist) > 220:
 
-		
-		velocity.x = -facing * 600
+		velocity.x = direction * SPEED * 0.8
 
-	# gradually reduce knockback
-		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
+	if state != State.RUN:
+		state = State.RUN
 
-		if abs(knockback_x) < 10:
-			knockback_x = 0
-			is_hurting = false
-
-			velocity.y += GRAVITY * delta
-			move_and_slide()
-			return
-
-
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		return
-
+	if not is_attacking:
+		play_anim("walk")
 
 	if abs(dist) > 220:
 		velocity.x = direction * SPEED * 0.8
@@ -493,16 +414,70 @@ func cpu_logic(delta):
 		ai_timer = randf_range(0.4, 0.8)
 
 		match randi() % 5:
+
 			0:
 				do_action("punch")
+
 			1:
 				do_action("kick")
+
 			2:
 				do_action("uppercut")
+
 			3:
 				do_action("roundhousekick")
+
 			4:
 				shoot_fireball()
+
+func handle_flyingkick(delta):
+	play_anim("flyingkick")
+
+	special_move_timer -= delta
+	velocity.x = facing * 1900
+	velocity.y = 400
+
+	move_and_slide()
+
+	if special_move_timer <= 0:
+		flyingkick_active = false
+		special_move = false
+		special_move_invincible = false
+		velocity = Vector2.ZERO
+
+func handle_bicyclekick(delta):
+	play_anim("bicyclekick")
+
+	special_move_timer -= delta
+	velocity.x = facing * 1900
+	velocity.y = 300
+
+	move_and_slide()
+
+	if special_move_timer <= 0:
+		bicyclekick_active = false
+		special_move = false
+		special_move_invincible = false
+		velocity = Vector2.ZERO
+
+func handle_special_hit():
+
+	if not special_move:
+		return
+
+	for i in range(get_slide_collision_count()):
+		var col = get_slide_collision(i)
+		var body = col.get_collider()
+
+		if body and body != self and body.has_method("take_damage"):
+			body.take_damage(1)
+
+			special_move = false
+			flyingkick_active = false
+			bicyclekick_active = false
+			special_move_invincible = false
+			velocity = Vector2.ZERO
+			return
 
 func do_action(anim_name: String):
 
@@ -806,172 +781,63 @@ func stop_block():
 
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
+
 	if area == null or !is_instance_valid(area):
 		return
 
-	if not can_take_damage:
-		return
-
+	# ---------------- SPEAR ----------------
 	if area.is_in_group("ReptileSpear"):
+
+		if not can_take_damage:
+			return
+
+		take_damage(1)
 
 		is_hurting = true
 		action_locked = true
 		is_attacking = false
-		take_damage(1)
-		play_anim("hurt") # or "walk" if you want fake stun walk
-		print("SPEAR HIT:", name)
-		if is_hurting:
-			velocity.x = -11888
-			move_and_slide()
 
-	if area.is_in_group("HitBox"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 2600
+		velocity.x = -11888
 		velocity.y = -200
 
 		play_anim("hurt")
-
-	# bullet checks FIRST (important)
-	if area.is_in_group("SubzeroBullet"):
-		apply_stun(3.0)
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 600
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("ReptileBullet"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 600
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("ReptileAcid"):
-		take_damage(1)
 		return
 
-	if area.is_in_group("RaidenElectricBullet"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 600
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("ElectricForceField"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 0
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("ElectricBurst"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 0
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("ElectricBullet"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 600
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("ElectricForceHurtBox"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 0
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("KanoBullet"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 600
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("IceBullet"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 600
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("JohnnyCageBullet"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 600
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("SonyaBullet"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 600
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("FireBullet"):
-		take_damage(1)
-
-		is_hurting = true
-
-		# knockback away from attacker
-		velocity.x = -facing * 600
-		velocity.y = -200
-
-		play_anim("hurt")
-
-	if area.is_in_group("Fireball"):
+	# ---------------- GLOBAL COOLDOWN CHECK ----------------
+	if not can_take_damage:
 		return
+
+	var damage_sources = [
+		"HitBox",
+		"ReptileBullet",
+		"ReptileAcid",
+		"RaidenElectricBullet",
+		"ElectricForceField",
+		"ElectricBurst",
+		"ElectricBullet",
+		"KanoBullet",
+		"IceBullet",
+		"SubzeroBullet",
+		"JohnnyCageBullet",
+		"SonyaBullet",
+		"FireBullet",
+		"Fireball"
+	]
+
+	for source in damage_sources:
+		if area.is_in_group(source):
+
+			if source == "SubzeroBullet":
+				apply_stun(3.0)
+
+			take_damage(1)
+
+			is_hurting = true
+			action_locked = true
+			is_attacking = false
+
+			knockback_x = -facing * 1100
+			velocity.y = -200
+
+			play_anim("hurt")
+			return
