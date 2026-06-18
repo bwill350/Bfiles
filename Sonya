@@ -331,7 +331,7 @@ func cpu_logic(delta):
 	if is_hurting:
 
 		
-		velocity.x = -facing * 1000
+		velocity.x = -facing * 700
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -546,6 +546,10 @@ func take_damage(amount: int):
 
 	can_take_damage = false
 
+	await get_tree().create_timer(0.25).timeout
+
+	can_take_damage = true
+
 	if state == State.DEAD:
 		can_take_damage = true
 		return
@@ -596,10 +600,6 @@ func take_damage(amount: int):
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
-
-	await get_tree().create_timer(0.4).timeout
-
-	can_take_damage = true
 
 	# ⚠️ FINISH HIM
 	if health == 0:
