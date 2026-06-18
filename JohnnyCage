@@ -557,11 +557,8 @@ func shoot_player():
 
 	var bullet_scene: PackedScene
 
-	# ---------------- SPECIAL BULLET ----------------
 	if special_bullet != null:
 		bullet_scene = special_bullet
-
-		# reset after one shot
 		special_bullet = null
 	else:
 		bullet_scene = JOHNNY_CAGE_BULLET
@@ -572,6 +569,10 @@ func shoot_player():
 
 	bullet.global_position = $JohnnyShoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
+
+	# Flip sprite when facing right
+	if bullet.has_node("Sprite2D"):
+		bullet.get_node("Sprite2D").flip_h = facing > 0
 
 	await get_tree().create_timer(0.25).timeout
 
