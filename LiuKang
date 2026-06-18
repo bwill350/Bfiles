@@ -209,6 +209,11 @@ func update_animation():
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
+	if stunned:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
 	combo_timer += delta
@@ -362,7 +367,7 @@ func cpu_logic(delta):
 	if is_hurting:
 
 		
-		velocity.x = knockback_x
+		velocity.x = -facing * 470
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -804,44 +809,32 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 
 	if area == null or !is_instance_valid(area):
 		return
-		take_damage(1)
-	# ---------------- SPEAR ----------------
+
+	if not can_take_damage:
+		return
+
+	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
-
-		if not can_take_damage:
-			return
-
 		take_damage(1)
 
 		is_hurting = true
 		action_locked = true
 		is_attacking = false
 
-		velocity.x = -11888
+		velocity.x = -facing * 900
 		velocity.y = -200
 
 		play_anim("hurt")
 		return
 
-	# ---------------- GLOBAL COOLDOWN CHECK ----------------
-	if not can_take_damage:
-		return
-
+	# ---------------- GLOBAL DAMAGE ----------------
 	var damage_sources = [
-		"HitBox",
-		"ReptileBullet",
-		"ReptileAcid",
-		"RaidenElectricBullet",
-		"ElectricForceField",
-		"ElectricBurst",
-		"ElectricBullet",
-		"KanoBullet",
-		"IceBullet",
-		"SubzeroBullet",
-		"JohnnyCageBullet",
-		"SonyaBullet",
-		"FireBullet",
-		"Fireball"
+		"HitBox","ReptileBullet","ReptileAcid",
+		"RaidenElectricBullet","ElectricForceField",
+		"ElectricBurst","ElectricBullet",
+		"KanoBullet","IceBullet","SubzeroBullet",
+		"JohnnyCageBullet","SonyaBullet",
+		"FireBullet","Fireball"
 	]
 
 	for source in damage_sources:
@@ -856,7 +849,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 			action_locked = true
 			is_attacking = false
 
-			knockback_x = -facing * 1400
+			knockback_x = -facing * 900
 			velocity.y = -200
 
 			play_anim("hurt")
