@@ -448,7 +448,6 @@ func do_action(anim_name: String):
 
 	play_anim(anim_name)
 
-	# 🔥 SPAWN SPEAR EARLY (IMPORTANT)
 	if anim_name == "spear":
 		spawn_spear()
 
@@ -461,10 +460,13 @@ func do_action(anim_name: String):
 	]:
 		spawn_attack(anim_name)
 
-	await sprite.animation_finished
+	await get_tree().create_timer(0.3).timeout
 
 	is_attacking = false
 	action_locked = false
+
+	if state != State.DEAD and not is_finish_state:
+		play_anim("idle")
 
 func pull_enemy(enemy: Node2D):
 
@@ -726,17 +728,20 @@ func take_damage(amount: int):
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
+	is_attacking = false
+	is_shooting = false
 
 	health -= amount
 	health = max(health, 0)
 
-# ---------------- FINISH HIM STATE ----------------
+	# ---------------- FINISH HIM STATE ----------------
 	if health == 1 and not finish_triggered:
 		finish_triggered = true
 		trigger_finish_state()
 
-# ---------------- DEATH ----------------
+	# ---------------- DEATH ----------------
 	if health <= 0:
+		can_take_damage = true
 		die()
 		return
 
@@ -751,6 +756,9 @@ func take_damage(amount: int):
 	hurt_locked = false
 	action_locked = false
 	can_take_damage = true
+
+	if state != State.DEAD and not is_finish_state:
+		play_anim("idle")
 
 func trigger_finish_state():
 	if is_finish_state:
