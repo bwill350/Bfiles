@@ -210,21 +210,13 @@ func update_animation():
 func _physics_process(delta):
 
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
+
 	combo_timer += delta
 
 	if combo_timer > combo_reset_time:
 		combo.clear()
+		combo_timer = 0.0
 
-	# ---------------- SPECIAL MOVES FIRST ----------------
-	if flyingkick_active:
-		start_flyingkick()
-		return
-
-	if bicyclekick_active:
-		start_bicyclekick()
-		return
-
-	# ---------------- CPU ----------------
 	if is_cpu:
 		cpu_logic(delta)
 		move_and_slide()
@@ -233,60 +225,88 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	# gravity ONCE
 	velocity.y += GRAVITY * delta
 
 	if action_locked:
-		move_and_slide()
 		return
 
 	var input_dir = Input.get_axis("left", "right")
+	var climb_pressed = Input.is_action_pressed("climb")
 
-	# facing
+	# ---------------- FACING ----------------
 	if input_dir != 0:
 		facing = input_dir
 
 	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
-	$LiuKangshoot.position = Vector2(63 * facing, -155)
-
+	$Subzeroshoot.position = Vector2(63 * facing, -155)
+	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
-	# states
-	if not is_on_floor():
+	# ---------------- CLIMB ----------------
+	if climb_pressed and not is_on_floor() and is_on_wall():
+		state = State.CLIMB
+
+	elif not is_on_floor():
 		state = State.JUMP
+
 	elif input_dir != 0:
 		state = State.RUN
+
 	else:
 		state = State.IDLE
 
+	# ---------------- ANIMS ----------------
 	match state:
-		State.RUN:
+
+		State.CLIMB:
+			velocity.y = -CLIMB_SPEED
+
 			if not is_attacking:
-				play_anim("walk")
+				play_anim("climb")
+
 		State.JUMP:
 			if not is_attacking:
 				play_anim("jump")
+
+		State.RUN:
+			if not is_attacking:
+				play_anim("walk")
+
 		State.IDLE:
 			if not is_attacking:
 				play_anim("idle")
 
-	# jump
+	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
 
-	# attacks
-	if Input.is_action_just_pressed("punch"):
+	# ---------------- ATTACKS ----------------
+	if Input.is_action_just_pressed("jumpkick"):
+		do_action("jumpkick")
+
+	elif Input.is_action_just_pressed("punch"):
 		do_action("punch")
-	elif Input.is_action_just_pressed("kick"):
-		do_action("kick")
-	elif Input.is_action_just_pressed("uppercut"):
-		do_action("uppercut")
+
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
-	elif Input.is_action_just_pressed("jumpkick"):
-		do_action("jumpkick")
+
+	elif Input.is_action_just_pressed("kick"):
+		do_action("kick")
+
+	elif Input.is_action_just_pressed("uppercut"):
+		do_action("uppercut")
+
+	elif Input.is_action_pressed("shoot"):
+		shoot_fireball()
+
+	elif Input.is_action_just_pressed("shoot"):
+		if shoot_cooldown <= 0:
+			shoot_fireball()
+
+	elif Input.is_action_pressed("block"):
+		start_block()
 
 	elif Input.is_action_pressed("flyingkick"):
 		start_flyingkick()
@@ -334,7 +354,7 @@ func _physics_process(delta):
 			global_position.y = lerp(global_position.y, flyingkick_y, 0.2)
 			special_move_timer -= delta
 			velocity.x = facing * 1300
-			velocity.y +GRAVITY * delta * 0.4
+			velocity.y += GRAVITY * delta * 0.4
 			move_and_slide()
 # ---------------- CPU ----------------
 func cpu_logic(delta):
@@ -784,7 +804,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 
 	if area == null or !is_instance_valid(area):
 		return
-
+		take_damage(1)
 	# ---------------- SPEAR ----------------
 	if area.is_in_group("ReptileSpear"):
 
@@ -836,7 +856,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 			action_locked = true
 			is_attacking = false
 
-			knockback_x = -facing * 1100
+			knockback_x = -facing * 1400
 			velocity.y = -200
 
 			play_anim("hurt")
