@@ -13,17 +13,19 @@ const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 var flicker_on := true
 var finished := false
 var owner_character = null
-
+var damage_done := false
 
 # ---------------- READY ----------------
 func _ready():
-
+	$CleanupTimer.start()
 	$Sprite.play("fade")
-
 	add_to_group("FireDeath")
-
+	add_to_group("HurtBox")
+	$".".add_to_group("HurtBox")
 	self.scale = Vector2.ZERO
-
+	area_entered.connect(_on_area_entered)
+	if not is_inside_tree():
+		return
 	if sprite:
 		sprite.play("charge")
 
@@ -44,22 +46,6 @@ func _ready():
 
 	await get_tree().process_frame
 
-	for fighter in get_tree().get_nodes_in_group("Reptile"):
-		fighter.remove_meta("firedeath_hit")
-	for fighter in get_tree().get_nodes_in_group("Subzero"):
-		fighter.remove_meta("firedeath_hit")
-	for fighter in get_tree().get_nodes_in_group("Raiden"):
-		fighter.remove_meta("firedeath_hit")
-	for fighter in get_tree().get_nodes_in_group("LiuKang"):
-		fighter.remove_meta("firedeath_hit")
-	for fighter in get_tree().get_nodes_in_group("JohnnyCage"):
-		fighter.remove_meta("firedeath_hit")
-	for fighter in get_tree().get_nodes_in_group("Kano"):
-		fighter.remove_meta("firedeath_hit")
-	for fighter in get_tree().get_nodes_in_group("Sonya"):
-		fighter.remove_meta("firedeath_hit")
-
-		queue_free()
 
 # ---------------- STOP EVERYTHING ----------------
 func stop_fatality():
@@ -256,5 +242,22 @@ func start_particle_burst():
 		)
 
 func _on_cleanup_timer_timeout():
-
 	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+
+
+func _on_area_entered(area: Area2D):
+	if damage_done or area == null:
+		return
+
+	var enemy = area.get_parent()
+
+	# Ignore the fighter that created this effect
+	if owner_character and enemy == owner_character:
+		return
+
+	if not area.is_in_group("HurtBox"):
+		return
+
+	if enemy and enemy.has_method("take_damage"):
+		enemy.take_damage(1)
+		damage_done = true
