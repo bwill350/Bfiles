@@ -668,12 +668,17 @@ func take_damage(amount: int):
 	# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
 
-		is_finish_state = true
+		trigger_finish_state()
 
-		finish_label.visible = true
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
 
-		if finish_label.has_method("start_flicker"):
-			finish_label.start_flicker(2.0, 0.05)
+		play_anim("hurt")
+
+		await get_tree().create_timer(0.5).timeout
+
+		is_hurting = false
 
 		return
 
