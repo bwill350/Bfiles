@@ -321,18 +321,16 @@ func shoot_acid():
 		return
 
 	shoot_cooldown = shoot_cooldown_time
-
 	is_attacking = true
 	action_locked = true
 
 	play_anim("shoot")
 
 	var bullet = REPTILES_ACID.instantiate()
-
 	get_tree().current_scene.add_child(bullet)
 
 	bullet.global_position = $Reptileshoot.global_position
-	bullet.velocity = Vector2(facing, 0) * bullet.speed
+	bullet.velocity = Vector2.RIGHT * facing * bullet.speed
 
 	await get_tree().create_timer(0.2).timeout
 
@@ -359,6 +357,9 @@ func cpu_logic(delta):
 			move_and_slide()
 			return
 
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
 
 # GRAVITY
 	velocity.y += GRAVITY * delta
@@ -376,10 +377,6 @@ func cpu_logic(delta):
 		action_locked = true
 		velocity.x = 0
 		move_and_slide()
-		return
-
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
 		return
 
 	ai_timer -= delta
@@ -647,16 +644,16 @@ func shoot_player():
 	if is_shooting:
 		return
 
-
 	is_shooting = true
 	is_attacking = true
 	action_locked = true
 
 	play_anim("shoot")
 
+	# ✅ MOVE MARKER FIRST
+	$Reptileshoot.position = Vector2(88.9 * facing, -14.6)
 
 	var bullet_scene: PackedScene
-
 
 	if special_bullet != null:
 		bullet_scene = special_bullet
@@ -664,47 +661,33 @@ func shoot_player():
 	else:
 		bullet_scene = BULLET_SCENE
 
-
 	var bullet = bullet_scene.instantiate()
+	get_tree().current_scene.add_child(bullet)
 
-	get_tree().current_scene.call_deferred("add_child", bullet)
-
-
+	# optional but safe after add
 	await get_tree().process_frame
 
-
-	# marker follows facing
-	$Reptileshoot.position = Vector2(88.9 * facing, -14.6)
-
-
+	# ✅ NOW POSITION IS CORRECT
 	bullet.global_position = $Reptileshoot.global_position
-
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-
-	# flip bullet
 	if bullet.has_node("Sprite2D"):
 		bullet.get_node("Sprite2D").flip_h = facing < 0
 
 	if bullet.has_node("AnimatedSprite2D"):
 		bullet.get_node("AnimatedSprite2D").flip_h = facing < 0
 
-
 	await get_tree().create_timer(0.25).timeout
 
-
 	is_shooting = false
-
 
 	if is_hurting:
 		is_attacking = false
 		action_locked = false
 		return
 
-
 	if state == State.DEAD:
 		return
-
 
 	is_attacking = false
 	action_locked = false
@@ -714,51 +697,76 @@ func shoot_player():
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 
-	if spawn_protection:
-		return
-
-	if state == State.DEAD:
-		return
-
 	if not can_take_damage:
 		return
 
 	can_take_damage = false
 
-	is_hurting = true
-	hurt_locked = true
-	action_locked = true
-	is_attacking = false
-	is_shooting = false
+	await get_tree().create_timer(0.25).timeout
+
+	can_take_damage = true
+
+	if state == State.DEAD:
+		return
+
+	if spawn_protection:
+		return
+
+	# BLOCK REDUCTION
+	if is_blocking:
+		amount = max(amount - 1, 0)
+
+	if amount <= 0:
+		return
 
 	health -= amount
 	health = max(health, 0)
 
-	# ---------------- FINISH HIM STATE ----------------
-	if health == 1 and not finish_triggered:
-		finish_triggered = true
-		trigger_finish_state()
-
-	# ---------------- DEATH ----------------
-	if health <= 0:
-		can_take_damage = true
-		die()
-		return
+	print("Subzero took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
-
 	hit_sound.play()
+
+	# ---------------- FINISH HIM ----------------
+	if health == 1 and not is_finish_state:
+
+		is_finish_state = true
+
+		finish_label.visible = true
+
+		if finish_label.has_method("start_flicker"):
+			finish_label.start_flicker(2.0, 0.05)
+
+		return
+
+	# ---------------- FINAL HIT ----------------
+	if health <= 0:
+
+		finish_label.visible = false
+
+		await get_tree().create_timer(0.5).timeout
+
+		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+		return
+
+	# ---------------- NORMAL HURT ----------------
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+
+	state = State.IDLE
+
 	play_anim("hurt")
 
-	await get_tree().create_timer(0.15).timeout
+	var blood = BLOOD_EFFECT.instantiate()
+	get_tree().current_scene.add_child(blood)
+	blood.global_position = $BloodMarker.global_position
+
+	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
-	can_take_damage = true
-
-	if state != State.DEAD and not is_finish_state:
-		play_anim("idle")
 
 func trigger_finish_state():
 	if is_finish_state:
