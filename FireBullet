@@ -8,12 +8,16 @@ class_name FireBullet
 
 var velocity: Vector2 = Vector2.ZERO
 var target: Node2D = null
+var has_hit := false
 
 func _ready():
-
 	add_to_group("FireBullet")
 
 	area_entered.connect(_on_area_entered)
+
+	# 🔥 Ensure bullet ALWAYS moves even if spawn code forgets velocity
+	if velocity == Vector2.ZERO:
+		velocity = Vector2.RIGHT * speed
 
 	# auto cleanup
 	await get_tree().create_timer(lifetime).timeout
@@ -23,6 +27,7 @@ func _ready():
 	var players = get_tree().get_nodes_in_group("Subzero")
 	if players.size() > 0:
 		target = players[0]
+
 
 func _physics_process(delta):
 
@@ -41,14 +46,26 @@ func _physics_process(delta):
 
 func _on_area_entered(area: Area2D) -> void:
 
-	if area == null:
+	if has_hit:
 		return
 
-	var target_player = area.get_parent()
-	if target_player == null:
+	if area.is_in_group("FireBullet"):
 		return
 
-	# ignore non-fighters safely
-	if target_player.has_method("take_damage"):
-		target_player.take_damage(damage)
-		queue_free()
+	var fighter = area.get_parent()
+
+	if fighter == null:
+		return
+
+	if not fighter.is_in_group("Fighter"):
+		return
+
+	if fighter.is_in_group("LiuKang"):
+		return
+
+	has_hit = true
+
+	if fighter.has_method("take_damage"):
+		fighter.take_damage(damage)
+
+	queue_free()
