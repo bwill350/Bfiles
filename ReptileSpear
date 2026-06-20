@@ -1,23 +1,39 @@
 extends Area2D
+class_name ReptileSpear
 
+@export var lifetime: float = 3.0
 @export var speed := 2000.0
+
 var velocity := Vector2.ZERO
 var owner_character = null
 var hit := false
+var hit_lock := false
+
 
 func _ready():
 	add_to_group("ReptileSpear")
 	area_entered.connect(_on_area_entered)
 
+	# auto delete after lifetime
+	await get_tree().create_timer(lifetime).timeout
+	if is_instance_valid(self):
+		queue_free()
+
+
 func _physics_process(delta):
 	position += velocity * delta
 
-func _on_area_entered(area):
+
+func _on_area_entered(area: Area2D) -> void:
+
+	if hit or hit_lock:
+		return
 
 	if area == null:
 		return
 
-	var enemy = area.get_parent()
+	# safer than get_parent()
+	var enemy = area.owner if area.owner != null else area.get_parent()
 
 	if enemy == null:
 		return
@@ -25,40 +41,21 @@ func _on_area_entered(area):
 	if enemy == owner_character:
 		return
 
-	if enemy.is_in_group("Fighter"):
-
-		queue_free()
-
-		if enemy.has_method("spear_pulled_to_p1"):
-			enemy.spear_pulled_to_p1()
-
-		return
-
-func on_hit_fighter(enemy):
-	if enemy == null:
-		return
-
-	# make sure it's a valid fighter
 	if not enemy.is_in_group("Fighter"):
 		return
 
-	# decide direction toward Player 1
-	var p1 = get_tree().get_first_node_in_group("P1")
-	if p1 == null:
-		return
+	hit = true
+	hit_lock = true
 
-	var dir = sign(p1.global_position.x - enemy.global_position.x)
+	# stop spear immediately
+	velocity = Vector2.ZERO
 
-	# OPTIONAL: if CPU or normal fighter, apply different strength
-	if enemy.is_cpu:
-		enemy.velocity.x = dir * 1200
-	else:
-		enemy.velocity.x = dir * 800
-
-	enemy.velocity.y = -120
-
-	# now trigger pull state if it exists
+	# apply pull logic
 	if enemy.has_method("spear_pulled_to_p1"):
 		enemy.spear_pulled_to_p1()
+
+	# optional extra callback
+	if enemy.has_method("take_damage"):
+		enemy.take_damage(1)
 
 	queue_free()
