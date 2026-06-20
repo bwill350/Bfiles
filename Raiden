@@ -48,6 +48,7 @@ var can_take_damage := true
 var is_finish_state := false
 var lock_timer := 0.0
 var stunned := false
+var hurt_cooldown := false
 
 # ---------------- CPU ----------------
 var is_cpu := false
@@ -152,18 +153,22 @@ func _on_health_changed(h):
 
 # ---------------- READY ----------------
 func _ready():
+
 	add_to_group("Fighter")
-	spawn_protection = true
-	spawn_protection = false
 	add_to_group("enemy")
 	add_to_group("Raiden")
+
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
 	add_to_group("ElectricDeath")
+
 	spawn_locked = false
+
 	health = max_health
 	health_changed.emit(health)
+
 	play_anim("idle")
+
 	ai_timer = randf_range(0.2, 0.6)
 
 # ---------------- INPUT ----------------
@@ -792,77 +797,57 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 	sprite.play(anim_name)
 
-func _on_Raiden_Hurt_Box_area_entered(area: Area2D) -> void:
+func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 
-	# ---------------- SPEAR HIT ----------------
+	if hurt_cooldown:
+		return
+
+	if area == null or !is_instance_valid(area):
+		return
+
+	if area.is_in_group("HurtBox"):
+		return
+
 	if area.is_in_group("ReptileSpear"):
+		hurt_cooldown = true
 
 		health -= 1
 		health_changed.emit(health)
 
-		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
-
-		# IMPORTANT: mark this as special knockback type
 		knockback_x = -900
 
 		play_anim("hurt")
 
-		# let CPU handle movement, just reset after delay
 		await get_tree().create_timer(0.8).timeout
 
-		is_spear_pulled = false
 		is_hurting = false
 		action_locked = false
-		knockback_x = 0
+		hurt_cooldown = false
 		return
 
-	# ---------------- GLOBAL COOLDOWN ----------------
 	if not can_take_damage:
 		return
 
-	var damage_sources = [
-		"HitBox",
-		"ReptileAcid",
-		"KanoBullet",
-		"FireBullet",
-		"Fireball",
-		"JohnnyCageBullet",
-		"SonyaBullet"
-	]
+	if area.is_in_group("HitBox") \
+	or area.is_in_group("ReptileAcid") \
+	or area.is_in_group("KanoBullet") \
+	or area.is_in_group("FireBullet") \
+	or area.is_in_group("Fireball") \
+	or area.is_in_group("JohnnyCageBullet") \
+	or area.is_in_group("SonyaBullet"):
 
-	for source in damage_sources:
-		if area.is_in_group(source):
+		hurt_cooldown = true
 
-			if source == "SubzeroBullet":
-				apply_stun(3.0)
+		knockback_x = -facing * 700
+		take_damage(1)
 
-			take_damage(1)
+		is_hurting = true
+		action_locked = true
+		is_attacking = false
 
-			is_hurting = true
-			action_locked = true
-			is_attacking = false
+		play_anim("hurt")
 
-			# NORMAL knockback ONLY
-			knockback_x = -facing * 700
-
-			play_anim("hurt")
-			return
-
-
-	# ---------------- IGNORE OWN PROJECTILES ----------------
-	if area.is_in_group("RaidenElectricBullet"):
-		return
-
-	if area.is_in_group("ElectricForceField"):
-		return
-
-	if area.is_in_group("ElectricBurst"):
-		return
-
-	if area.is_in_group("ElectricBullet"):
-		return
-
-	if area.is_in_group("ElectricForceHurtBox"):
-		return
+		await get_tree().create_timer(0.15).timeout
+		hurt_cooldown = false
