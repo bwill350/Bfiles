@@ -30,7 +30,7 @@ var special_move := false
 var special_move_timer := 0.0
 var cannonball_hit_lock := false
 var is_spear_pulled := false
-
+var was_on_floor := false
 # ---------------- STATE ----------------
 enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
@@ -186,7 +186,7 @@ func _physics_process(delta):
 			cannonball_hit_lock = false
 			spawn_protection = false
 			velocity = Vector2.ZERO
-			return
+		return
 
 		if cannonball_active:
 			var cannon_input = Input.get_axis("left", "right")
@@ -270,12 +270,14 @@ func _physics_process(delta):
 
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
+	velocity.y += GRAVITY * delta
 
 	# ---------------- STATES ----------------
+
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.CLIMB
 
-	elif not is_on_floor():
+	elif not is_on_floor() and velocity.y < 0:
 		state = State.JUMP
 
 	elif input_dir != 0:
