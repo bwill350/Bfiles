@@ -1,50 +1,47 @@
 extends Area2D
-class_name SonyaBullet
+class_name SubzeroBullet
 
 @export var speed: float = 900.0
-@export var damage: int = 1
 @export var lifetime: float = 3.0
+@export var stun_time: float = 0.5
+@export var damage: int = 1
 
 var velocity: Vector2 = Vector2.ZERO
-var has_hit := false
 
-@onready var sprite: AnimatedSprite2D = $Sprite
-
+@onready var sprite: Sprite2D = $Sprite2D
 
 func _ready():
-
-	if sprite:
-		sprite.play("SonyaBullet")
-
-	add_to_group("SonyaBullet")
+	add_to_group("SubzeroBullet")
 
 	area_entered.connect(_on_area_entered)
 
-	# safety: always move forward even if spawn forgot velocity
+	# default direction safety
 	if velocity == Vector2.ZERO:
 		velocity = Vector2.RIGHT * speed
 
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
 
-
 func _physics_process(delta):
 	global_position += velocity * delta
+	rotation = velocity.angle()
 
+func set_direction(dir: Vector2):
+	velocity = dir.normalized() * speed
 
 func _on_area_entered(area: Area2D) -> void:
-
-	if has_hit:
+	# ignore self/projectiles
+	if area.is_in_group("SubzeroBullet"):
 		return
 
-	# ignore self bullets
-	if area.is_in_group("SonyaBullet"):
+	var target = area.get_parent()
+	if target == null:
 		return
 
-	# OPTIONAL: ignore other bullets
-	if area.is_in_group("SubzeroBullet") or area.is_in_group("ReptileBullet"):
-		return
+	# ---------------- UNIVERSAL DAMAGE ----------------
+	if target.has_method("take_damage"):
+		target.take_damage(damage)
 
-	# apply hit once then remove
-	has_hit = true
-	queue_free()
+		# optional stun hook (only if your characters support it)
+		if target.has_method("apply_stun"):
+			target.apply_stun(stun_time)
