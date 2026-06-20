@@ -1,5 +1,7 @@
 extends Area2D
 
+var damage_done := false
+var owner_character = null
 @export var damage := 1
 
 func _ready():
@@ -12,32 +14,19 @@ func _ready():
 	area_entered.connect(_on_area_entered)
 
 func _on_area_entered(area):
+	print("Area:", area.name)
+	print("Parent:", area.get_parent().name)
 
-	if area == null:
+	var enemy = area.get_parent()
+
+	print("Enemy:", enemy)
+	print("Owner:", owner_character)
+
+	if enemy == owner_character:
+		print("IGNORED OWNER")
 		return
 
-	var parent = area.get_parent()
-	if parent == null:
-		return
-
-	# ---------------- SPECIFIC GROUP CHECKS ----------------
-
-	if area.is_in_group("HurtBox"):
-		parent.take_damage(damage)
-		return
-
-	# ---------------- ATTACKS (optional safety layer) ----------------
-	if area.is_in_group("ReptileAttack"):
-		parent.take_damage(damage)
-		return
-
-	if area.is_in_group("SubzeroAttack"):
-		parent.take_damage(damage)
-		return
-
-	if area.is_in_group("RaidenAttack"):
-		return
-
-	# ---------------- FALLBACK ----------------
-	if parent.has_method("take_damage"):
-		parent.take_damage(damage)
+	if enemy and enemy.has_method("take_damage"):
+		print("DAMAGING:", enemy.name)
+		enemy.take_damage(1)
+		damage_done = true
