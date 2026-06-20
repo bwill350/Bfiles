@@ -358,7 +358,7 @@ func _physics_process(delta):
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-	# ---------------- HURT PRIORITY ----------------
+# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
 		if is_spear_pulled:
@@ -367,7 +367,6 @@ func cpu_logic(delta):
 		else:
 			# normal knockback
 			velocity.x = -facing * 600
-			velocity.y += GRAVITY * delta
 
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
@@ -611,16 +610,9 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
-	# ---------------- FINISH HIM ----------------
+# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
-
-		is_finish_state = true
-
-		finish_label.visible = true
-
-		if finish_label.has_method("start_flicker"):
-			finish_label.start_flicker(2.0, 0.05)
-
+		trigger_finish_state()
 		return
 
 	# ---------------- FINAL HIT ----------------
@@ -658,17 +650,27 @@ func trigger_finish_state():
 
 	is_finish_state = true
 
+	state = State.IDLE
+	velocity = Vector2.ZERO
+
+	action_locked = true
+	hurt_locked = false
 	is_attacking = false
 	is_shooting = false
 	is_hurting = false
 
-	action_locked = true
-	hurt_locked = true
-
-	state = State.IDLE
-	velocity = Vector2.ZERO
-
 	finish_label.visible = true
+
+	if finish_label.has_method("start_flicker"):
+		finish_label.start_flicker(2.0, 0.05)
+
+	# ⏱ WAIT THEN REMOVE LABEL
+	await get_tree().create_timer(2.0).timeout
+
+	if is_instance_valid(finish_label):
+		finish_label.visible = false
+
+	is_finish_state = false
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
@@ -819,12 +821,14 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("HurtBox"):
 		return
 
+	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
 		hurt_cooldown = true
 
 		health -= 1
 		health_changed.emit(health)
 
+		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
 
@@ -832,6 +836,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 
 		await get_tree().create_timer(0.8).timeout
 
+		is_spear_pulled = false
 		is_hurting = false
 		action_locked = false
 		hurt_cooldown = false
