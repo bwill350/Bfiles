@@ -48,7 +48,7 @@ var finish_triggered := false
 var is_pulled := false
 var pull_target: Node2D = null
 var pull_timer := 0.0
-
+var hurt_cooldown := false
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -129,16 +129,11 @@ func apply_stun(duration: float):
 
 # ---------------- READY ----------------
 func _ready():
-	
+
 	add_to_group("Fighter")
-	spawn_protection = true
-
-	
-
-	spawn_protection = false
-
 	add_to_group("enemy")
-	add_to_group("Kano")
+	add_to_group("Reptile")
+
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
 	add_to_group("ElectricDeath")
@@ -889,8 +884,10 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 	return
 
-
 func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
+
+	if hurt_cooldown:
+		return
 
 	if area == null or !is_instance_valid(area):
 		return
@@ -898,9 +895,20 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 	if not can_take_damage:
 		return
 
+	if area.is_in_group("HurtBox"):
+		return
 
-	# ---------------- HITBOX (melee) ----------------
+	if area.is_in_group("ReptileSpear"):
+		return
+
+	if area.is_in_group("ReptileBullet") or area.is_in_group("ReptileAcid"):
+		return
+
 	if area.is_in_group("HitBox"):
+		hurt_cooldown = true
+
+		knockback_x = -facing * 400
+		velocity.y = -200
 
 		take_damage(1)
 
@@ -908,50 +916,48 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 		action_locked = true
 		is_attacking = false
 
-		velocity.x = -facing * 400
-		velocity.y = -200
+		play_anim("hurt")
+
+		await get_tree().create_timer(0.15).timeout
+		hurt_cooldown = false
+		return
+
+	if area.is_in_group("SubzeroBullet"):
+		hurt_cooldown = true
+
+		apply_stun(3.0)
+		knockback_x = -facing * 400
+		take_damage(1)
+
+		is_hurting = true
+		action_locked = true
+		is_attacking = false
 
 		play_anim("hurt")
+
+		await get_tree().create_timer(0.15).timeout
+		hurt_cooldown = false
 		return
 
+	if area.is_in_group("RaidenElectricBullet") \
+	or area.is_in_group("ElectricForceField") \
+	or area.is_in_group("ElectricBurst") \
+	or area.is_in_group("ElectricBullet") \
+	or area.is_in_group("KanoBullet") \
+	or area.is_in_group("FireBullet") \
+	or area.is_in_group("Fireball") \
+	or area.is_in_group("JohnnyCageBullet"):
 
-	# ---------------- GLOBAL COOLDOWN CHECK ----------------
-	var damage_sources = [
-		"SubzeroBullet",
-		"RaidenElectricBullet",
-		"ElectricForceField",
-		"ElectricBurst",
-		"ElectricBullet",
-		"ElectricForceHurtBox",
-		"KanoBullet",
-		"IceBullet",
-		"FireBullet",
-		"Fireball",
-		"JohnnyCageBullet"
-	]
+		hurt_cooldown = true
 
-	for source in damage_sources:
-		if area.is_in_group(source):
+		knockback_x = -facing * 400
+		take_damage(1)
 
-			if source == "SubzeroBullet":
-				apply_stun(3.0)
+		is_hurting = true
+		action_locked = true
+		is_attacking = false
 
-			take_damage(1)
+		play_anim("hurt")
 
-			is_hurting = true
-			action_locked = true
-			is_attacking = false
-
-			knockback_x = -facing * 400
-			velocity.y = -200
-
-			play_anim("hurt")
-			return
-
-
-	# ---------------- IGNORE OWN ATTACKS ----------------
-	if area.is_in_group("ReptileBullet"):
-		return
-
-	if area.is_in_group("ReptileAcid"):
-		return
+		await get_tree().create_timer(0.15).timeout
+		hurt_cooldown = false
