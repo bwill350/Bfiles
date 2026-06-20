@@ -55,7 +55,7 @@ var hurt_recovery := false
 var lock_timer := 0.0
 var special_move_y := 0.0
 var spawn_locked := true
-
+var is_spear_pulled := false
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -109,27 +109,18 @@ var shoot_cooldown: float = 0.0
 
 # ---------------- READY ----------------
 func _ready():
-	
 	add_to_group("Fighter")
 	spawn_protection = true
-
-	
-
 	spawn_protection = false
-
 	add_to_group("enemy")
 	add_to_group("LiuKang")
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
 	add_to_group("ElectricDeath")
-
 	spawn_locked = false
-
 	health = max_health
 	health_changed.emit(health)
-
 	play_anim("idle")
-
 	ai_timer = randf_range(0.2, 0.6)
 
 func _unhandled_input(event):
@@ -232,6 +223,14 @@ func _physics_process(delta):
 
 	velocity.y += GRAVITY * delta
 
+	if flyingkick_active:
+		handle_flyingkick(delta)
+		return
+
+	if bicyclekick_active:
+		handle_bicyclekick(delta)
+		return
+
 	if action_locked:
 		return
 
@@ -245,7 +244,7 @@ func _physics_process(delta):
 	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
-	$Subzeroshoot.position = Vector2(63 * facing, -155)
+	$LiuKangshoot.position = Vector2(63 * facing, -155)
 	# ---------------- MOVEMENT ----------------
 	velocity.x = input_dir * SPEED
 
@@ -352,34 +351,31 @@ func _physics_process(delta):
 				velocity = Vector2.ZERO
 				return
 
-	# ---------------- SPECIAL MOVES ----------------
-	if special_move:
-
-		if flyingkick_active:
-			global_position.y = lerp(global_position.y, flyingkick_y, 0.2)
-			special_move_timer -= delta
-			velocity.x = facing * 1300
-			velocity.y += GRAVITY * delta * 0.4
-			move_and_slide()
 # ---------------- CPU ----------------
 func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		
-		velocity.x = -facing * 470
+		if is_spear_pulled:
+			# opposite of normal knockback
+			velocity.x = -facing * -600
+		else:
+			# normal knockback
+			velocity.x = -facing * 600
+			velocity.y += GRAVITY * delta
 
-	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
 		if abs(knockback_x) < 10:
 			knockback_x = 0
 			is_hurting = false
+			is_spear_pulled = false
 
-			velocity.y += GRAVITY * delta
-			move_and_slide()
-			return
+		return
 
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
 
 # GRAVITY
 	velocity.y += GRAVITY * delta
@@ -399,10 +395,6 @@ func cpu_logic(delta):
 		move_and_slide()
 		return
 
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		return
-
 	ai_timer -= delta
 
 	velocity.y += GRAVITY * delta
@@ -414,13 +406,6 @@ func cpu_logic(delta):
 
 
 # ---------------- MOVEMENT ----------------
-	if abs(dist) > 220:
-
-		velocity.x = direction * SPEED * 0.8
-
-	if state != State.RUN:
-		state = State.RUN
-
 	if not is_attacking:
 		play_anim("walk")
 
@@ -456,11 +441,15 @@ func cpu_logic(delta):
 				shoot_fireball()
 
 func handle_flyingkick(delta):
+
 	play_anim("flyingkick")
 
 	special_move_timer -= delta
-	velocity.x = facing * 1900
-	velocity.y = 400
+
+	velocity.x = facing * 1300
+
+	# let gravity bring him down
+	velocity.y += GRAVITY * delta
 
 	move_and_slide()
 
@@ -468,14 +457,17 @@ func handle_flyingkick(delta):
 		flyingkick_active = false
 		special_move = false
 		special_move_invincible = false
-		velocity = Vector2.ZERO
 
 func handle_bicyclekick(delta):
+
 	play_anim("bicyclekick")
 
 	special_move_timer -= delta
-	velocity.x = facing * 1900
-	velocity.y = 300
+
+	velocity.x = facing * 1300
+
+	# let gravity bring him down
+	velocity.y += GRAVITY * delta
 
 	move_and_slide()
 
@@ -483,7 +475,6 @@ func handle_bicyclekick(delta):
 		bicyclekick_active = false
 		special_move = false
 		special_move_invincible = false
-		velocity = Vector2.ZERO
 
 func handle_special_hit():
 
@@ -584,17 +575,20 @@ func shoot_fireball():
 	play_anim("idle")
 
 func take_damage(amount: int):
+
 	if not can_take_damage:
 		return
 
 	can_take_damage = false
 
+	await get_tree().create_timer(0.25).timeout
+
+	can_take_damage = true
+
 	if state == State.DEAD:
-		can_take_damage = true
 		return
 
 	if spawn_protection:
-		can_take_damage = true
 		return
 
 	# BLOCK REDUCTION
@@ -602,55 +596,56 @@ func take_damage(amount: int):
 		amount = max(amount - 1, 0)
 
 	if amount <= 0:
-		can_take_damage = true
 		return
 
 	health -= amount
 	health = max(health, 0)
 
-	print("Sonya took damage: ", amount, " HP=", health)
+	print("Subzero took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
 
-	# 💀 DEATH FIRST
-	if health <= 0:
-		die()
+	# ---------------- FINISH HIM ----------------
+	if health == 1 and not is_finish_state:
+
+		is_finish_state = true
+
+		finish_label.visible = true
+
+		if finish_label.has_method("start_flicker"):
+			finish_label.start_flicker(2.0, 0.05)
+
 		return
 
-	# ⚠️ FINISH STATE (ONLY ONCE)
-	if health == 1 and not is_finish_state:
-		trigger_finish_state()
+	# ---------------- FINAL HIT ----------------
+	if health <= 0:
 
-	# 💥 HURT FX ALWAYS WORKS EXCEPT DEAD
+		finish_label.visible = false
+
+		await get_tree().create_timer(0.5).timeout
+
+		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+		return
+
+	# ---------------- NORMAL HURT ----------------
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
 
 	state = State.IDLE
+
 	play_anim("hurt")
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
-	await sprite.animation_finished
+	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
-
-	await get_tree().create_timer(0.4).timeout
-
-	can_take_damage = true
-
-	# ⚠️ FINISH HIM
-	if health == 0:
-		if not is_finish_state:
-			trigger_finish_state()
-		finish_label.visible = true
-	else:
-		finish_label.visible = false
 
 func trigger_finish_state():
 	if is_finish_state:
@@ -814,27 +809,39 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		return
 
 	# ---------------- SPEAR PRIORITY ----------------
+# ---------------- SPEAR PRIORITY (PULL TOWARD P1) ----------------
 	if area.is_in_group("ReptileSpear"):
-		take_damage(1)
 
+		health -= 1
+		health_changed.emit(health)
+
+		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
-		is_attacking = false
-
-		velocity.x = -facing * 900
-		velocity.y = -200
 
 		play_anim("hurt")
+
+		await get_tree().create_timer(0.8).timeout
+
+		is_spear_pulled = false
+		is_hurting = false
+		action_locked = false
+
 		return
 
 	# ---------------- GLOBAL DAMAGE ----------------
 	var damage_sources = [
-		"HitBox","ReptileBullet","ReptileAcid",
-		"RaidenElectricBullet","ElectricForceField",
-		"ElectricBurst","ElectricBullet",
-		"KanoBullet","IceBullet","SubzeroBullet",
-		"JohnnyCageBullet","SonyaBullet",
-		"FireBullet","Fireball"
+		"HitBox",
+		"ReptileAcid",
+		"RaidenElectricBullet",
+		"ElectricForceField",
+		"ElectricBurst",
+		"ElectricBullet",
+		"KanoBullet",
+		"FireBullet",
+		"Fireball",
+		"JohnnyCageBullet",
+		"SonyaBullet"
 	]
 
 	for source in damage_sources:
@@ -850,7 +857,6 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 			is_attacking = false
 
 			knockback_x = -facing * 900
-			velocity.y = -200
 
 			play_anim("hurt")
 			return
