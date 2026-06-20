@@ -4,6 +4,9 @@ extends Control
 @onready var subzero_btn = $SubzeroButton
 @onready var raiden_btn = $RaidenButton
 @onready var liu_kang_btn = $LiuKangButton
+@onready var sonya_btn = $SonyaButton
+@onready var kano_btn = $KanoButton
+@onready var johnny_cage_btn = $JohnnyCageButton
 
 @onready var mode_button = $ModeButton
 @onready var start_button = $StartButton
@@ -12,17 +15,23 @@ extends Control
 @onready var p2_label = $P2Label
 @onready var cpu_label = $CPULabel
 
-# ---------------- FIXED PATHS ----------------
+# ---------------- CHARACTER DATA ----------------
 const REPTILE_DATA = preload("res://Data/Reptile.tres")
 const SUBZERO_DATA = preload("res://Data/Subzero.tres")
 const RAIDEN_DATA = preload("res://Data/Raiden.tres")
 const LIU_KANG_DATA = preload("res://Data/LiuKang.tres")
+const SONYA_DATA = preload("res://Data/Sonya.tres")
+const KANO_DATA = preload("res://Data/Kano.tres")
+const JOHNNY_CAGE_DATA = preload("res://Data/JohnnyCage.tres")
 
 func _ready():
 	reptile_btn.pressed.connect(func(): _select_character("Reptile"))
 	subzero_btn.pressed.connect(func(): _select_character("Subzero"))
 	raiden_btn.pressed.connect(func(): _select_character("Raiden"))
 	liu_kang_btn.pressed.connect(func(): _select_character("LiuKang"))
+	sonya_btn.pressed.connect(func(): _select_character("Sonya"))
+	kano_btn.pressed.connect(func(): _select_character("Kano"))
+	johnny_cage_btn.pressed.connect(func(): _select_character("JohnnyCage"))
 
 	mode_button.pressed.connect(_toggle_mode)
 	start_button.pressed.connect(_start_game)
@@ -42,6 +51,12 @@ func _select_character(char_name: String):
 				Game.p1_data = RAIDEN_DATA
 			"LiuKang":
 				Game.p1_data = LIU_KANG_DATA
+			"Sonya":
+				Game.p1_data = SONYA_DATA
+			"Kano":
+				Game.p1_data = KANO_DATA
+			"JohnnyCage":
+				Game.p1_data = JOHNNY_CAGE_DATA
 
 		p1_label.text = "P1: " + char_name
 		return
@@ -60,6 +75,12 @@ func _select_character(char_name: String):
 					Game.p2_data = RAIDEN_DATA
 				"LiuKang":
 					Game.p2_data = LIU_KANG_DATA
+				"Sonya":
+					Game.p2_data = SONYA_DATA
+				"Kano":
+					Game.p2_data = KANO_DATA
+				"JohnnyCage":
+					Game.p2_data = JOHNNY_CAGE_DATA
 
 			p2_label.text = "P2: " + char_name
 			return
@@ -76,6 +97,11 @@ func _toggle_mode():
 	p1_label.text = "P1: Not Selected"
 	p2_label.text = "P2: Not Selected"
 	cpu_label.text = "CPU: Not Selected"
+
+	if Game.vs_cpu:
+		mode_button.text = "Mode: VS CPU"
+	else:
+		mode_button.text = "Mode: PVP"
 
 func _start_game():
 	get_tree().change_scene_to_file("res://Scenes/Levels/Level1.tscn")
