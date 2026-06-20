@@ -277,7 +277,7 @@ func _physics_process(delta):
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.CLIMB
 
-	elif not is_on_floor() and velocity.y < 0:
+	elif not is_on_floor():
 		state = State.JUMP
 
 	elif input_dir != 0:
