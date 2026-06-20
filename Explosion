@@ -11,3 +11,4 @@ func _ready():
 func _on_explosion_timeout():
 	$AudioStreamPlayer2D.play()
 	queue_free()
+
