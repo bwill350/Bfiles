@@ -761,17 +761,28 @@ func trigger_finish_state():
 		return
 
 	is_finish_state = true
-	action_locked = true
-	is_attacking = false
-	is_shooting = false
-	is_hurting = false
 
 	state = State.IDLE
 	velocity = Vector2.ZERO
 
+	action_locked = true
+	hurt_locked = false
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
+
 	finish_label.visible = true
-	await get_tree().create_timer(1.0).timeout
-	finish_label.visible = false
+
+	if finish_label.has_method("start_flicker"):
+		finish_label.start_flicker(2.0, 0.05)
+
+	# ⏱ WAIT THEN REMOVE LABEL
+	await get_tree().create_timer(2.0).timeout
+
+	if is_instance_valid(finish_label):
+		finish_label.visible = false
+
+	is_finish_state = false
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
