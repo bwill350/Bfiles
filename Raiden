@@ -712,16 +712,9 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
-	# ---------------- FINISH HIM ----------------
+# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
-
-		is_finish_state = true
-
-		finish_label.visible = true
-
-		if finish_label.has_method("start_flicker"):
-			finish_label.start_flicker(2.0, 0.05)
-
+		trigger_finish_state()
 		return
 
 	# ---------------- FINAL HIT ----------------
@@ -754,6 +747,9 @@ func take_damage(amount: int):
 	action_locked = false
 
 func trigger_finish_state():
+	if is_finish_state:
+		return
+
 	is_finish_state = true
 
 	state = State.IDLE
@@ -770,8 +766,13 @@ func trigger_finish_state():
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
 
-	await get_tree().create_timer(1.0).timeout
-	finish_label.visible = false
+	# ⏱ WAIT THEN REMOVE LABEL
+	await get_tree().create_timer(2.0).timeout
+
+	if is_instance_valid(finish_label):
+		finish_label.visible = false
+
+	is_finish_state = false
 
 # ---------------- DEATH ----------------
 func die():
