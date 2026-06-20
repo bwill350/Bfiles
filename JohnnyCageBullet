@@ -14,10 +14,15 @@ var has_hit := false
 func _ready():
 	add_to_group("JohnnyCageBullet")
 
+	# Flip sprite based on direction
+	sprite.flip_h = velocity.x < 0
+
 	area_entered.connect(_on_area_entered)
 
 	await get_tree().create_timer(lifetime).timeout
-	queue_free()
+
+	if is_instance_valid(self):
+		queue_free()
 
 func _physics_process(delta):
 	global_position += velocity * delta
@@ -27,6 +32,7 @@ func _on_area_entered(area):
 	if has_hit:
 		return
 
+	# Ignore other Johnny Cage bullets
 	if area.is_in_group("JohnnyCageBullet"):
 		return
 
@@ -38,7 +44,7 @@ func _on_area_entered(area):
 	if not fighter.is_in_group("Fighter"):
 		return
 
-	# Optional: don't hit Johnny Cage himself
+	# Don't hit Johnny Cage himself
 	if fighter.is_in_group("JohnnyCage"):
 		return
 
