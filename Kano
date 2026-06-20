@@ -29,6 +29,7 @@ signal combo_used(combo_name: String)
 var special_move := false
 var special_move_timer := 0.0
 var cannonball_hit_lock := false
+var is_spear_pulled := false
 
 # ---------------- STATE ----------------
 enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
@@ -124,17 +125,15 @@ func _ready():
 	add_to_group("Fighter")
 	spawn_protection = true
 	spawn_protection = false
-
 	add_to_group("enemy")
 	add_to_group("Kano")
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
 	add_to_group("ElectricDeath")
-
 	spawn_locked = false
-
 	health = max_health
 	health_changed.emit(health)
+	play_anim("idle")
 	ai_timer = randf_range(0.2, 0.6)
 
 # ---------------- INPUT ----------------
@@ -163,26 +162,6 @@ func _unhandled_input(event):
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-# ---------------- FACE + CHASE (ONLY PLAYER CONTROLLED LOGIC HERE) ----------------
-	if not is_cpu and target and is_instance_valid(target) and !is_attacking and !is_hurting:
-		var dist = target.global_position.x - global_position.x
-
-		if abs(dist) > 10:
-			var direction = sign(dist)
-
-			facing = direction
-			sprite.flip_h = facing > 0
-
-			velocity.x = direction * SPEED
-			play_anim("walk")
-		else:
-			velocity.x = move_toward(knockback_x, 0, 1500 * delta)
-			play_anim("walk")
-
-
-
-	# NORMAL GRAVITY
-	velocity.y += GRAVITY * delta
 
 	# ---------------- STUN ----------------
 	if stunned:
@@ -417,20 +396,25 @@ func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		
-		velocity.x = -facing * 200
+		if is_spear_pulled:
+			# opposite of normal knockback
+			velocity.x = -facing * -600
+		else:
+			# normal knockback
+			velocity.x = -facing * 600
 
-	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
 		if abs(knockback_x) < 10:
 			knockback_x = 0
 			is_hurting = false
+			is_spear_pulled = false
 
-			velocity.y += GRAVITY * delta
-			move_and_slide()
-			return
+		return
 
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
 
 # GRAVITY
 	velocity.y += GRAVITY * delta
@@ -450,10 +434,6 @@ func cpu_logic(delta):
 		move_and_slide()
 		return
 
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		return
-
 	ai_timer -= delta
 
 	velocity.y += GRAVITY * delta
@@ -465,13 +445,6 @@ func cpu_logic(delta):
 
 
 # ---------------- MOVEMENT ----------------
-	if abs(dist) > 220:
-
-		velocity.x = direction * SPEED * 0.8
-
-	if state != State.RUN:
-		state = State.RUN
-
 	if not is_attacking:
 		play_anim("walk")
 
@@ -654,37 +627,65 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
-	if spawn_protection:
+
+	if not can_take_damage:
 		return
-	# already dead
+
+	can_take_damage = false
+
+	await get_tree().create_timer(0.25).timeout
+
+	can_take_damage = true
+
 	if state == State.DEAD:
 		return
 
 	if spawn_protection:
 		return
 
-	if not can_take_damage:
-		return
-
-	# block reduction
+	# BLOCK REDUCTION
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
 	if amount <= 0:
 		return
 
-	can_take_damage = false
+	health -= amount
+	health = max(health, 0)
 
+	print("Subzero took damage: ", amount, " HP=", health)
+
+	health_changed.emit(health)
+	hit_sound.play()
+
+	# ---------------- FINISH HIM ----------------
+	if health == 1 and not is_finish_state:
+
+		is_finish_state = true
+
+		finish_label.visible = true
+
+		if finish_label.has_method("start_flicker"):
+			finish_label.start_flicker(2.0, 0.05)
+
+		return
+
+	# ---------------- FINAL HIT ----------------
+	if health <= 0:
+
+		finish_label.visible = false
+
+		await get_tree().create_timer(0.5).timeout
+
+		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+		return
+
+	# ---------------- NORMAL HURT ----------------
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
 
-	health -= amount
-	health = max(health, 0)
-	health_changed.emit(health)
-
-	if health == 1 and not is_finish_state:
-		trigger_finish_state()
+	state = State.IDLE
 
 	play_anim("hurt")
 
@@ -692,19 +693,11 @@ func take_damage(amount: int):
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = blood_marker.global_position
 
-	await get_tree().create_timer(0.3).timeout
+	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
-	can_take_damage = true
-
-	play_anim("idle")
-
-	# FINISH HIM
-	if health == 0:
-		die()
-		is_finish_state = true
 
 func trigger_finish_state():
 	if is_finish_state:
@@ -834,25 +827,23 @@ func play_anim(anim_name: String):
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 
-	if area == null or !is_instance_valid(area):
-		return
-
-	# ---------------- SPEAR ----------------
 	if area.is_in_group("ReptileSpear"):
 
-		if not can_take_damage:
-			return
+		health -= 1
+		health_changed.emit(health)
 
-		take_damage(1)
-
+		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
-		is_attacking = false
-
-		velocity.x = -11888
-		velocity.y = -200
 
 		play_anim("hurt")
+
+		await get_tree().create_timer(0.8).timeout
+
+		is_spear_pulled = false
+		is_hurting = false
+		action_locked = false
+
 		return
 
 
@@ -862,7 +853,6 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 
 	var damage_sources = [
 		"HitBox",
-		"ReptileBullet",
 		"ReptileAcid",
 		"RaidenElectricBullet",
 		"ElectricForceField",
@@ -887,11 +877,10 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 			take_damage(1)
 
 			is_hurting = true
-			action_locked = true
+			action_locked = false
 			is_attacking = false
 
 			knockback_x = -facing * 600
-			velocity.y = -200
 
 			play_anim("hurt")
 			return
