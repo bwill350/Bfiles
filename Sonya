@@ -49,6 +49,7 @@ var hurt_locked := false
 var can_take_damage := true
 var is_finish_state := false
 var lock_timer := 0.0
+var hurt_cooldown := false
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -126,18 +127,22 @@ func apply_stun(duration: float):
 
 # ---------------- READY ----------------
 func _ready():
+
 	add_to_group("Fighter")
-	spawn_protection = true
-	spawn_protection = false
 	add_to_group("enemy")
 	add_to_group("Sonya")
+
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
 	add_to_group("ElectricDeath")
+
 	spawn_locked = false
+
 	health = max_health
 	health_changed.emit(health)
+
 	play_anim("idle")
+
 	ai_timer = randf_range(0.2, 0.6)
 
 # ---------------- INPUT ----------------
@@ -552,7 +557,7 @@ func take_damage(amount: int):
 	health -= amount
 	health = max(health, 0)
 
-	print("Subzero took damage: ", amount, " HP=", health)
+	print("Sonya took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
@@ -718,14 +723,20 @@ func play_anim(anim_name: String):
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 
+	if hurt_cooldown:
+		return
+
 	if area == null or !is_instance_valid(area):
 		return
 
 	if not can_take_damage:
 		return
 
-	# ---------------- SPEAR ----------------
+	if area.is_in_group("HurtBox"):
+		return
+
 	if area.is_in_group("ReptileSpear"):
+		hurt_cooldown = true
 
 		health -= 1
 		health_changed.emit(health)
@@ -741,80 +752,46 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 		is_spear_pulled = false
 		is_hurting = false
 		action_locked = false
-
+		hurt_cooldown = false
 		return
 
-	# ---------------- NO DAMAGE (own bullet) ----------------
 	if area.is_in_group("SonyaBullet"):
 		return
 
-	# ---------------- STUN ----------------
-	if area.is_in_group("SubzeroBullet"):
-		apply_stun(3.0)
-
-	# ---------------- DAMAGE SOURCES ----------------
-	var knock_medium := [
-		"HitBox",
-		"ReptileAcid",
-		"RaidenElectricBullet",
-		"ElectricForceField",
-		"ElectricBurst",
-		"ElectricBullet",
-		"KanoBullet",
-		"FireBullet",
-		"Fireball",
-		"JohnnyCageBullet",
-		"SonyaBullet"
-	]
-
-	var knock_light := [
-		"ElectricForceField",
-		"ElectricBurst",
-		"ElectricForceHurtBox"
-	]
-
-	var melee := ["HitBox"]
+	var hit := false
 
 	if area.is_in_group("HitBox"):
+		knockback_x = -facing * 700
+		hit = true
+
+	elif area.is_in_group("Fireball"):
+		knockback_x = -facing * 600
+		hit = true
+
+	elif area.is_in_group("ReptileAcid") \
+	or area.is_in_group("RaidenElectricBullet") \
+	or area.is_in_group("ElectricBullet") \
+	or area.is_in_group("KanoBullet") \
+	or area.is_in_group("FireBullet") \
+	or area.is_in_group("JohnnyCageBullet"):
+		knockback_x = -facing * 600
+		hit = true
+
+	elif area.is_in_group("ElectricForceField") \
+	or area.is_in_group("ElectricBurst"):
+		knockback_x = 0
+		hit = true
+
+	if hit:
+		hurt_cooldown = true
+
 		take_damage(1)
+
 		is_hurting = true
 		action_locked = true
-
-		velocity.x = -facing * 700
-
-		play_anim("hurt")
-		return
-
-	if area.is_in_group("Fireball"):
-		take_damage(1)
-		is_hurting = true
-		action_locked = true
-
-		velocity.x = -facing * 600
+		is_attacking = false
 
 		play_anim("hurt")
-		return
 
-	# ---------------- BULLETS (MEDIUM KNOCKBACK) ----------------
-	for g in knock_medium:
-		if area.is_in_group(g):
-			take_damage(1)
-			is_hurting = true
-			action_locked = true
-
-			velocity.x = -facing * 600
-
-			play_anim("hurt")
-			return
-
-	# ---------------- LIGHT HITS ----------------
-	for g in knock_light:
-		if area.is_in_group(g):
-			take_damage(1)
-			is_hurting = true
-			action_locked = true
-
-			velocity.x = 0
-
-			play_anim("hurt")
-			return
+		await get_tree().create_timer(0.15).timeout
+		hurt_cooldown = false
