@@ -180,6 +180,13 @@ func _physics_process(delta):
 
 		special_move_timer -= delta
 
+		if cannonball_active:
+			var cannon_input = Input.get_axis("left", "right")
+			velocity.x += cannon_input * 40
+			velocity.y = 0
+
+		move_and_slide()
+
 		if special_move_timer <= 0:
 			special_move = false
 			cannonball_active = false
@@ -188,12 +195,6 @@ func _physics_process(delta):
 			velocity = Vector2.ZERO
 		return
 
-		if cannonball_active:
-			var cannon_input = Input.get_axis("left", "right")
-			velocity.x += cannon_input * 40
-			velocity.y = 0
-
-		move_and_slide()
 
 	# COLLISION CHECK
 		for i in range(get_slide_collision_count()):
@@ -325,8 +326,8 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("shoot"):
 		shoot_player()
 
-	elif Input.is_action_just_pressed("fatality"):
-		do_action("fatality")
+	elif Input.is_action_just_pressed("cannonball"):
+		do_action("cannonball")
 
 	elif Input.is_action_just_pressed("Reptilesacid"):
 		if shoot_cooldown <= 0:
@@ -408,7 +409,7 @@ func cpu_logic(delta):
 			velocity.x = -facing * -600
 		else:
 			# normal knockback
-			velocity.x = -facing * 600
+			velocity.x = knockback_x
 
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
@@ -569,8 +570,15 @@ func spawn_attack(anim_name: String):
 func start_cannonball():
 	if state == State.DEAD:
 		return
+
 	if action_locked:
 		return
+
+	var dir := Input.get_axis("left", "right")
+
+	# If player is holding a direction, use it
+	if dir != 0:
+		facing = sign(dir)
 
 	cannonball_hit_lock = true
 	spawn_protection = true
@@ -848,12 +856,14 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("HurtBox"):
 		return
 
+	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
 		hurt_cooldown = true
 
 		health -= 1
 		health_changed.emit(health)
 
+		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
 
@@ -861,6 +871,7 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 
 		await get_tree().create_timer(0.8).timeout
 
+		is_spear_pulled = false
 		is_hurting = false
 		action_locked = false
 		hurt_cooldown = false
