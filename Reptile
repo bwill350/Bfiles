@@ -722,16 +722,9 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
-	# ---------------- FINISH HIM ----------------
+# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
-
-		is_finish_state = true
-
-		finish_label.visible = true
-
-		if finish_label.has_method("start_flicker"):
-			finish_label.start_flicker(2.0, 0.05)
-
+		trigger_finish_state()
 		return
 
 	# ---------------- FINAL HIT ----------------
