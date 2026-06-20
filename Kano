@@ -54,6 +54,7 @@ var is_finish_state := false
 var lock_timer := 0.0
 var cannonball_active := false
 var cannonball_timer := 0.0
+var hurt_cooldown := false
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -122,18 +123,22 @@ func apply_stun(duration: float):
 
 # ---------------- READY ----------------
 func _ready():
+
 	add_to_group("Fighter")
-	spawn_protection = true
-	spawn_protection = false
 	add_to_group("enemy")
 	add_to_group("Kano")
+
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
 	add_to_group("ElectricDeath")
+
 	spawn_locked = false
+
 	health = max_health
 	health_changed.emit(health)
+
 	play_anim("idle")
+
 	ai_timer = randf_range(0.2, 0.6)
 
 # ---------------- INPUT ----------------
@@ -653,7 +658,7 @@ func take_damage(amount: int):
 	health -= amount
 	health = max(health, 0)
 
-	print("Subzero took damage: ", amount, " HP=", health)
+	print("Kano took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
@@ -827,12 +832,21 @@ func play_anim(anim_name: String):
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 
+	if hurt_cooldown:
+		return
+
+	if area == null or !is_instance_valid(area):
+		return
+
+	if area.is_in_group("HurtBox"):
+		return
+
 	if area.is_in_group("ReptileSpear"):
+		hurt_cooldown = true
 
 		health -= 1
 		health_changed.emit(health)
 
-		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
 
@@ -840,47 +854,33 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 
 		await get_tree().create_timer(0.8).timeout
 
-		is_spear_pulled = false
 		is_hurting = false
 		action_locked = false
-
+		hurt_cooldown = false
 		return
 
-
-	# ---------------- GLOBAL COOLDOWN CHECK ----------------
 	if not can_take_damage:
 		return
 
-	var damage_sources = [
-		"HitBox",
-		"ReptileAcid",
-		"RaidenElectricBullet",
-		"ElectricForceField",
-		"ElectricBurst",
-		"ElectricBullet",
-		"IceBullet",
-		"JohnnyCageBullet",
-		"SonyaBullet",
-		"FireBullet",
-		"Fireball"
-	]
+	if area.is_in_group("HitBox") \
+	or area.is_in_group("ReptileAcid") \
+	or area.is_in_group("RaidenElectricBullet") \
+	or area.is_in_group("FireBullet") \
+	or area.is_in_group("Fireball") \
+	or area.is_in_group("JohnnyCageBullet") \
+	or area.is_in_group("SonyaBullet") \
+	or area.is_in_group("IceBullet"):
 
-	for source in damage_sources:
-		if area.is_in_group(source):
+		hurt_cooldown = true
 
-			if source == "KanoBullet":
-				return
+		knockback_x = -facing * 600
+		take_damage(1)
 
-			if source == "SubzeroBullet":
-				apply_stun(3.0)
+		is_hurting = true
+		action_locked = true
+		is_attacking = false
 
-			take_damage(1)
+		play_anim("hurt")
 
-			is_hurting = true
-			action_locked = false
-			is_attacking = false
-
-			knockback_x = -facing * 600
-
-			play_anim("hurt")
-			return
+		await get_tree().create_timer(0.15).timeout
+		hurt_cooldown = false
