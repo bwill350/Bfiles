@@ -11,13 +11,15 @@ extends Area2D
 
 var flicker_on := true
 var finished := false
-
+var owner_character = null
+var damage_done := false
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 
 # ---------------- READY ----------------
 func _ready():
 	$CleanupTimer.start()
 	add_to_group("IceDeath")
+	add_to_group("HurtBox")
 	$CleanupTimer.timeout.connect(_on_cleanup_timer_timeout)
 	area_entered.connect(_on_area_entered)
 	add_to_group("IceDeath")
@@ -25,6 +27,9 @@ func _ready():
 
 	if sprite:
 		sprite.play("charge")
+
+	if not is_inside_tree():
+		return
 
 	if sound:
 		sound.play()
@@ -38,23 +43,23 @@ func _ready():
 
 	stop_fatality()
 
-
 # ---------------- DAMAGE ----------------
 func _on_area_entered(area: Area2D):
-
-	if area == null:
+	if damage_done or area == null:
 		return
 
-	# ---------------- HURTBOX DETECTION ----------------
-	if area.is_in_group("HurtBox"):
+	var enemy = area.get_parent()
 
-		var enemy = area.get_parent()
+	# Ignore the fighter that created this effect
+	if owner_character and enemy == owner_character:
+		return
 
-		if enemy and enemy.has_method("take_damage"):
-			enemy.take_damage(1)
-			enemy.queue_free()
-			$CleanupTimer.start()
+	if not area.is_in_group("HurtBox"):
+		return
 
+	if enemy and enemy.has_method("take_damage"):
+		enemy.take_damage(1)
+		damage_done = true
 
 # ---------------- STOP ----------------
 func stop_fatality():
@@ -84,7 +89,6 @@ func stop_fatality():
 	$CleanupTimer.start()
 	queue_free()
 
-
 # ---------------- FLICKER ----------------
 func start_flicker():
 
@@ -103,7 +107,6 @@ func start_flicker():
 			sprite.modulate = Color(0.4, 0.8, 1.5)
 	).set_delay(0.05)
 
-
 # ---------------- MAIN ANIMATION ----------------
 func start_main_animation():
 
@@ -113,7 +116,6 @@ func start_main_animation():
 	t.tween_property(self, "scale", Vector2(0.3, 3), 0.12)
 	t.tween_property(self, "scale", Vector2.ONE, 0.18)
 	t.tween_property(self, "scale", Vector2.ZERO, 0.2)
-
 
 # ---------------- SHOCKWAVE ----------------
 func start_shockwave():
@@ -128,7 +130,6 @@ func start_shockwave():
 
 	t.tween_property(ring, "scale", Vector2(1, 1), 0.35)
 	t.parallel().tween_property(ring, "modulate:a", 0.0, 0.35)
-
 
 # ---------------- PARTICLES ----------------
 func start_particle_burst():
@@ -167,7 +168,6 @@ func start_particle_burst():
 		t_out.tween_callback(func():
 			p.emitting = false
 		)
-
 
 func _on_cleanup_timer_timeout():
 	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
