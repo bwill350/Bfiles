@@ -153,7 +153,7 @@ func _on_health_changed(h):
 
 # ---------------- READY ----------------
 func _ready():
-
+	$Crispy.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Raiden")
@@ -778,13 +778,12 @@ func trigger_finish_state():
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
-
+		die()
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
 
-	# KEEP SONYA IDLE AT 1 HP
 	state = State.IDLE
 	velocity = Vector2.ZERO
 
@@ -792,8 +791,6 @@ func trigger_finish_state():
 	is_shooting = false
 	is_hurting = false
 	is_blocking = false
-
-	play_anim("idle")
 
 # ---------------- DEATH ----------------
 func die():
@@ -807,17 +804,21 @@ func die():
 	get_tree().current_scene.add_child(death)
 	death.global_position = global_position
 
+	# stop everything
 	velocity = Vector2.ZERO
-
 	is_attacking = false
 	is_shooting = false
 	action_locked = true
 	hurt_locked = true
+	is_hurting = false
 
-	hide() # optional, hides fighter while blood effect plays
+	# 🔥 HARD SWAP SPRITES
+	$Sprite.visible = false          # AnimatedSprite2D OFF
+	$Crispy.visible = true         # static image ON
 
-	# Let BloodDeath animation play
-	await get_tree().create_timer(2.0).timeout
+
+	# optional delay before menu
+	await get_tree().create_timer(1.5).timeout
 
 	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
 
