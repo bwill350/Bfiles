@@ -628,7 +628,7 @@ func take_damage(amount: int):
 	if health <= 0:
 
 		finish_label.visible = false
-
+		die()
 		await get_tree().create_timer(0.5).timeout
 
 		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
@@ -729,13 +729,29 @@ func spawn_attack(anim_name: String):
 
 # ---------------- DEATH ----------------
 func die():
+
+	if state == State.DEAD:
+		return
+
 	state = State.DEAD
-	velocity = Vector2.ZERO
 
 	var death = BLOOD_DEATH.instantiate()
 	get_tree().current_scene.add_child(death)
 	death.global_position = global_position
-	queue_free()
+
+	velocity = Vector2.ZERO
+
+	is_attacking = false
+	is_shooting = false
+	action_locked = true
+	hurt_locked = true
+
+	hide() # optional, hides fighter while blood effect plays
+
+	# Let BloodDeath animation play
+	await get_tree().create_timer(2.0).timeout
+
+	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim: String):
@@ -852,8 +868,6 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
-
-		play_anim("hurt")
 
 		await get_tree().create_timer(0.8).timeout
 
