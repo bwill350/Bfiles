@@ -811,11 +811,5 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 
 		take_damage(1)
 
-		is_hurting = true
-		action_locked = true
-		is_attacking = false
-
-		play_anim("hurt")
-
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
