@@ -189,6 +189,16 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
+	if health <= 1:
+		state = State.IDLE
+		velocity.x = 0
+
+	if not is_hurting:
+		play_anim("idle")
+
+		move_and_slide()
+		return
+
 	velocity.y += GRAVITY * delta
 
 	if action_locked:
@@ -527,8 +537,6 @@ func shoot_player():
 	is_attacking = false
 	action_locked = false
 
-	play_anim("idle")
-
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 
@@ -598,6 +606,7 @@ func take_damage(amount: int):
 	action_locked = false
 
 func trigger_finish_state():
+
 	if is_finish_state:
 		return
 
@@ -611,19 +620,30 @@ func trigger_finish_state():
 	is_attacking = false
 	is_shooting = false
 	is_hurting = false
+	is_blocking = false
+
+	play_anim("idle")
 
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
 
-	# ⏱ WAIT THEN REMOVE LABEL
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
 
-	is_finish_state = false
+	# KEEP SONYA IDLE AT 1 HP
+	state = State.IDLE
+	velocity = Vector2.ZERO
+
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
+	is_blocking = false
+
+	play_anim("idle")
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
