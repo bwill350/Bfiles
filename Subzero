@@ -30,6 +30,7 @@ var combo_timer := 0.0
 var spawn_locked := true
 var spawn_protection := false
 var is_spear_pulled := false
+var last_hit_frame := -1
 # ---------------- STATE ----------------
 enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 var state: State = State.IDLE
@@ -111,14 +112,10 @@ func update_facing_offsets():
 
 # ---------------- READY ----------------
 func _ready():
-
+	$Crispy.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Subzero")
-
-	add_to_group("FireDeath")
-	add_to_group("IceDeath")
-	add_to_group("ElectricDeath")
 
 	spawn_locked = false
 
@@ -128,32 +125,6 @@ func _ready():
 	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
-
-func _on_health_changed(h):
-
-	if h == 1 and not is_finish_state:
-
-		is_finish_state = true
-
-		is_attacking = false
-		is_shooting = false
-		is_hurting = false
-
-		action_locked = false
-		hurt_locked = false
-
-		state = State.IDLE
-		velocity = Vector2.ZERO
-
-		finish_label.visible = true
-
-		if finish_label.has_method("start_flicker"):
-			finish_label.start_flicker(2.0, 0.05)
-
-		await get_tree().create_timer(2.0).timeout
-
-		if is_instance_valid(finish_label):
-			finish_label.visible = false
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -173,6 +144,18 @@ func _physics_process(delta):
 
 	if state == State.DEAD:
 		return
+
+	# ---------------- FINISH HIM STATE ----------------
+	if health == 1:
+		if not is_finish_state:
+			is_finish_state = true
+			finish_label.visible = true
+			if finish_label.has_method("start_flicker"):
+				finish_label.start_flicker(2.0, 0.05)
+	else:
+		if is_finish_state:
+			is_finish_state = false
+			finish_label.visible = false
 
 	if health <= 1:
 
@@ -308,7 +291,7 @@ func cpu_logic(delta):
 			# normal knockback
 			velocity.x = -facing * 600
 
-		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
+		knockback_x = move_toward(knockback_x, 0, 10 * delta)
 
 		if abs(knockback_x) < 10:
 			knockback_x = 0
@@ -418,7 +401,7 @@ func do_action(anim_name: String):
 	if has_node("AttackMarker"):
 		$AttackMarker.call_deferred("emit_signal", "trigger_attack")
 
-	await sprite.animation_finished
+	await get_tree().create_timer(0.25).timeout
 
 	is_attacking = false
 	action_locked = false
@@ -461,7 +444,6 @@ func spawn_attack(anim_name: String):
 		"jumpkick"
 	]:
 		return
-
 	var attack = SUBZERO_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 
@@ -514,20 +496,20 @@ func shoot_player():
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 
-	if not can_take_damage:
-		return
-
-	can_take_damage = false
-
-	await get_tree().create_timer(0.25).timeout
-
-	can_take_damage = true
-
 	if state == State.DEAD:
 		return
 
 	if spawn_protection:
 		return
+
+	if not can_take_damage:
+		return
+
+	# 🔥 FRAME LOCK (prevents multi-hit stacking)
+	var frame := Engine.get_physics_frames()
+	if has_meta("last_damage_frame") and get_meta("last_damage_frame") == frame:
+		return
+	set_meta("last_damage_frame", frame)
 
 	# BLOCK REDUCTION
 	if is_blocking:
@@ -536,43 +518,26 @@ func take_damage(amount: int):
 	if amount <= 0:
 		return
 
+	# APPLY DAMAGE
 	health -= amount
 	health = max(health, 0)
 
+	print("ouch")
 	print("Subzero took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
 
-	# ---------------- FINISH HIM ----------------
+# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
 
-		is_finish_state = true
-
-		is_hurting = false
-		is_attacking = false
-		is_shooting = false
-		is_blocking = false
-
-		action_locked = true
-		hurt_locked = false
-
-		state = State.IDLE
-		velocity = Vector2.ZERO
-
-		play_anim("idle")
-
-		finish_label.visible = true
-
-		if finish_label.has_method("start_flicker"):
-			finish_label.start_flicker(2.0, 0.05)
-
+		trigger_finish_state()
 		return
 
-	# ---------------- FINAL HIT ----------------
+	# ---------------- DEATH ----------------
+		# ---------------- FINAL HIT ----------------
 	if health <= 0:
 
-		finish_label.visible = false
 		die()
 		await get_tree().create_timer(0.5).timeout
 
@@ -585,12 +550,9 @@ func take_damage(amount: int):
 	action_locked = true
 
 	state = State.IDLE
-
 	play_anim("hurt")
 
-	var blood = BLOOD_EFFECT.instantiate()
-	get_tree().current_scene.add_child(blood)
-	blood.global_position = $BloodMarker.global_position
+	# knockback should be handled outside, NOT here
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -621,13 +583,12 @@ func trigger_finish_state():
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
-
+		die()
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
 
-	# KEEP SONYA IDLE AT 1 HP
 	state = State.IDLE
 	velocity = Vector2.ZERO
 
@@ -635,8 +596,6 @@ func trigger_finish_state():
 	is_shooting = false
 	is_hurting = false
 	is_blocking = false
-
-	play_anim("idle")
 
 # ---------------- DEATH ----------------
 func die():
@@ -650,17 +609,21 @@ func die():
 	get_tree().current_scene.add_child(death)
 	death.global_position = global_position
 
+	# stop everything
 	velocity = Vector2.ZERO
-
 	is_attacking = false
 	is_shooting = false
 	action_locked = true
 	hurt_locked = true
+	is_hurting = false
 
-	hide() # optional, hides fighter while blood effect plays
+	# 🔥 HARD SWAP SPRITES
+	$Sprite.visible = false          # AnimatedSprite2D OFF
+	$Crispy.visible = true         # static image ON
 
-	# Let BloodDeath animation play
-	await get_tree().create_timer(2.0).timeout
+
+	# optional delay before menu
+	await get_tree().create_timer(1.5).timeout
 
 	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
 
@@ -694,31 +657,59 @@ func play_anim(anim_name: String):
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
+	if area == null or !is_instance_valid(area):
+		return
+
+	var parent = area.get_parent()
+	if parent == null or !is_instance_valid(parent):
+		return
+
+	# debug AFTER validation
+	print("AREA:", area.name)
+	print("PARENT:", parent.name)
+	print("GROUPS:", area.get_groups())
+
+	# ---------------- GLOBAL SAFETY BLOCKS ----------------
+	if state == State.DEAD:
+		return
+
 	if health <= 1:
 		return
 
 	if hurt_cooldown:
 		return
 
-	if area == null or !is_instance_valid(area):
-		return
-
-	if area.is_in_group("HurtBox"):
-		return
-
 	if not can_take_damage:
 		return
 
+	if spawn_protection:
+		return
+
+	# ❌ never treat hurtboxes as damage
+	if area.is_in_group("HurtBox"):
+		return
+
+
+	# 🔥 FRAME LOCK (IMPORTANT FIX FOR SPAM)
+	var frame := Engine.get_physics_frames()
+	if has_meta("last_hit_frame") and get_meta("last_hit_frame") == frame:
+		return
+
+
+	var hit := false
+	var knock := 0
+
+
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
+		set_meta("last_hit_frame", frame)
+
 		hurt_cooldown = true
-
-		health -= 1
-		health_changed.emit(health)
-
 		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
+
+		take_damage(1)
 
 		await get_tree().create_timer(0.8).timeout
 
@@ -728,44 +719,47 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_cooldown = false
 		return
 
-	# ---------------- IGNORE ALL STUN SOURCES ----------------
-	# (Sub-Zero is immune to stun system)
+
+	# ---------------- IGNORE STUN SOURCES ----------------
 	if area.is_in_group("SubzeroBullet"):
 		return
 
-	# ---------------- HIT LOGIC ----------------
-	var hit := false
 
+	# ---------------- HIT TYPES ----------------
 	if area.is_in_group("HitBox"):
-		knockback_x = -facing * 700
-		hit = true
-
-	elif area.is_in_group("Fireball"):
-		knockback_x = -facing * 600
+		knock = -facing * 700
 		hit = true
 
 	elif area.is_in_group("ReptileAcid") \
 	or area.is_in_group("RaidenElectricBullet") \
 	or area.is_in_group("ElectricBullet") \
 	or area.is_in_group("KanoBullet") \
-	or area.is_in_group("FireBullet") \
 	or area.is_in_group("JohnnyCageBullet") \
-	or area.is_in_group("SonyaBullet"):
-
-		knockback_x = -facing * 600
+	or area.is_in_group("SonyaBullet") \
+	or area.is_in_group("FireBullet") \
+	or area.is_in_group("KanoBullet"):
+		knock = -facing * 600
 		hit = true
 
 	elif area.is_in_group("ElectricForceField") \
 	or area.is_in_group("ElectricBurst"):
-
-		knockback_x = 0
+		knock = 0
 		hit = true
 
+
 	# ---------------- APPLY DAMAGE ----------------
-	if hit:
+	if hit and not hurt_cooldown:
+
+		set_meta("last_hit_frame", frame)
+
 		hurt_cooldown = true
+		knockback_x = knock
+
+		hit_box.monitoring = false
 
 		take_damage(1)
 
 		await get_tree().create_timer(0.15).timeout
+
+		hit_box.monitoring = true
 		hurt_cooldown = false
