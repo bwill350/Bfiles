@@ -241,6 +241,24 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
+	if health <= 1:
+
+		state = State.IDLE
+		velocity = Vector2.ZERO
+
+		is_attacking = false
+		is_shooting = false
+		is_hurting = false
+		is_blocking = false
+
+		action_locked = false
+		hurt_locked = false
+
+		play_anim("idle")
+
+		move_and_slide()
+		return
+
 	# ---------------- LOCKS ----------------
 	if action_locked or hurt_locked:
 		move_and_slide()
@@ -638,8 +656,6 @@ func shoot_player():
 	is_attacking = false
 	action_locked = false
 
-	play_anim("idle")
-
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 
@@ -678,16 +694,6 @@ func take_damage(amount: int):
 
 		trigger_finish_state()
 
-		is_hurting = true
-		hurt_locked = true
-		action_locked = true
-
-		play_anim("hurt")
-
-		await get_tree().create_timer(0.5).timeout
-
-		is_hurting = false
-
 		return
 
 	# ---------------- FINAL HIT ----------------
@@ -720,6 +726,7 @@ func take_damage(amount: int):
 	action_locked = false
 
 func trigger_finish_state():
+
 	if is_finish_state:
 		return
 
@@ -728,26 +735,39 @@ func trigger_finish_state():
 	state = State.IDLE
 	velocity = Vector2.ZERO
 
-	action_locked = true
-	hurt_locked = false
 	is_attacking = false
 	is_shooting = false
 	is_hurting = false
+	is_blocking = false
+
+	action_locked = false
+	hurt_locked = false
+
+	play_anim("idle")
 
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
 
-	# ⏱ WAIT THEN REMOVE LABEL
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
 
-	is_finish_state = false
+	# FORCE IDLE FOREVER AT 1 HP
+	state = State.IDLE
+	velocity = Vector2.ZERO
 
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
+	is_blocking = false
 
+	action_locked = false
+	hurt_locked = false
+
+	play_anim("idle")
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
@@ -846,6 +866,7 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
+
 
 	if hurt_cooldown:
 		return
