@@ -573,7 +573,7 @@ func take_damage(amount: int):
 	if health <= 0:
 
 		finish_label.visible = false
-
+		die()
 		await get_tree().create_timer(0.5).timeout
 
 		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
@@ -640,10 +640,16 @@ func trigger_finish_state():
 
 # ---------------- DEATH ----------------
 func die():
+
 	if state == State.DEAD:
 		return
 
 	state = State.DEAD
+
+	var death = BLOOD_DEATH.instantiate()
+	get_tree().current_scene.add_child(death)
+	death.global_position = global_position
+
 	velocity = Vector2.ZERO
 
 	is_attacking = false
@@ -651,15 +657,12 @@ func die():
 	action_locked = true
 	hurt_locked = true
 
-	var death = BLOOD_DEATH.instantiate()
-	get_tree().current_scene.add_child(death)
+	hide() # optional, hides fighter while blood effect plays
 
-	death.global_position = global_position
+	# Let BloodDeath animation play
+	await get_tree().create_timer(2.0).timeout
 
-	if death.has_method("set"):
-		death.set("facing", facing)
-
-		queue_free()
+	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
 
 
 
@@ -716,8 +719,6 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
-
-		play_anim("hurt")
 
 		await get_tree().create_timer(0.8).timeout
 
