@@ -800,7 +800,7 @@ func trigger_finish_state():
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
-
+		die()
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
@@ -898,18 +898,24 @@ func die():
 		return
 
 	state = State.DEAD
-	health = 0
-	velocity = Vector2.ZERO
-
-	trigger_finish_state() # 👈 THIS is what you were missing
-
-	await get_tree().create_timer(1.2).timeout
 
 	var death = BLOOD_DEATH.instantiate()
 	get_tree().current_scene.add_child(death)
 	death.global_position = global_position
 
-	queue_free()
+	velocity = Vector2.ZERO
+
+	is_attacking = false
+	is_shooting = false
+	action_locked = true
+	hurt_locked = true
+
+	hide() # optional, hides fighter while blood effect plays
+
+	# Let BloodDeath animation play
+	await get_tree().create_timer(2.0).timeout
+
+	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
@@ -979,8 +985,6 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 		action_locked = true
 		is_attacking = false
-
-		play_anim("hurt")
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
