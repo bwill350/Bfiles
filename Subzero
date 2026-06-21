@@ -174,6 +174,24 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
+	if health <= 1:
+
+		is_finish_state = true
+
+		is_hurting = false
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		state = State.IDLE
+
+		velocity = Vector2.ZERO
+
+		play_anim("idle")
+
+		move_and_slide()
+		return
+
 	velocity.y += GRAVITY * delta
 
 	if action_locked:
@@ -454,9 +472,9 @@ func spawn_attack(anim_name: String):
 
 	match anim_name:
 		"uppercut":
-			dmg = 2
+			dmg = 1
 		"roundhousekick":
-			dmg = 2
+			dmg = 1
 
 	if attack.has_method("set_damage"):
 		attack.set_damage(dmg)
@@ -531,6 +549,19 @@ func take_damage(amount: int):
 
 		is_finish_state = true
 
+		is_hurting = false
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		action_locked = true
+		hurt_locked = false
+
+		state = State.IDLE
+		velocity = Vector2.ZERO
+
+		play_anim("idle")
+
 		finish_label.visible = true
 
 		if finish_label.has_method("start_flicker"):
@@ -568,6 +599,7 @@ func take_damage(amount: int):
 	action_locked = false
 
 func trigger_finish_state():
+
 	if is_finish_state:
 		return
 
@@ -581,19 +613,30 @@ func trigger_finish_state():
 	is_attacking = false
 	is_shooting = false
 	is_hurting = false
+	is_blocking = false
+
+	play_anim("idle")
 
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
 
-	# ⏱ WAIT THEN REMOVE LABEL
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
 
-	is_finish_state = false
+	# KEEP SONYA IDLE AT 1 HP
+	state = State.IDLE
+	velocity = Vector2.ZERO
+
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
+	is_blocking = false
+
+	play_anim("idle")
 
 # ---------------- DEATH ----------------
 func die():
@@ -647,6 +690,9 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
+
+	if health <= 1:
+		return
 
 	if hurt_cooldown:
 		return
