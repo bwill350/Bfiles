@@ -136,9 +136,6 @@ func _ready():
 	add_to_group("enemy")
 	add_to_group("Reptile")
 
-	add_to_group("IceDeath")
-	add_to_group("ElectricDeath")
-
 	spawn_locked = false
 
 	health = max_health
@@ -198,15 +195,15 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	if health <= 1:
+	if is_finish_state:
 		state = State.IDLE
 		velocity.x = 0
 
 		if not is_hurting:
 			play_anim("idle")
 
-			move_and_slide()
-			return
+		move_and_slide()
+		return
 
 	velocity.y += GRAVITY * delta
 
@@ -378,7 +375,7 @@ func cpu_logic(delta):
 		return
 
 # STOP ALL ACTIONS AT 1HP
-	if health <= 1:
+	if is_finish_state:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
@@ -725,7 +722,8 @@ func take_damage(amount: int):
 	if spawn_protection:
 		return
 
-	if is_finish_state:
+# Allow fatal blow during Finish Him state
+	if is_finish_state and health > 1:
 		return
 
 	# BLOCK REDUCTION
@@ -939,7 +937,8 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 	if not can_take_damage:
 		return
 
-	if is_finish_state:
+	# Allow fatal blow during Finish Him state
+	if is_finish_state and health > 1:
 		return
 
 	# ---------------- GENERIC IGNORES ----------------
