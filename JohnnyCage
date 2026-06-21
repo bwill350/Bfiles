@@ -143,7 +143,7 @@ func _ready():
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
 	add_to_group("ElectricDeath")
-
+	
 	spawn_locked = false
 
 	health = max_health
@@ -201,6 +201,16 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
+	if health <= 1:
+		state = State.IDLE
+		velocity.x = 0
+
+		if not is_hurting:
+			play_anim("idle")
+
+		move_and_slide()
+		return
+
 	velocity.y += GRAVITY * delta
 
 	if action_locked:
@@ -224,7 +234,7 @@ func _physics_process(delta):
 
 		cannonkick_timer -= delta
 
-		velocity.x = facing * 1300
+		velocity.x = facing * 700
 		velocity.y = 0
 
 		if cannonkick_timer <= 0:
@@ -361,40 +371,40 @@ func shoot_acid():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		velocity.x = knockback_x
+		if is_spear_pulled:
+			velocity.x = -knockback_x
+		else:
+			velocity.x = knockback_x
 
-		knockback_x = move_toward(knockback_x, 0, 1200 * delta)
+		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
 		if abs(knockback_x) < 10:
 			knockback_x = 0
+			velocity.x = 0
 			is_hurting = false
 			is_spear_pulled = false
+			action_locked = false
 
-		move_and_slide()
 		return
 
-	# ---------------- INVALID TARGET ----------------
 	if target == null or !is_instance_valid(target):
 		velocity.x = 0
-		move_and_slide()
 		return
 
-	# ---------------- GRAVITY ----------------
+# GRAVITY
 	velocity.y += GRAVITY * delta
 
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
-	# HARD LOCK
+	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
-		move_and_slide()
 		return
 
-	# LOW HP LOCK
+# STOP ALL ACTIONS AT 1HP
 	if health <= 1:
 		is_attacking = false
 		action_locked = true
@@ -404,30 +414,48 @@ func cpu_logic(delta):
 
 	ai_timer -= delta
 
+	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
 
-	# ---------------- MOVEMENT ----------------
+# GRAVITY
+	velocity.y += GRAVITY * delta
+
+
+# ---------------- MOVEMENT ----------------
 	if not is_attacking:
 		play_anim("walk")
 
 	if abs(dist) > 220:
 		velocity.x = direction * SPEED * 0.8
+		state = State.RUN
+		play_anim("walk")
 	else:
 		velocity.x = direction * SPEED * 0.8
+		state = State.RUN
+		play_anim("walk")
 
 	# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
+
 		ai_timer = randf_range(0.4, 0.8)
 
 		match randi() % 5:
-			0: do_action("punch")
-			1: do_action("kick")
-			2: do_action("uppercut")
-			3: do_action("roundhousekick")
-			4: shoot_player()
 
-	move_and_slide()
+			0:
+				do_action("punch")
+
+			1:
+				do_action("kick")
+
+			2:
+				do_action("uppercut")
+
+			3:
+				do_action("roundhousekick")
+
+			4:
+				shoot_player()
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -512,7 +540,7 @@ func start_cannonkick():
 
 	sprite.play("cannonkick")
 
-	velocity.x = facing * 1300
+	velocity.x = facing * 700
 	velocity.y = 0
 
 # ---------------- SHOOT ----------------
@@ -557,13 +585,17 @@ func shoot_player():
 	is_attacking = false
 	action_locked = false
 
-	play_anim("idle")
-
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 
 	if not can_take_damage:
 		return
+
+	can_take_damage = false
+
+	await get_tree().create_timer(0.25).timeout
+
+	can_take_damage = true
 
 	if state == State.DEAD:
 		return
@@ -578,12 +610,10 @@ func take_damage(amount: int):
 	if amount <= 0:
 		return
 
-	can_take_damage = false
-
 	health -= amount
 	health = max(health, 0)
 
-	print("JohnnyCage took damage: ", amount, " HP=", health)
+	print("Sonya took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
@@ -592,21 +622,15 @@ func take_damage(amount: int):
 	if health == 1 and not is_finish_state:
 
 		trigger_finish_state()
-
-		is_hurting = true
-		action_locked = true
-		play_anim("hurt")
-
-		await get_tree().create_timer(0.25).timeout
-
-		can_take_damage = true
 		return
 
 	# ---------------- FINAL HIT ----------------
 	if health <= 0:
+
 		finish_label.visible = false
 
 		await get_tree().create_timer(0.5).timeout
+
 		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
 		return
 
@@ -616,11 +640,12 @@ func take_damage(amount: int):
 	action_locked = true
 
 	state = State.IDLE
+
 	play_anim("hurt")
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
-	blood.global_position = blood_marker.global_position
+	blood.global_position = $BloodMarker.global_position
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -628,10 +653,8 @@ func take_damage(amount: int):
 	hurt_locked = false
 	action_locked = false
 
-	await get_tree().create_timer(0.25).timeout
-	can_take_damage = true
-
 func trigger_finish_state():
+
 	if is_finish_state:
 		return
 
@@ -645,19 +668,30 @@ func trigger_finish_state():
 	is_attacking = false
 	is_shooting = false
 	is_hurting = false
+	is_blocking = false
+
+	play_anim("idle")
 
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
 
-	# ⏱ WAIT THEN REMOVE LABEL
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
 
-	is_finish_state = false
+	# KEEP SONYA IDLE AT 1 HP
+	state = State.IDLE
+	velocity = Vector2.ZERO
+
+	is_attacking = false
+	is_shooting = false
+	is_hurting = false
+	is_blocking = false
+
+	play_anim("idle")
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
@@ -777,22 +811,22 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 	if area == null or !is_instance_valid(area):
 		return
 
-	if area.is_in_group("HurtBox"):
+	if not can_take_damage:
 		return
 
-	if not can_take_damage:
+	if area.is_in_group("HurtBox"):
 		return
 
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
 		hurt_cooldown = true
 
+		health -= 1
+		health_changed.emit(health)
+
 		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
-
-		health -= 1
-		health_changed.emit(health)
 
 		play_anim("hurt")
 
@@ -804,61 +838,19 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_cooldown = false
 		return
 
-	# ---------------- STUN ----------------
-	if area.is_in_group("SubzeroBullet"):
-		apply_stun(3.0)
-
-	# ---------------- SINGLE HIT LOCK ----------------
-	if area.get_instance_id() == last_hit_id:
-		return
-
-	last_hit_id = area.get_instance_id()
-
-	# reset lock quickly (prevents permanent lock bug)
-	get_tree().create_timer(0.15).timeout.connect(func():
-		last_hit_id = -1
-	)
-
-	# ---------------- DAMAGE MAP ----------------
-	var hit := false
-	var knock := 0
-
-	if area.is_in_group("HitBox"):
-		hit = true
-		knock = -700
-
-	elif area.is_in_group("Fireball"):
-		hit = true
-		knock = -600
-
-	elif area.is_in_group("ReptileAcid") \
+	if area.is_in_group("HitBox") \
+	or area.is_in_group("ReptileAcid") \
 	or area.is_in_group("RaidenElectricBullet") \
-	or area.is_in_group("ElectricBullet") \
-	or area.is_in_group("KanoBullet") \
 	or area.is_in_group("FireBullet") \
+	or area.is_in_group("Fireball") \
 	or area.is_in_group("SonyaBullet") \
-	or area.is_in_group("IceBullet"):
-		hit = true
-		knock = -600
+	or area.is_in_group("JohnnyCageBullet") \
+	or area.is_in_group("KanoBullet"):
 
-	elif area.is_in_group("ElectricForceField") \
-	or area.is_in_group("ElectricBurst"):
-		hit = true
-		knock = 0
-
-	# ---------------- APPLY ONCE ----------------
-	if hit:
 		hurt_cooldown = true
 
-		knockback_x = knock
-
+		knockback_x = -facing * 900
 		take_damage(1)
-
-		is_hurting = true
-		action_locked = true
-		is_attacking = false
-
-		play_anim("hurt")
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
