@@ -137,7 +137,7 @@ func run(input_dir: float):
 	velocity.x = input_dir * SPEED * 4  # faster than walk
 
 	if not is_attacking:
-		play_anim("run")
+		play_anim("walk")
 
 # ---------------- READY ----------------
 func _ready():
