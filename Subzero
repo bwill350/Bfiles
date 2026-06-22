@@ -32,7 +32,7 @@ var spawn_protection := false
 var is_spear_pulled := false
 var last_hit_frame := -1
 # ---------------- STATE ----------------
-enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 var state: State = State.IDLE
 var is_finish_state := false
 var hurt_cooldown := false
@@ -126,6 +126,16 @@ func _ready():
 
 	ai_timer = randf_range(0.2, 0.6)
 
+func run(input_dir: float):
+	if input_dir == 0:
+		return
+
+	state = State.RUN
+	velocity.x = input_dir * SPEED * 66  # faster than walk
+
+	if not is_attacking:
+		play_anim("walk")
+
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
@@ -135,7 +145,6 @@ func _physics_process(delta):
 
 	if combo_timer > combo_reset_time:
 		combo.clear()
-		combo_timer = 0.0
 
 	if is_cpu:
 		cpu_logic(delta)
@@ -145,32 +154,12 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	# ---------------- FINISH HIM STATE ----------------
-	if health == 1:
-		if not is_finish_state:
-			is_finish_state = true
-			finish_label.visible = true
-			if finish_label.has_method("start_flicker"):
-				finish_label.start_flicker(2.0, 0.05)
-	else:
-		if is_finish_state:
-			is_finish_state = false
-			finish_label.visible = false
-
 	if health <= 1:
-
-		is_finish_state = true
-
-		is_hurting = false
-		is_attacking = false
-		is_shooting = false
-		is_blocking = false
-
 		state = State.IDLE
+		velocity.x = 0
 
-		velocity = Vector2.ZERO
-
-		play_anim("idle")
+		if not is_hurting:
+			play_anim("idle")
 
 		move_and_slide()
 		return
@@ -180,57 +169,122 @@ func _physics_process(delta):
 	if action_locked:
 		return
 
+	# ---------------- DEAD ----------------
+	if state == State.DEAD:
+		return
+
+	# NORMAL GRAVITY
+	velocity.y += GRAVITY * delta
+
+	# ---------------- FINISH HIM ----------------
+	if is_finish_state:
+
+		velocity.x = 0
+
+		if not is_on_floor():
+			velocity.y += GRAVITY * delta
+		else:
+			velocity.y = 0
+
+		state = State.IDLE
+		play_anim("idle")
+
+		move_and_slide()
+		return
+
+	# ---------------- LOCK TIMER SAFETY ----------------
+	if action_locked:
+		lock_timer -= delta
+		if lock_timer <= 0:
+			action_locked = false
+			is_attacking = false
+			hurt_locked = false
+
+	# ---------------- LOCKED ----------------
+	if action_locked or hurt_locked:
+		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
+		move_and_slide()
+		return
+
+	# ---------------- CPU ----------------
+	if is_cpu:
+		if target == null:
+			target = get_tree().get_first_node_in_group("Fighter")
+
+		cpu_logic(delta)
+		move_and_slide()
+		return
+
+	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
 
-	# ---------------- FACING ----------------
+	# ---------------- FACING (FIXED LIKE REPTILE) ----------------
 	if input_dir != 0:
-		facing = input_dir
+		facing = sign(input_dir)
 
-	sprite.flip_h = facing > 0
+	sprite.flip_h = -facing < 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$Subzeroshoot.position = Vector2(63 * facing, -155)
 	# ---------------- MOVEMENT ----------------
-	velocity.x = input_dir * SPEED
-
-	# ---------------- CLIMB ----------------
-	if climb_pressed and not is_on_floor() and is_on_wall():
-		state = State.CLIMB
-
-	elif not is_on_floor():
-		state = State.JUMP
+	# ---------------- MOVEMENT ----------------
+	if Input.is_action_pressed("run") and input_dir != 0:
+		run(input_dir)
 
 	elif input_dir != 0:
-		state = State.RUN
+		state = State.WALK
+		velocity.x = input_dir * SPEED
+
+	else:
+		state = State.IDLE
+		velocity.x = 0
+
+	# ---------------- STATE ----------------
+	if climb_pressed and not is_on_floor() and is_on_wall():
+		state = State.CLIMB
 
 	else:
 		state = State.IDLE
 
-	# ---------------- ANIMS ----------------
-	match state:
+	move_and_slide()
 
-		State.CLIMB:
-			velocity.y = -CLIMB_SPEED
+	# ---------------- STATES (ONLY WHEN FREE) ----------------
+	if not is_hurting and not is_attacking:
+		if not is_on_floor():
+			state = State.JUMP
 
-			if not is_attacking:
-				play_anim("climb")
-
-		State.JUMP:
-			if not is_attacking:
+	# ---------------- ANIMS (ONLY ONCE) ----------------
+	if is_hurting:
+		play_anim("hurt")
+		return
+	elif is_attacking:
+		true # attack system controls animation
+	else:
+		match state:
+			State.JUMP:
 				play_anim("jump")
-
-		State.RUN:
-			if not is_attacking:
+			State.RUN:
 				play_anim("walk")
+			State.IDLE:
+				play_anim("idle")
 
-		State.IDLE:
-			if not is_attacking:
+	# ---------------- ANIMATION ----------------
+	if not is_attacking:
+		match state:
+			State.CLIMB:
+				play_anim("climb")
+			State.JUMP:
+				play_anim("jump")
+			State.RUN:
+				play_anim("walk")
+			State.IDLE:
 				play_anim("idle")
 
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
+
 
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("jumpkick"):
@@ -254,6 +308,9 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("shoot"):
 		if shoot_cooldown <= 0:
 			shoot_player()
+
+	elif Input.is_action_pressed("run"):
+		do_action("run")
 
 	elif Input.is_action_pressed("block"):
 		start_block()
@@ -312,7 +369,11 @@ func cpu_logic(delta):
 
 	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
+		velocity.x = 0
+		move_and_slide()
 		return
+
+	
 
 # STOP ALL ACTIONS AT 1HP
 	if health <= 1:
@@ -401,7 +462,7 @@ func do_action(anim_name: String):
 	if has_node("AttackMarker"):
 		$AttackMarker.call_deferred("emit_signal", "trigger_attack")
 
-	await get_tree().create_timer(0.25).timeout
+	await sprite.animation_finished
 
 	is_attacking = false
 	action_locked = false
@@ -446,9 +507,10 @@ func spawn_attack(anim_name: String):
 		return
 	var attack = SUBZERO_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
-
+	attack.add_to_group("HitBox")
 	attack.global_position = attack_marker.global_position
 	attack.scale.x = facing  # THIS replaces facing system
+
 
 	var dmg := 1
 
