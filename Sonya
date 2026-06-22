@@ -27,7 +27,7 @@ signal health_changed(health)
 signal combo_used(combo_name: String)
 @onready var character = get_parent()
 # ---------------- STATE ----------------
-enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 var is_spear_pulled := false
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
@@ -166,99 +166,109 @@ func _unhandled_input(event):
 	elif event.is_action_pressed("shoot"):
 		register_input("shoot")
 
+func run(input_dir: float):
+	if input_dir == 0:
+		return
+
+	state = State.RUN
+	velocity.x = input_dir * SPEED * 4  # faster than walk
+
+	if not is_attacking:
+		play_anim("run")
+
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
+	# ---------------- GRAVITY ----------------
+	if not is_on_floor():
+		velocity.y += GRAVITY * delta
+
+	# ---------------- STUN ----------------
 	if stunned:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
 
-	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
-
-	combo_timer += delta
-
-	if combo_timer > combo_reset_time:
-		combo.clear()
-
+	# ---------------- CPU ----------------
 	if is_cpu:
 		cpu_logic(delta)
 		move_and_slide()
 		return
 
+	# ---------------- DEAD ----------------
 	if state == State.DEAD:
-		return
-
-	if health <= 1:
-		state = State.IDLE
-		velocity.x = 0
-
-	if not is_hurting:
-		play_anim("idle")
-
 		move_and_slide()
 		return
 
-	velocity.y += GRAVITY * delta
+	# ---------------- COOLDOWNS ----------------
+	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
+	combo_timer += delta
+	if combo_timer > combo_reset_time:
+		combo.clear()
+
+	# ---------------- INPUT LOCK ----------------
 	if action_locked:
+		velocity.x = move_toward(velocity.x, 0, SPEED * 10 * delta)
+		move_and_slide()
 		return
 
+	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
-	var climb_pressed = Input.is_action_pressed("climb")
 
 	# ---------------- FACING ----------------
 	if input_dir != 0:
-		facing = input_dir
+		facing = sign(input_dir)
 
 	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$SonyaShoot.position = Vector2(63 * facing, -155)
-	# ---------------- MOVEMENT ----------------
-	velocity.x = input_dir * SPEED
 
-	# ---------------- CLIMB ----------------
-	if climb_pressed and not is_on_floor() and is_on_wall():
-		state = State.CLIMB
+		# =========================================================
+	# 🟢 MOVEMENT (RUN ADDED HERE)
+	# =========================================================
+	if Input.is_action_pressed("run") and input_dir != 0:
+		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
+	else:
+		velocity.x = input_dir * SPEED
 
-	elif not is_on_floor():
+		# ---------------- STATE ----------------
+		if not is_on_floor():
+			state = State.JUMP
+		elif input_dir != 0:
+			state = State.WALK
+		elif input_dir != 0:
+			state = State.RUN
+		else:
+			state = State.IDLE
+
+	# ---------------- STATE FIX (IMPORTANT) ----------------
+	if not is_on_floor():
 		state = State.JUMP
-
 	elif input_dir != 0:
-		state = State.RUN
-
+		if Input.is_action_pressed("run"):
+			state = State.RUN
+		else:
+			state = State.WALK
 	else:
 		state = State.IDLE
 
-	# ---------------- ANIMS ----------------
-	match state:
-
-		State.CLIMB:
-			velocity.y = -CLIMB_SPEED
-
-			if not is_attacking:
-				play_anim("climb")
-
-		State.JUMP:
-			if not is_attacking:
+	# ---------------- ANIMATIONS ----------------
+	if not is_attacking:
+		match state:
+			State.JUMP:
 				play_anim("jump")
-
-		State.RUN:
-			if not is_attacking:
+			State.WALK:
 				play_anim("walk")
-
-		State.IDLE:
-			if not is_attacking:
+			State.RUN:
+				play_anim("run")
+			State.IDLE:
 				play_anim("idle")
 
-	# ---------------- JUMP ----------------
+	# ---------------- ACTIONS ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
-
-	# ---------------- ATTACKS ----------------
-	if Input.is_action_just_pressed("jumpkick"):
-		do_action("jumpkick")
 
 	elif Input.is_action_just_pressed("punch"):
 		do_action("punch")
@@ -266,25 +276,18 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
 
-	elif Input.is_action_just_pressed("kick"):
-		do_action("kick")
-
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
 
-	elif Input.is_action_pressed("shoot"):
-		shoot_player()
-
 	elif Input.is_action_just_pressed("shoot"):
-		if shoot_cooldown <= 0:
-			shoot_player()
+		shoot_player()
 
 	elif Input.is_action_pressed("block"):
 		start_block()
-
 	else:
 		stop_block()
 
+	# ---------------- FINAL MOVE ----------------
 	move_and_slide()
 
 # ---------------- BLOCK ----------------
@@ -364,6 +367,11 @@ func cpu_logic(delta):
 
 	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
+		return
+
+	if state == State.DEAD:
+		velocity.y += GRAVITY * delta
+		move_and_slide()
 		return
 
 # STOP ALL ACTIONS AT 1HP
@@ -475,9 +483,13 @@ func spawn_attack(anim_name: String):
 	var attack = SONYA_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 
+	# ---------------- POSITION ----------------
 	attack.global_position = $AttackMarker.global_position
-	attack.scale.x = facing  # THIS replaces facing system
 
+	# ---------------- DIRECTION ----------------
+	attack.scale.x = facing
+
+	# ---------------- DAMAGE ----------------
 	var dmg := 1
 
 	match anim_name:
@@ -491,6 +503,14 @@ func spawn_attack(anim_name: String):
 	else:
 		attack.damage = dmg
 
+	# ---------------- CRITICAL FIXS ----------------
+	attack.add_to_group("HitBox")  # 🔥 REQUIRED FOR ALL YOUR OTHER CHARACTERS
+
+	if attack is Area2D:
+		attack.monitoring = true
+		attack.monitorable = true
+
+	# optional but VERY useful for CPU consistency
 	attack.owner = self
 
 # ---------------- SHOOT ----------------
