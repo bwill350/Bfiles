@@ -25,6 +25,11 @@ var electricfly_active := false
 var special_move_invincible := false
 var spawn_protection := false
 var is_spear_pulled = false
+var tap_time := 0.25
+var last_tap_time := 0.0
+var last_tap_dir := 0
+var run_locked := false
+var jump_requested := false
 
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
@@ -33,7 +38,7 @@ signal combo_used(combo_name: String)
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
 # ---------------- STATE ----------------
-enum State { IDLE, RUN, JUMP, JUMPKICK, ROUNDHOUSEKICK, BLOCK, PUNCH, CLIMB, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, ROUNDHOUSEKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
 var state: State = State.IDLE
 var speed
@@ -49,6 +54,7 @@ var is_finish_state := false
 var lock_timer := 0.0
 var stunned := false
 var hurt_cooldown := false
+
 
 # ---------------- CPU ----------------
 var is_cpu := false
@@ -213,13 +219,47 @@ func check_combos():
 		combo_used.emit("acid")
 		combo.clear()
 
+func handle_double_tap_run(input_dir: float, delta: float) -> bool:
+	if input_dir == 0:
+		return false
+
+	var now := Time.get_ticks_msec() / 1000.0
+
+	if input_dir == last_tap_dir:
+		if now - last_tap_time <= tap_time:
+			run_locked = true
+			return true
+
+	last_tap_time = now
+	last_tap_dir = input_dir
+
+	return false
+
+func run(input_dir: float):
+	if input_dir == 0:
+		return
+
+	if state == State.DEAD:
+		return
+
+	state = State.RUN
+	velocity.x = input_dir * SPEED * 4
+
+	if not is_attacking and not is_hurting:
+		play_anim("run")
+
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
-	if stunned:
-		velocity = Vector2.ZERO
-		move_and_slide()
-		return
+	if not is_on_floor():
+		velocity.y += GRAVITY * delta
+	else:
+		velocity.y = 0
+
+		if stunned:
+			velocity = Vector2.ZERO
+			move_and_slide()
+			return
 
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
@@ -245,8 +285,6 @@ func _physics_process(delta):
 
 		move_and_slide()
 		return
-
-	velocity.y += GRAVITY * delta
 
 	if action_locked:
 		return
@@ -276,6 +314,9 @@ func _physics_process(delta):
 
 	# NORMAL GRAVITY
 	velocity.y += GRAVITY * delta
+
+	if is_on_floor():
+		velocity.y = 0
 
 	# ---------------- FINISH HIM ----------------
 	if is_finish_state:
@@ -333,17 +374,21 @@ func _physics_process(delta):
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$Raidenshoot.position = Vector2(63 * facing, -155)
 	# ---------------- MOVEMENT ----------------
-	velocity.x = input_dir * SPEED
+	# ---------------- MOVEMENT ----------------
+	if Input.is_action_pressed("run") and input_dir != 0:
+		run(input_dir)
+
+	elif input_dir != 0:
+		state = State.WALK
+		velocity.x = input_dir * SPEED
+
+	else:
+		state = State.IDLE
+		velocity.x = 0
 
 	# ---------------- STATE ----------------
 	if climb_pressed and not is_on_floor() and is_on_wall():
 		state = State.CLIMB
-
-	elif not is_on_floor():
-		state = State.JUMP
-
-	elif input_dir != 0:
-		state = State.RUN
 
 	else:
 		state = State.IDLE
@@ -484,22 +529,24 @@ func cpu_logic(delta):
 	facing = direction
 	sprite.flip_h = facing > 0
 
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
-
-# ---------------- MOVEMENT ----------------
-	if not is_attacking:
-		play_anim("walk")
-
-	if abs(dist) > 220:
-		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
-		play_anim("walk")
+	var input_dir = Input.get_axis("left", "right")
+	# =========================================================
+	# 🟢 MOVEMENT (RUN ADDED HERE)
+	# =========================================================
+	if Input.is_action_pressed("run") and input_dir != 0:
+		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
 	else:
-		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
-		play_anim("walk")
+		velocity.x = input_dir * SPEED
+
+		# ---------------- STATE ----------------
+		if not is_on_floor():
+			state = State.JUMP
+		elif input_dir != 0:
+			state = State.WALK
+		elif input_dir != 0:
+			state = State.RUN
+		else:
+			state = State.IDLE
 
 	# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
@@ -716,7 +763,7 @@ func take_damage(amount: int):
 	health -= amount
 	health = max(health, 0)
 
-	print("Subzero took damage: ", amount, " HP=", health)
+	print("Raiden took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
