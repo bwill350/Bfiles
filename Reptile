@@ -21,7 +21,7 @@ signal health_changed(health)
 signal combo_used(combo_name: String)
 @onready var character = get_parent()
 # ---------------- STATE ----------------
-enum State { IDLE, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
 var immune_groups := ["FireDeath", "IceDeath", "ElectricDeath"]
 var fire_finish_immunity := false
@@ -129,6 +129,16 @@ func apply_stun(duration: float):
 	stunned = false
 	action_locked = false
 
+func run(input_dir: float):
+	if input_dir == 0:
+		return
+
+	state = State.RUN
+	velocity.x = input_dir * SPEED * 4  # faster than walk
+
+	if not is_attacking:
+		play_anim("run")
+
 # ---------------- READY ----------------
 func _ready():
 
@@ -205,6 +215,7 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
 	if action_locked:
@@ -221,28 +232,30 @@ func _physics_process(delta):
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$Reptileshoot.position = Vector2(63 * facing, -155)
-	# ---------------- MOVEMENT ----------------
-	velocity.x = input_dir * SPEED
 
-	# ---------------- CLIMB ----------------
-	if climb_pressed and not is_on_floor() and is_on_wall():
-		state = State.CLIMB
-
-	elif not is_on_floor():
-		state = State.JUMP
-
-	elif input_dir != 0:
-		state = State.RUN
-
+	# =========================================================
+	# 🟢 MOVEMENT (RUN ADDED HERE)
+	# =========================================================
+	if Input.is_action_pressed("run") and input_dir != 0:
+		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
 	else:
-		state = State.IDLE
+		velocity.x = input_dir * SPEED
+
+		# ---------------- STATE ----------------
+		if not is_on_floor():
+			state = State.JUMP
+		elif input_dir != 0:
+			state = State.WALK
+		elif input_dir != 0:
+			state = State.RUN
+		else:
+			state = State.IDLE
 
 	# ---------------- ANIMS ----------------
 	match state:
 
 		State.CLIMB:
 			velocity.y = -CLIMB_SPEED
-
 			if not is_attacking:
 				play_anim("idle")
 
@@ -250,14 +263,17 @@ func _physics_process(delta):
 			if not is_attacking:
 				play_anim("jump")
 
-		State.RUN:
+		State.WALK:
 			if not is_attacking:
 				play_anim("walk")
+
+		State.RUN:
+			if not is_attacking:
+				play_anim("run")
 
 		State.IDLE:
 			if not is_attacking:
 				play_anim("idle")
-
 
 	if is_hurting and hurt_locked:
 		return
@@ -294,6 +310,9 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("spear"):
 		do_action("spear")
+
+	elif Input.is_action_just_pressed("run"):
+		do_action("run")
 
 	else:
 		stop_block()
@@ -965,8 +984,6 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 		action_locked = true
 		is_attacking = false
-
-		play_anim("hurt")
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
