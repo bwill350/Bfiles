@@ -558,6 +558,7 @@ func shoot_player():
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 
+	# ---------------- BASIC BLOCKS ----------------
 	if state == State.DEAD:
 		return
 
@@ -567,42 +568,37 @@ func take_damage(amount: int):
 	if not can_take_damage:
 		return
 
-	# 🔥 FRAME LOCK (prevents multi-hit stacking)
+	# frame lock (prevents multi-hit spam same frame)
 	var frame := Engine.get_physics_frames()
 	if has_meta("last_damage_frame") and get_meta("last_damage_frame") == frame:
 		return
 	set_meta("last_damage_frame", frame)
 
-	# BLOCK REDUCTION
+	# ---------------- BLOCK REDUCTION ----------------
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
 	if amount <= 0:
 		return
 
-	# APPLY DAMAGE
+	# ---------------- APPLY DAMAGE ----------------
 	health -= amount
 	health = max(health, 0)
 
-	print("ouch")
-	print("Subzero took damage: ", amount, " HP=", health)
+	print("Subzero took damage:", amount, "HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
 
-# ---------------- FINISH HIM ----------------
+	# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
-
 		trigger_finish_state()
 		return
 
 	# ---------------- DEATH ----------------
-		# ---------------- FINAL HIT ----------------
 	if health <= 0:
-
 		die()
 		await get_tree().create_timer(0.5).timeout
-
 		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
 		return
 
@@ -614,7 +610,7 @@ func take_damage(amount: int):
 	state = State.IDLE
 	play_anim("hurt")
 
-	# knockback should be handled outside, NOT here
+	# optional: knockback is handled by hit logic, not here
 
 	await get_tree().create_timer(0.25).timeout
 
