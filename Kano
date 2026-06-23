@@ -157,6 +157,7 @@ func _ready():
 
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
+
 	if is_cpu:
 		return
 
@@ -167,19 +168,20 @@ func _unhandled_input(event):
 		register_input("down")
 
 	elif event.is_action_pressed("left"):
-		if Input.is_action_just_pressed("cannonball"):
-			start_cannonball()
+		facing = -1
 		register_input("left")
 
 	elif event.is_action_pressed("right"):
-		if Input.is_action_just_pressed("cannonball"):
-			start_cannonball()
+		facing = 1
 		register_input("right")
 
 	elif event.is_action_pressed("shoot"):
 		register_input("shoot")
 
+
+
 func handle_double_tap_run(input_dir: float, delta: float) -> bool:
+
 	if input_dir == 0:
 		return false
 
@@ -195,37 +197,50 @@ func handle_double_tap_run(input_dir: float, delta: float) -> bool:
 
 	return false
 
-	if not is_attacking:
-		play_anim("run")
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
+	# ---------------- CANNONBALL ----------------
+	if Input.is_action_just_pressed("cannonball"):
+
+		if Input.is_action_pressed("left"):
+			facing = -1
+
+		elif Input.is_action_pressed("right"):
+			facing = 1
+
+		start_cannonball()
+
+	# ---------------- STUN ----------------
+	if stunned:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
+	# ---------------- GRAVITY ----------------
 	if not is_on_floor():
 		velocity.y += GRAVITY * delta
 	else:
 		velocity.y = 0
 
-		if stunned:
-			velocity = Vector2.ZERO
-			move_and_slide()
-			return
-
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
 	combo_timer += delta
-
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
+	# ---------------- CPU ----------------
 	if is_cpu:
 		cpu_logic(delta)
 		move_and_slide()
 		return
 
+	# ---------------- DEAD ----------------
 	if state == State.DEAD:
 		return
 
+	# ---------------- FINISH HIM ----------------
 	if health <= 1:
 		state = State.IDLE
 		velocity.x = 0
@@ -236,26 +251,13 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	if action_locked:
-		return
-
-	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
-
-	if action_locked:
+	# ---------------- KEEP CANNONBALL MOVING ----------------
+	if cannonball_active:
+		velocity.x = facing * 1300
+		move_and_slide()
 		return
 
 	var input_dir = Input.get_axis("left", "right")
-	var climb_pressed = Input.is_action_pressed("climb")
-
-	velocity.y += GRAVITY * delta
-
-	# ---------------- FLOOR LANDING FIX ----------------
-	if is_on_floor():
-		velocity.y = 0
-
-	if state == State.JUMP:
-		state = State.IDLE
 
 	# ---------------- FACING ----------------
 	if input_dir != 0:
@@ -265,39 +267,23 @@ func _physics_process(delta):
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$KanoShoot.position = Vector2(63 * facing, -155)
-# ---------------- JUMP ----------------
+
+	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
 		state = State.JUMP
 
-	# =========================================================
-	# 🟢 MOVEMENT (RUN ADDED HERE)
-	# =========================================================
+	# ---------------- WALK / RUN ----------------
 	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
+		run(input_dir)
 	else:
 		velocity.x = input_dir * SPEED
-
-		# ---------------- STATE ----------------
-		if not is_on_floor():
-			state = State.JUMP
-		elif input_dir != 0:
-			state = State.WALK
-		elif input_dir != 0:
-			state = State.RUN
-		else:
-			state = State.IDLE
 
 	# ---------------- STATES ----------------
 	if not is_on_floor():
 		state = State.JUMP
-
 	elif input_dir != 0:
 		state = State.WALK
-
-	elif input_dir != 0:
-		state = State.RUN
-
 	else:
 		state = State.IDLE
 
@@ -311,10 +297,7 @@ func _physics_process(delta):
 
 		State.JUMP:
 			if not is_attacking:
-				if velocity.y < 0:
-					play_anim("jump")
-				else:
-					play_anim("jump")
+				play_anim("jump")
 
 		State.WALK:
 			if not is_attacking:
@@ -344,19 +327,6 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("shoot"):
 		shoot_player()
 
-	elif Input.is_action_just_pressed("run"):
-		do_action("run")
-
-	elif Input.is_action_just_pressed("cannonball"):
-		do_action("cannonball")
-
-	elif Input.is_action_just_pressed("fatality"):
-		do_action("fatality")
-
-	elif Input.is_action_just_pressed("Reptilesacid"):
-		if shoot_cooldown <= 0:
-			shoot_acid()
-
 	elif Input.is_action_pressed("block"):
 		start_block()
 
@@ -364,6 +334,7 @@ func _physics_process(delta):
 		stop_block()
 
 	move_and_slide()
+
 # ---------------- BLOCK ----------------
 func start_block():
 
@@ -592,29 +563,51 @@ func spawn_attack(anim_name: String):
 		attack.set_damage(dmg)
 
 func start_cannonball():
+
 	if state == State.DEAD:
 		return
 
 	if action_locked:
 		return
 
-	var dir := Input.get_axis("left", "right")
+	# ---------------- DIRECTION ----------------
+	if Input.is_action_pressed("left"):
+		facing = -1
+	elif Input.is_action_pressed("right"):
+		facing = 1
 
-	# If player is holding a direction, use it
-	if dir != 0:
-		facing = sign(dir)
+	sprite.flip_h = facing > 0
 
+	# ---------------- STATE FLAGS ----------------
 	cannonball_hit_lock = true
 	spawn_protection = true
-
 	cannonball_active = true
 	special_move = true
+
+	cannonball_timer = 0.6
 	special_move_timer = 0.6
 
-	sprite.play("cannonball")
+	action_locked = true
+	is_attacking = true
 
-	velocity.x = facing * 1300
+	# ---------------- START MOVE ----------------
+	play_anim("cannonball")
+
+
 	velocity.y = 0
+	velocity.x = facing * 1300
+
+	# ---------------- HOLD DURATION ----------------
+	await get_tree().create_timer(0.6).timeout
+
+	# ---------------- RESET ----------------
+	cannonball_active = false
+	spawn_protection = false
+	action_locked = false
+	is_attacking = false
+
+	if state != State.DEAD:
+		play_anim("idle")
 
 # ---------------- SHOOT ----------------
 func shoot_player():
