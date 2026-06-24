@@ -452,7 +452,11 @@ func cpu_logic(delta):
 
 # ---------------- SHOOT ----------------
 func shoot_player():
-	if spawn_locked:
+
+	if health <= 1:
+		return
+
+	if is_finish_state:
 		return
 	if is_shooting:
 		return
@@ -463,14 +467,21 @@ func shoot_player():
 
 	play_anim("shoot")
 
-	var bullet = SONYA_BULLET.instantiate()
+	var bullet_scene: PackedScene
+
+	if special_bullet != null:
+		bullet_scene = special_bullet
+		special_bullet = null
+	else:
+		bullet_scene = SONYA_BULLET
+
+	var bullet = bullet_scene.instantiate()
 	get_tree().current_scene.add_child(bullet)
 
-	# 🔥 SPAWN FROM MARKER
 	bullet.global_position = $SonyaShoot.global_position
 
-	# 🔥 FIXED DIRECTION
-	bullet.velocity = Vector2.RIGHT * sign(facing) * bullet.speed
+	# ONLY THIS controls direction
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -481,8 +492,6 @@ func shoot_player():
 
 	is_attacking = false
 	action_locked = false
-
-	play_anim("idle")
 
 func spawn_fx(scene: PackedScene):
 
