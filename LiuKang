@@ -84,6 +84,7 @@ const FIREBALL = preload("res://Fireball.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
+@onready var hurt_sound: AudioStreamPlayer2D = $Hurt
 @onready var hit_box: Area2D = $LiuKangHurtBox
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 @onready var attack_marker: Marker2D = $AttackMarker
@@ -769,9 +770,15 @@ func spawn_attack(anim_name: String):
 	var dmg := 1
 
 	match anim_name:
+		"punch":
+			dmg = 1
+		"kick":
+			dmg = 1
 		"uppercut":
 			dmg = 1
 		"roundhousekick":
+			dmg = 1
+		"jumpkick":
 			dmg = 1
 
 	if attack.has_method("set_damage"):
@@ -904,7 +911,6 @@ func stop_block():
 
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
-
 	if hurt_cooldown:
 		return
 
@@ -914,9 +920,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 	if not can_take_damage:
 		return
 
-	if area.is_in_group("HitBox"):
-		knockback_x = -facing * 700
-
+	$Hurt.play()
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
 		hurt_cooldown = true
