@@ -146,9 +146,11 @@ func _unhandled_input(event):
 		register_input("down")
 
 	elif event.is_action_pressed("left"):
+		play_anim("walk")
 		register_input("left")
 
 	elif event.is_action_pressed("right"):
+		play_anim("walk")
 		register_input("right")
 
 	elif event.is_action_pressed("shoot"):
@@ -332,7 +334,7 @@ func _physics_process(delta):
 		state = State.CLIMB
 
 	else:
-		state = State.IDLE
+		state = State.WALK
 
 	# ---------------- ANIMS ----------------
 	match state:
@@ -357,6 +359,7 @@ func _physics_process(delta):
 
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
+		$Sprite.play("jump")
 		velocity.y = jump_velocity
 
 	# ---------------- ATTACKS ----------------
