@@ -98,6 +98,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
+@onready var hurt_sound: AudioStreamPlayer2D = $Hurt
 @onready var hit_box: Area2D = $KanoHurtBox
 @onready var shoot_marker: Marker2D = $KanoShoot
 @onready var attack_marker: Marker2D = $AttackMarker
@@ -327,6 +328,9 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("shoot"):
 		shoot_player()
 
+	elif Input.is_action_pressed("fatality"):
+		do_action("fatality")
+
 	elif Input.is_action_pressed("block"):
 		start_block()
 
@@ -518,6 +522,7 @@ func do_action(anim_name: String):
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
+
 	if anim_name not in [
 		"punch",
 		"kick",
@@ -530,37 +535,29 @@ func spawn_attack(anim_name: String):
 	var attack = KANO_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 
-	# ---------------- FIX: proper facing placement ----------------
-	var pos = $AttackMarker.global_position
+	attack.global_position = attack_marker.global_position
+	attack.scale.x = facing  # THIS replaces facing system
 
-	if facing == -1:
-		pos.x = global_position.x - abs($AttackMarker.position.x)
-	else:
-		pos.x = global_position.x + abs($AttackMarker.position.x)
-
-	attack.global_position = pos
-
-	# direction
-	if "direction" in attack:
-		attack.direction = facing
-
-	# ---------------- DAMAGE ----------------
 	var dmg := 1
 
 	match anim_name:
+		"punch":
+			dmg = 1
+		"kick":
+			dmg = 1
 		"uppercut":
 			dmg = 1
 		"roundhousekick":
 			dmg = 1
 		"jumpkick":
 			dmg = 1
-		_:
-			dmg = 1
 
-	if "damage" in attack:
-		attack.damage = dmg
-	elif attack.has_method("set_damage"):
+	if attack.has_method("set_damage"):
 		attack.set_damage(dmg)
+	else:
+		attack.damage = dmg
+
+	attack.owner = self
 
 func start_cannonball():
 
@@ -688,11 +685,9 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
-	# ---------------- FINISH HIM ----------------
+# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
-
 		trigger_finish_state()
-
 		return
 
 	# ---------------- FINAL HIT ----------------
@@ -716,7 +711,7 @@ func take_damage(amount: int):
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
-	blood.global_position = blood_marker.global_position
+	blood.global_position = $BloodMarker.global_position
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -873,15 +868,12 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
-
+	$Hurt.play()
 
 	if hurt_cooldown:
 		return
 
 	if area == null or !is_instance_valid(area):
-		return
-
-	if area.is_in_group("HurtBox"):
 		return
 
 	# ---------------- SPEAR PRIORITY ----------------
