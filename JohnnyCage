@@ -100,6 +100,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
+@onready var hurt_sound: AudioStreamPlayer2D = $Hurt
 @onready var hit_box: Area2D = $JohnnyCageHurtBox
 @onready var shoot_marker: Marker2D = $JohnnyShoot
 @onready var attack_marker: Marker2D = $AttackMarker
@@ -144,19 +145,16 @@ func run(input_dir: float):
 	velocity.x = input_dir * SPEED * 4  # faster than walk
 
 	if not is_attacking:
-		play_anim("run")
+		play_anim("walk")
 
 # ---------------- READY ----------------
 func _ready():
+	$Sprite.visible = true
 	$Crispy.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("JohnnyCage")
 
-	add_to_group("FireDeath")
-	add_to_group("IceDeath")
-	add_to_group("ElectricDeath")
-	
 	spawn_locked = false
 
 	health = max_health
@@ -165,7 +163,6 @@ func _ready():
 	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
-
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
 
@@ -179,57 +176,50 @@ func _unhandled_input(event):
 		register_input("down")
 
 	elif event.is_action_pressed("left"):
-		if Input.is_action_just_pressed("cannonball"):
-			start_cannonkick()
 		register_input("left")
 
 	elif event.is_action_pressed("right"):
-		if Input.is_action_just_pressed("cannonball"):
-			start_cannonkick()
 		register_input("right")
 
 	elif event.is_action_pressed("shoot"):
 		register_input("shoot")
 
-func handle_double_tap_run(input_dir: float, delta: float) -> bool:
-	if input_dir == 0:
-		return false
-
-	var now := Time.get_ticks_msec() / 1000.0
-
-	if input_dir == last_tap_dir:
-		if now - last_tap_time <= tap_time:
-			run_locked = true
-			return true
-
-	last_tap_time = now
-	last_tap_dir = input_dir
-
-	return false
-
-	state = State.RUN
-	velocity.x = input_dir * SPEED * 9  # faster than walk
-
-	if not is_attacking:
-		play_anim("run")
-
-
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
+	if state == State.DEAD:
+		return
+
+	# ---------------- STUN ----------------
 	if stunned:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
 
+	# ---------------- DEATH / FINISH ----------------
+	if state == State.DEAD:
+		return
+
+	if is_finish_state:
+		state = State.IDLE
+		velocity.x = 0
+		if not is_hurting:
+			play_anim("idle")
+		move_and_slide()
+		return
+
+	# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+
+	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
 	combo_timer += delta
-
 	if combo_timer > combo_reset_time:
 		combo.clear()
-		combo_timer = 0.0
 
+	# ---------------- CPU ----------------
 	if is_cpu:
 		cpu_logic(delta)
 		move_and_slide()
@@ -238,7 +228,7 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	if health <= 1:
+	if is_finish_state:
 		state = State.IDLE
 		velocity.x = 0
 
@@ -248,27 +238,25 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
 	if action_locked:
-		velocity.y += GRAVITY * delta
-		move_and_slide()
 		return
 
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
 
 	# ---------------- FACING ----------------
-	facing = sign(input_dir)
-	if facing == 0:
-		facing = 1
+	if input_dir != 0:
+		facing = input_dir
 
 	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$JohnnyShoot.position = Vector2(63 * facing, -155)
 
-# =========================================================
+	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
 	# =========================================================
 	if Input.is_action_pressed("run") and input_dir != 0:
@@ -286,27 +274,13 @@ func _physics_process(delta):
 		else:
 			state = State.IDLE
 
-func _input(event):
-	if Input.is_action_just_released("run"):
-		do_action("idle")
-
-
-
-	var climb_pressed = Input.is_action_pressed("climb")
-# ---------------- CLIMB / JUMP OVERRIDE ----------------
-	if climb_pressed and not is_on_floor() and is_on_wall():
-		state = State.CLIMB
-
-	elif not is_on_floor():
-		state = State.JUMP
-
-# ---------------- ANIMS ----------------
+	# ---------------- ANIMS ----------------
 	match state:
 
 		State.CLIMB:
 			velocity.y = -CLIMB_SPEED
 			if not is_attacking:
-				play_anim("climb")
+				play_anim("idle")
 
 		State.JUMP:
 			if not is_attacking:
@@ -323,6 +297,9 @@ func _input(event):
 		State.IDLE:
 			if not is_attacking:
 				play_anim("idle")
+
+	if is_hurting and hurt_locked:
+		return
 
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
@@ -344,18 +321,15 @@ func _input(event):
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
 
-	elif Input.is_action_pressed("shoot"):
-		shoot_player()
-
-	elif Input.is_action_pressed("cannonkick"):
-		start_cannonkick()
-
 	elif Input.is_action_just_pressed("shoot"):
 		if shoot_cooldown <= 0:
 			shoot_player()
 
 	elif Input.is_action_pressed("block"):
 		start_block()
+
+	elif Input.is_action_just_pressed("run"):
+		do_action("run")
 
 	else:
 		stop_block()
@@ -564,9 +538,15 @@ func spawn_attack(anim_name: String):
 	var dmg := 1
 
 	match anim_name:
+		"punch":
+			dmg = 1
+		"kick":
+			dmg = 1
 		"uppercut":
 			dmg = 1
 		"roundhousekick":
+			dmg = 1
+		"jumpkick":
 			dmg = 1
 
 	if attack.has_method("set_damage"):
@@ -919,6 +899,7 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 		return
 
 	if area.is_in_group("ReptileAcid") \
+	or area.is_in_group("HitBox") \
 	or area.is_in_group("RaidenElectricBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
@@ -935,7 +916,7 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_locked = true
 
 		take_damage(1)
-
+		$Hurt.play()
 		await get_tree().create_timer(0.35).timeout
 		hurt_cooldown = false
 		return
