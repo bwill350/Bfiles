@@ -82,6 +82,7 @@ const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
+@onready var hurt_sound: AudioStreamPlayer2D = $Hurt
 @onready var hit_box: Area2D = $SubzeroHurtBox
 @onready var shoot_marker: Marker2D = $Subzeroshoot
 @onready var attack_marker: Marker2D = $AttackMarker
@@ -515,9 +516,15 @@ func spawn_attack(anim_name: String):
 	var dmg := 1
 
 	match anim_name:
+		"punch":
+			dmg = 1
+		"kick":
+			dmg = 1
 		"uppercut":
 			dmg = 1
 		"roundhousekick":
+			dmg = 1
+		"jumpkick":
 			dmg = 1
 
 	if attack.has_method("set_damage"):
@@ -558,47 +565,48 @@ func shoot_player():
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 
-	# ---------------- BASIC BLOCKS ----------------
+	if not can_take_damage:
+		return
+
+	can_take_damage = false
+
+	await get_tree().create_timer(0.25).timeout
+
+	can_take_damage = true
+
 	if state == State.DEAD:
 		return
 
 	if spawn_protection:
 		return
 
-	if not can_take_damage:
-		return
-
-	# frame lock (prevents multi-hit spam same frame)
-	var frame := Engine.get_physics_frames()
-	if has_meta("last_damage_frame") and get_meta("last_damage_frame") == frame:
-		return
-	set_meta("last_damage_frame", frame)
-
-	# ---------------- BLOCK REDUCTION ----------------
+	# BLOCK REDUCTION
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
 	if amount <= 0:
 		return
 
-	# ---------------- APPLY DAMAGE ----------------
 	health -= amount
 	health = max(health, 0)
 
-	print("Subzero took damage:", amount, "HP=", health)
+	print("Subzero took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
 
-	# ---------------- FINISH HIM ----------------
+# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
 		trigger_finish_state()
 		return
 
-	# ---------------- DEATH ----------------
+	# ---------------- FINAL HIT ----------------
 	if health <= 0:
+
+		finish_label.visible = false
 		die()
 		await get_tree().create_timer(0.5).timeout
+
 		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
 		return
 
@@ -608,9 +616,12 @@ func take_damage(amount: int):
 	action_locked = true
 
 	state = State.IDLE
+
 	play_anim("hurt")
 
-	# optional: knockback is handled by hit logic, not here
+	var blood = BLOOD_EFFECT.instantiate()
+	get_tree().current_scene.add_child(blood)
+	blood.global_position = $BloodMarker.global_position
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -715,59 +726,28 @@ func play_anim(anim_name: String):
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
-	if area == null or !is_instance_valid(area):
-		return
-
-	var parent = area.get_parent()
-	if parent == null or !is_instance_valid(parent):
-		return
-
-	# debug AFTER validation
-	print("AREA:", area.name)
-	print("PARENT:", parent.name)
-	print("GROUPS:", area.get_groups())
-
-	# ---------------- GLOBAL SAFETY BLOCKS ----------------
-	if state == State.DEAD:
-		return
-
-	if health <= 1:
-		return
+	if area.is_in_group("HitBox"):
+		$Hurt.play()
 
 	if hurt_cooldown:
 		return
 
-	if not can_take_damage:
+	if area == null or !is_instance_valid(area):
 		return
 
-	if spawn_protection:
-		return
-
-	# ❌ never treat hurtboxes as damage
 	if area.is_in_group("HurtBox"):
 		return
 
-
-	# 🔥 FRAME LOCK (IMPORTANT FIX FOR SPAM)
-	var frame := Engine.get_physics_frames()
-	if has_meta("last_hit_frame") and get_meta("last_hit_frame") == frame:
-		return
-
-
-	var hit := false
-	var knock := 0
-
-
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
-		set_meta("last_hit_frame", frame)
-
 		hurt_cooldown = true
+
+		health -= 1
+		health_changed.emit(health)
+
 		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
-
-		take_damage(1)
 
 		await get_tree().create_timer(0.8).timeout
 
@@ -777,47 +757,23 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_cooldown = false
 		return
 
-
-	# ---------------- IGNORE STUN SOURCES ----------------
-	if area.is_in_group("SubzeroBullet"):
+	if not can_take_damage:
 		return
 
-
-	# ---------------- HIT TYPES ----------------
-	if area.is_in_group("HitBox"):
-		knock = -facing * 700
-		hit = true
-
-	elif area.is_in_group("ReptileAcid") \
-	or area.is_in_group("RaidenElectricBullet") \
-	or area.is_in_group("ElectricBullet") \
+	if area.is_in_group("HitBox") \
+	or area.is_in_group("ReptileAcid") \
 	or area.is_in_group("KanoBullet") \
+	or area.is_in_group("FireBullet") \
+	or area.is_in_group("Fireball") \
 	or area.is_in_group("JohnnyCageBullet") \
 	or area.is_in_group("SonyaBullet") \
-	or area.is_in_group("FireBullet") \
-	or area.is_in_group("KanoBullet"):
-		knock = -facing * 600
-		hit = true
-
-	elif area.is_in_group("ElectricForceField") \
-	or area.is_in_group("ElectricBurst"):
-		knock = 0
-		hit = true
-
-
-	# ---------------- APPLY DAMAGE ----------------
-	if hit and not hurt_cooldown:
-
-		set_meta("last_hit_frame", frame)
+	or area.is_in_group("RaidenElectricBullet"):
 
 		hurt_cooldown = true
-		knockback_x = knock
 
-		hit_box.monitoring = false
-
+		knockback_x = -facing * 700
 		take_damage(1)
 
 		await get_tree().create_timer(0.15).timeout
 
-		hit_box.monitoring = true
 		hurt_cooldown = false
