@@ -88,6 +88,7 @@ const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
+@onready var hurt_sound: AudioStreamPlayer2D = $Hurt
 @onready var hit_box: Area2D = $RaidenHurtBox
 @onready var shoot_marker: Marker2D = $Raidenshoot
 @onready var attack_marker: Marker2D = $AttackMarker
@@ -720,9 +721,15 @@ func spawn_attack(anim_name: String):
 	var dmg := 1
 
 	match anim_name:
+		"punch":
+			dmg = 1
+		"kick":
+			dmg = 1
 		"uppercut":
 			dmg = 1
 		"roundhousekick":
+			dmg = 1
+		"jumpkick":
 			dmg = 1
 
 	if attack.has_method("set_damage"):
@@ -876,7 +883,8 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
-
+	if area.is_in_group("HitBox"):
+		$Hurt.play()
 	if hurt_cooldown:
 		return
 
