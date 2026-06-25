@@ -141,7 +141,7 @@ func _ready():
 	$Crispy.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
-	add_to_group("Kano")
+	add_to_group("LiuKang")
 
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
@@ -155,6 +155,8 @@ func _ready():
 	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
+	facing = 1
+	sprite.flip_h = -facing < 0
 
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
@@ -202,16 +204,8 @@ func handle_double_tap_run(input_dir: float, delta: float) -> bool:
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
-	# ---------------- CANNONBALL ----------------
-	if Input.is_action_just_pressed("cannonball"):
-
-		if Input.is_action_pressed("left"):
-			facing = -1
-
-		elif Input.is_action_pressed("right"):
-			facing = 1
-
-		start_cannonball()
+	if state == State.DEAD:
+		return
 
 	# ---------------- STUN ----------------
 	if stunned:
@@ -219,12 +213,23 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# ---------------- GRAVITY ----------------
-	if not is_on_floor():
-		velocity.y += GRAVITY * delta
-	else:
-		velocity.y = 0
+	# ---------------- DEATH / FINISH ----------------
+	if state == State.DEAD:
+		return
 
+	if is_finish_state:
+		state = State.IDLE
+		velocity.x = 0
+		if not is_hurting:
+			play_anim("idle")
+		move_and_slide()
+		return
+
+	# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+
+	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
 	combo_timer += delta
@@ -237,12 +242,10 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# ---------------- DEAD ----------------
 	if state == State.DEAD:
 		return
 
-	# ---------------- FINISH HIM ----------------
-	if health <= 1:
+	if is_finish_state:
 		state = State.IDLE
 		velocity.x = 0
 
@@ -252,13 +255,14 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# ---------------- KEEP CANNONBALL MOVING ----------------
-	if cannonball_active:
-		velocity.x = facing * 1300
-		move_and_slide()
+	# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+	if action_locked:
 		return
 
 	var input_dir = Input.get_axis("left", "right")
+	var climb_pressed = Input.is_action_pressed("climb")
 
 	# ---------------- FACING ----------------
 	if input_dir != 0:
@@ -269,24 +273,23 @@ func _physics_process(delta):
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$KanoShoot.position = Vector2(63 * facing, -155)
 
-	# ---------------- JUMP ----------------
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jump_velocity
-		state = State.JUMP
-
-	# ---------------- WALK / RUN ----------------
+	# =========================================================
+	# 🟢 MOVEMENT (RUN ADDED HERE)
+	# =========================================================
 	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)
+		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
 	else:
 		velocity.x = input_dir * SPEED
 
-	# ---------------- STATES ----------------
-	if not is_on_floor():
-		state = State.JUMP
-	elif input_dir != 0:
-		state = State.WALK
-	else:
-		state = State.IDLE
+		# ---------------- STATE ----------------
+		if not is_on_floor():
+			state = State.JUMP
+		elif input_dir != 0:
+			state = State.WALK
+		elif input_dir != 0:
+			state = State.RUN
+		else:
+			state = State.IDLE
 
 	# ---------------- ANIMS ----------------
 	match state:
@@ -294,7 +297,7 @@ func _physics_process(delta):
 		State.CLIMB:
 			velocity.y = -CLIMB_SPEED
 			if not is_attacking:
-				play_anim("climb")
+				play_anim("idle")
 
 		State.JUMP:
 			if not is_attacking:
@@ -312,6 +315,13 @@ func _physics_process(delta):
 			if not is_attacking:
 				play_anim("idle")
 
+	if is_hurting and hurt_locked:
+		return
+
+	# ---------------- JUMP ----------------
+	if Input.is_action_just_pressed("jump") and is_on_floor():
+		velocity.y = jump_velocity
+
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("punch"):
 		do_action("punch")
@@ -327,6 +337,9 @@ func _physics_process(delta):
 
 	elif Input.is_action_pressed("shoot"):
 		shoot_player()
+
+	elif Input.is_action_pressed("cannonball"):
+		do_action("cannonball")
 
 	elif Input.is_action_pressed("fatality"):
 		do_action("fatality")
@@ -403,21 +416,19 @@ func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		if is_spear_pulled:
-			# opposite of normal knockback
-			velocity.x = -facing * -600
-		else:
-			# normal knockback
-			velocity.x = knockback_x
+		
+		velocity.x = -facing * 400
 
+	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
 		if abs(knockback_x) < 10:
 			knockback_x = 0
 			is_hurting = false
-			is_spear_pulled = false
 
-		return
+			velocity.y += GRAVITY * delta
+			move_and_slide()
+			return
 
 	if target == null or !is_instance_valid(target):
 		velocity.x = 0
@@ -434,7 +445,7 @@ func cpu_logic(delta):
 		return
 
 # STOP ALL ACTIONS AT 1HP
-	if health <= 1:
+	if is_finish_state:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
@@ -452,6 +463,13 @@ func cpu_logic(delta):
 
 
 # ---------------- MOVEMENT ----------------
+	if abs(dist) > 220:
+
+		velocity.x = direction * SPEED * 0.8
+
+	if state != State.RUN:
+		state = State.RUN
+
 	if not is_attacking:
 		play_anim("walk")
 
@@ -464,27 +482,43 @@ func cpu_logic(delta):
 		state = State.RUN
 		play_anim("walk")
 
-	# ---------------- AI ACTIONS ----------------
+# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
 
-		ai_timer = randf_range(0.4, 0.8)
+		match Game.difficulty:
 
-		match randi() % 5:
+			"Hard":
 
-			0:
-				do_action("punch")
+				# Very fast reactions
+				ai_timer = randf_range(0.05, 0.15)
 
-			1:
-				do_action("kick")
+				var choice = randi() % 100
 
-			2:
-				do_action("uppercut")
+				if choice < 20:
+					do_action("punch")
+				elif choice < 40:
+					do_action("kick")
+				elif choice < 65:
+					do_action("uppercut")
+				elif choice < 80:
+					do_action("roundhousekick")
+				else:
+					shoot_player()
 
-			3:
-				do_action("roundhousekick")
+			"Easy":
 
-			4:
-				shoot_player()
+				ai_timer = randf_range(0.5, 0.9)
+
+				var choice = randi() % 100
+
+				if choice < 40:
+					do_action("punch")
+				elif choice < 70:
+					do_action("kick")
+				elif choice < 85:
+					do_action("uppercut")
+				else:
+					do_action("roundhousekick")
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -651,6 +685,7 @@ func shoot_player():
 
 	is_attacking = false
 	action_locked = false
+	play_anim("idle")
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
@@ -697,7 +732,7 @@ func take_damage(amount: int):
 		die()
 		await get_tree().create_timer(0.5).timeout
 
-		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 		return
 
 	# ---------------- NORMAL HURT ----------------
@@ -855,7 +890,7 @@ func die():
 	# optional delay before menu
 	await get_tree().create_timer(1.5).timeout
 
-	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
@@ -868,12 +903,15 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
-	$Hurt.play()
-
+	if area.is_in_group("HitBox"):
+		$Hurt.play()
 	if hurt_cooldown:
 		return
 
 	if area == null or !is_instance_valid(area):
+		return
+
+	if not can_take_damage:
 		return
 
 	# ---------------- SPEAR PRIORITY ----------------
@@ -895,16 +933,14 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_cooldown = false
 		return
 
-	if not can_take_damage:
-		return
-
+	# ---------------- NORMAL DAMAGE SOURCES ----------------
 	if area.is_in_group("HitBox") \
 	or area.is_in_group("ReptileAcid") \
 	or area.is_in_group("RaidenElectricBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
 	or area.is_in_group("JohnnyCageBullet") \
-	or area.is_in_group("SonyaBullet") \
+	or area.is_in_group("KanoBullet") \
 	or area.is_in_group("IceBullet"):
 
 		hurt_cooldown = true
