@@ -30,7 +30,7 @@ var combo_timer := 0.0
 var spawn_locked := true
 var spawn_protection := false
 var is_spear_pulled := false
-var last_hit_frame := -1
+var last_hit_frame := 1
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 var state: State = State.IDLE
@@ -126,6 +126,8 @@ func _ready():
 	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
+	facing = 1
+	sprite.flip_h = -facing < 0
 
 func run(input_dir: float):
 	if input_dir == 0:
@@ -140,13 +142,36 @@ func run(input_dir: float):
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
+	# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+	if state == State.DEAD:
+		return
+
+	# ---------------- DEATH / FINISH ----------------
+	if state == State.DEAD:
+		return
+
+	if is_finish_state:
+		state = State.IDLE
+		velocity.x = 0
+		if not is_hurting:
+			play_anim("idle")
+		move_and_slide()
+		return
+
+	# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+
+	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
 	combo_timer += delta
-
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
+	# ---------------- CPU ----------------
 	if is_cpu:
 		cpu_logic(delta)
 		move_and_slide()
@@ -155,7 +180,7 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	if health <= 1:
+	if is_finish_state:
 		state = State.IDLE
 		velocity.x = 0
 
@@ -165,127 +190,78 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
 	if action_locked:
 		return
 
-	# ---------------- DEAD ----------------
-	if state == State.DEAD:
-		return
-
-	# NORMAL GRAVITY
-	velocity.y += GRAVITY * delta
-
-	# ---------------- FINISH HIM ----------------
-	if is_finish_state:
-
-		velocity.x = 0
-
-		if not is_on_floor():
-			velocity.y += GRAVITY * delta
-		else:
-			velocity.y = 0
-
-		state = State.IDLE
-		play_anim("idle")
-
-		move_and_slide()
-		return
-
-	# ---------------- LOCK TIMER SAFETY ----------------
-	if action_locked:
-		lock_timer -= delta
-		if lock_timer <= 0:
-			action_locked = false
-			is_attacking = false
-			hurt_locked = false
-
-	# ---------------- LOCKED ----------------
-	if action_locked or hurt_locked:
-		velocity.x = move_toward(velocity.x, 0, SPEED * 8 * delta)
-		move_and_slide()
-		return
-
-	# ---------------- CPU ----------------
-	if is_cpu:
-		if target == null:
-			target = get_tree().get_first_node_in_group("Fighter")
-
-		cpu_logic(delta)
-		move_and_slide()
-		return
-
-	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
 
-	# ---------------- FACING (FIXED LIKE REPTILE) ----------------
+	# ---------------- FACING ----------------
 	if input_dir != 0:
-		facing = sign(input_dir)
+		facing = input_dir
 
-	sprite.flip_h = -facing < 0
+	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$Subzeroshoot.position = Vector2(63 * facing, -155)
-	# ---------------- MOVEMENT ----------------
-	# ---------------- MOVEMENT ----------------
-	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)
 
-	elif input_dir != 0:
-		state = State.WALK
+	# =========================================================
+	# 🟢 MOVEMENT (RUN ADDED HERE)
+	# =========================================================
+	if Input.is_action_pressed("run") and input_dir != 0:
+		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
+	else:
 		velocity.x = input_dir * SPEED
 
-	else:
-		state = State.IDLE
-		velocity.x = 0
-
-	# ---------------- STATE ----------------
-	if climb_pressed and not is_on_floor() and is_on_wall():
-		state = State.CLIMB
-
-	else:
-		state = State.IDLE
-
-	move_and_slide()
-
-	# ---------------- STATES (ONLY WHEN FREE) ----------------
-	if not is_hurting and not is_attacking:
+		# ---------------- STATE ----------------
 		if not is_on_floor():
 			state = State.JUMP
+		elif input_dir != 0:
+			state = State.WALK
+		elif input_dir != 0:
+			state = State.RUN
+		else:
+			state = State.IDLE
 
-	# ---------------- ANIMS (ONLY ONCE) ----------------
-	if is_hurting:
-		play_anim("hurt")
+	# ---------------- ANIMS ----------------
+	match state:
+
+		State.CLIMB:
+			velocity.y = -CLIMB_SPEED
+			if not is_attacking:
+				play_anim("idle")
+
+		State.JUMP:
+			if not is_attacking:
+				play_anim("jump")
+
+		State.WALK:
+			if not is_attacking:
+				play_anim("walk")
+
+		State.RUN:
+			if not is_attacking:
+				play_anim("run")
+
+		State.IDLE:
+			if not is_attacking:
+				play_anim("idle")
+
+	if is_hurting and hurt_locked:
 		return
-	elif is_attacking:
-		true # attack system controls animation
-	else:
-		match state:
-			State.JUMP:
-				play_anim("jump")
-			State.RUN:
-				play_anim("walk")
-			State.IDLE:
-				play_anim("idle")
-
-	# ---------------- ANIMATION ----------------
-	if not is_attacking:
-		match state:
-			State.CLIMB:
-				play_anim("climb")
-			State.JUMP:
-				play_anim("jump")
-			State.RUN:
-				play_anim("walk")
-			State.IDLE:
-				play_anim("idle")
 
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
 
+	move_and_slide()
+
+	# ---------------- JUMP ----------------
+	if Input.is_action_just_pressed("jump") and is_on_floor():
+		velocity.y = jump_velocity
 
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("jumpkick"):
@@ -339,7 +315,7 @@ func stop_block():
 
 # ---------------- CPU LOGIC ----------------
 func cpu_logic(delta):
-	# ---------------- HURT PRIORITY ----------------
+# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
 		if is_spear_pulled:
@@ -349,7 +325,7 @@ func cpu_logic(delta):
 			# normal knockback
 			velocity.x = -facing * 600
 
-		knockback_x = move_toward(knockback_x, 0, 10 * delta)
+		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
 		if abs(knockback_x) < 10:
 			knockback_x = 0
@@ -370,11 +346,7 @@ func cpu_logic(delta):
 
 	# HARD LOCK (Liu Kang style behavior)
 	if action_locked:
-		velocity.x = 0
-		move_and_slide()
 		return
-
-	
 
 # STOP ALL ACTIONS AT 1HP
 	if health <= 1:
@@ -400,14 +372,12 @@ func cpu_logic(delta):
 
 	if abs(dist) > 220:
 		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
+		state = State.WALK
 		play_anim("walk")
 	else:
 		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
+		state = State.WALK
 		play_anim("walk")
-
-
 
 	# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
@@ -694,7 +664,7 @@ func die():
 	# optional delay before menu
 	await get_tree().create_timer(1.5).timeout
 
-	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
 
 
@@ -725,17 +695,15 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
-
 	if area.is_in_group("HitBox"):
 		$Hurt.play()
-
 	if hurt_cooldown:
 		return
 
 	if area == null or !is_instance_valid(area):
 		return
 
-	if area.is_in_group("HurtBox"):
+	if not can_take_damage:
 		return
 
 	# ---------------- SPEAR PRIORITY ----------------
@@ -757,23 +725,19 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_cooldown = false
 		return
 
-	if not can_take_damage:
-		return
-
+	# ---------------- NORMAL DAMAGE SOURCES ----------------
 	if area.is_in_group("HitBox") \
 	or area.is_in_group("ReptileAcid") \
-	or area.is_in_group("KanoBullet") \
+	or area.is_in_group("RaidenElectricBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
 	or area.is_in_group("JohnnyCageBullet") \
-	or area.is_in_group("SonyaBullet") \
-	or area.is_in_group("RaidenElectricBullet"):
+	or area.is_in_group("KanoBullet"):
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 700
+		knockback_x = -facing * 600
 		take_damage(1)
 
 		await get_tree().create_timer(0.15).timeout
-
 		hurt_cooldown = false
