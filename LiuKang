@@ -62,6 +62,7 @@ var special_move_y := 0.0
 var spawn_locked := true
 var is_spear_pulled := false
 var hurt_cooldown := false
+var climb_pressed := Input.is_action_pressed("climb")
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -133,6 +134,8 @@ func _ready():
 	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
+	facing = 1
+	sprite.flip_h = -facing < 0
 
 func _unhandled_input(event):
 
@@ -258,19 +261,39 @@ func run(input_dir: float):
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
+	if state == State.DEAD:
+		return
+
+	# ---------------- STUN ----------------
 	if stunned:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
 
+	# ---------------- DEATH / FINISH ----------------
+	if state == State.DEAD:
+		return
+
+	if is_finish_state:
+		state = State.IDLE
+		velocity.x = 0
+		if not is_hurting:
+			play_anim("idle")
+		move_and_slide()
+		return
+
+	# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
+
+
+	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
 	combo_timer += delta
-
 	if combo_timer > combo_reset_time:
 		combo.clear()
-		combo_timer = 0.0
 
+	# ---------------- CPU ----------------
 	if is_cpu:
 		cpu_logic(delta)
 		move_and_slide()
@@ -279,7 +302,7 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	if health <= 1:
+	if is_finish_state:
 		state = State.IDLE
 		velocity.x = 0
 
@@ -289,15 +312,8 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
-
-	if flyingkick_active:
-		handle_flyingkick(delta)
-		return
-
-	if bicyclekick_active:
-		handle_bicyclekick(delta)
-		return
 
 	if action_locked:
 		return
@@ -313,49 +329,51 @@ func _physics_process(delta):
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$LiuKangshoot.position = Vector2(63 * facing, -155)
-# ---------------- MOVEMENT ----------------
-	var running := Input.is_action_pressed("run") and input_dir != 0
 
-	if running:
-		run(input_dir)
-
-	elif input_dir != 0:
-		state = State.WALK
+	# =========================================================
+	# 🟢 MOVEMENT (RUN ADDED HERE)
+	# =========================================================
+	if Input.is_action_pressed("run") and input_dir != 0:
+		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
+	else:
 		velocity.x = input_dir * SPEED
-		play_anim("walk")
 
-	else:
-		state = State.IDLE
-		velocity.x = move_toward(velocity.x, 0, 2000 * delta)
-		play_anim("idle")
-
-	# ---------------- CLIMB ----------------
-	if climb_pressed and not is_on_floor() and is_on_wall():
-		state = State.CLIMB
-
-	else:
-		state = State.WALK
+		# ---------------- STATE ----------------
+		if not is_on_floor():
+			state = State.JUMP
+		elif input_dir != 0:
+			state = State.WALK
+		elif input_dir != 0:
+			state = State.RUN
+		else:
+			state = State.IDLE
 
 	# ---------------- ANIMS ----------------
 	match state:
 
 		State.CLIMB:
 			velocity.y = -CLIMB_SPEED
-
 			if not is_attacking:
-				play_anim("climb")
+				play_anim("idle")
 
 		State.JUMP:
 			if not is_attacking:
 				play_anim("jump")
 
-		State.RUN:
+		State.WALK:
 			if not is_attacking:
 				play_anim("walk")
+
+		State.RUN:
+			if not is_attacking:
+				play_anim("run")
 
 		State.IDLE:
 			if not is_attacking:
 				play_anim("idle")
+
+	if is_hurting and hurt_locked:
+		return
 
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
@@ -381,10 +399,6 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("shoot"):
 		shoot_fireball()
 
-	elif Input.is_action_just_pressed("shoot"):
-		if shoot_cooldown <= 0:
-			shoot_fireball()
-
 	elif Input.is_action_pressed("block"):
 		start_block()
 
@@ -393,9 +407,6 @@ func _physics_process(delta):
 
 	elif Input.is_action_pressed("bicyclekick"):
 		start_bicyclekick()
-
-	elif Input.is_action_just_pressed("shoot"):
-		shoot_fireball()
 
 	elif Input.is_action_pressed("block"):
 		start_block()
@@ -430,24 +441,22 @@ func _physics_process(delta):
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-# ---------------- HURT PRIORITY ----------------
+	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		if is_spear_pulled:
-			# opposite of normal knockback
-			velocity.x = -facing * -600
-		else:
-			# normal knockback
-			velocity.x = -facing * 600
+		
+		velocity.x = -facing * 400
 
+	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
 		if abs(knockback_x) < 10:
 			knockback_x = 0
 			is_hurting = false
-			is_spear_pulled = false
 
-		return
+			velocity.y += GRAVITY * delta
+			move_and_slide()
+			return
 
 	if target == null or !is_instance_valid(target):
 		velocity.x = 0
@@ -464,7 +473,7 @@ func cpu_logic(delta):
 		return
 
 # STOP ALL ACTIONS AT 1HP
-	if health <= 1:
+	if is_finish_state:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
@@ -475,46 +484,71 @@ func cpu_logic(delta):
 
 	velocity.y += GRAVITY * delta
 	facing = direction
-	sprite.flip_h = -facing < 0
+	sprite.flip_h = facing > 0
 
 # GRAVITY
 	velocity.y += GRAVITY * delta
 
 
 # ---------------- MOVEMENT ----------------
+	if abs(dist) > 220:
+
+		velocity.x = direction * SPEED * 0.8
+
+	if state != State.RUN:
+		state = State.RUN
+
 	if not is_attacking:
 		play_anim("walk")
 
 	if abs(dist) > 220:
 		velocity.x = direction * SPEED * 0.8
-		state = State.WALK
+		state = State.RUN
 		play_anim("walk")
 	else:
 		velocity.x = direction * SPEED * 0.8
-		state = State.WALK
+		state = State.RUN
 		play_anim("walk")
 
-	# ---------------- AI ACTIONS ----------------
+# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
 
-		ai_timer = randf_range(0.4, 0.8)
+		match Game.difficulty:
 
-		match randi() % 5:
+			"Hard":
 
-			0:
-				do_action("punch")
+				# Very fast reactions
+				ai_timer = randf_range(0.05, 0.15)
 
-			1:
-				do_action("kick")
+				var choice = randi() % 100
 
-			2:
-				do_action("uppercut")
+				if choice < 20:
+					do_action("punch")
+				elif choice < 40:
+					do_action("kick")
+				elif choice < 65:
+					do_action("uppercut")
+				elif choice < 80:
+					do_action("roundhousekick")
+				else:
+					shoot_fireball()
 
-			3:
-				do_action("roundhousekick")
+			"Easy":
 
-			4:
-				shoot_fireball()
+				ai_timer = randf_range(0.5, 0.9)
+
+				var choice = randi() % 100
+
+				if choice < 40:
+					do_action("punch")
+				elif choice < 70:
+					do_action("kick")
+				elif choice < 85:
+					do_action("uppercut")
+				elif choice < 90:
+					do_action("roundhousekick")
+				else:
+					shoot_fireball()
 
 func handle_flyingkick(delta):
 
@@ -693,7 +727,7 @@ func take_damage(amount: int):
 		die()
 		await get_tree().create_timer(0.5).timeout
 
-		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 		return
 
 	# ---------------- NORMAL HURT ----------------
@@ -820,7 +854,7 @@ func die():
 	# optional delay before menu
 	await get_tree().create_timer(1.5).timeout
 
-	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim: String):
