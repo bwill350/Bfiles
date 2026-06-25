@@ -37,6 +37,7 @@ var tap_time := 0.25
 var last_tap_time := 0.0
 var last_tap_dir := 0
 var run_locked := false
+
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
@@ -163,6 +164,9 @@ func _ready():
 	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
+	facing = 1
+	sprite.flip_h = -facing < 0
+
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
 
@@ -457,30 +461,49 @@ func cpu_logic(delta):
 		state = State.RUN
 		play_anim("walk")
 
-	# ---------------- AI ACTIONS ----------------
+# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
 
-		ai_timer = randf_range(0.4, 0.8)
+		match Game.difficulty:
 
-		match randi() % 5:
+			"Hard":
 
-			0:
-				do_action("punch")
+				# Very fast reactions
+				ai_timer = randf_range(0.05, 0.15)
 
-			1:
-				do_action("kick")
+				var choice = randi() % 100
 
-			2:
-				do_action("uppercut")
+				if choice < 20:
+					do_action("punch")
+				elif choice < 40:
+					do_action("kick")
+				elif choice < 65:
+					do_action("uppercut")
+				elif choice < 80:
+					do_action("roundhousekick")
+				else:
+					shoot_player()
 
-			3:
-				do_action("roundhousekick")
+			"Easy":
 
-			4:
-				shoot_player()
+				ai_timer = randf_range(0.5, 0.9)
+
+				var choice = randi() % 100
+
+				if choice < 40:
+					do_action("punch")
+				elif choice < 70:
+					do_action("kick")
+				elif choice < 85:
+					do_action("uppercut")
+				else:
+					do_action("roundhousekick")
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
+
+	if is_attacking:
+		return
 
 	if health <= 1:
 		return
@@ -672,7 +695,7 @@ func take_damage(amount: int):
 		die()
 		await get_tree().create_timer(0.5).timeout
 
-		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 		return
 
 	# ---------------- NORMAL HURT ----------------
@@ -842,7 +865,7 @@ func die():
 	# optional delay before menu
 	await get_tree().create_timer(1.5).timeout
 
-	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
@@ -856,7 +879,8 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
-
+	if area.is_in_group("HitBox"):
+		$Hurt.play()
 	if hurt_cooldown:
 		return
 
@@ -864,19 +888,6 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 		return
 
 	if not can_take_damage:
-		return
-
-	if area.is_in_group("HurtBox"):
-		return
-
-	# debug AFTER validation
-	print("AREA:", area.name)
-	print("GROUPS:", area.get_groups())
-
-	if area.is_in_group("HitBox"):
-		hurt_cooldown = true
-
-		knockback_x = -facing * 900
 		return
 
 	# ---------------- SPEAR PRIORITY ----------------
@@ -898,25 +909,20 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_cooldown = false
 		return
 
-	if area.is_in_group("ReptileAcid") \
-	or area.is_in_group("HitBox") \
+	# ---------------- NORMAL DAMAGE SOURCES ----------------
+	if area.is_in_group("HitBox") \
+	or area.is_in_group("ReptileAcid") \
 	or area.is_in_group("RaidenElectricBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
-	or area.is_in_group("SonyaBullet") \
 	or area.is_in_group("JohnnyCageBullet") \
-	or area.is_in_group("KanoBullet"):
+	or area.is_in_group("KanoBullet") \
+	or area.is_in_group("IceBullet"):
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 900
-
-		is_hurting = true
-		action_locked = true
-		hurt_locked = true
-
+		knockback_x = -facing * 600
 		take_damage(1)
-		$Hurt.play()
-		await get_tree().create_timer(0.35).timeout
+
+		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
-		return
