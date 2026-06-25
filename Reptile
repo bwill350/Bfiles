@@ -143,7 +143,8 @@ func run(input_dir: float):
 
 # ---------------- READY ----------------
 func _ready():
-
+	facing = 1
+	sprite.flip_h = -facing < 0
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Reptile")
@@ -180,9 +181,6 @@ func _unhandled_input(event):
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
 	if state == State.DEAD:
 		return
 
@@ -204,14 +202,9 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-# GRAVITY
+	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
-	# ---------------- GRAVITY (ONLY ONCE) ----------------
-	if not is_on_floor():
-		velocity.y += GRAVITY * delta
-	else:
-		velocity.y = 0
 
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -222,10 +215,7 @@ func _physics_process(delta):
 
 	# ---------------- CPU ----------------
 	if is_cpu:
-		if is_pulled:
-			run_pull_logic(delta)
-		else:
-			cpu_logic(delta)
+		cpu_logic(delta)
 		move_and_slide()
 		return
 
@@ -389,24 +379,24 @@ func shoot_acid():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-	# GRAVITY
-	velocity.y += GRAVITY * delta
-	# ---------------- HURT PRIORITY ----------------
+# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		
-		velocity.x = -facing * 400
+		if is_pulled:
+			# opposite of normal knockback
+			velocity.x = -facing * -600
+		else:
+			# normal knockback
+			velocity.x = -facing * 600
 
-	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
 		if abs(knockback_x) < 10:
 			knockback_x = 0
 			is_hurting = false
+			is_pulled = false
 
-			velocity.y += GRAVITY * delta
-			move_and_slide()
-			return
+		return
 
 	if target == null or !is_instance_valid(target):
 		velocity.x = 0
@@ -423,7 +413,7 @@ func cpu_logic(delta):
 		return
 
 # STOP ALL ACTIONS AT 1HP
-	if is_finish_state:
+	if health <= 1:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
@@ -441,23 +431,16 @@ func cpu_logic(delta):
 
 
 # ---------------- MOVEMENT ----------------
-	if abs(dist) > 220:
-
-		velocity.x = direction * SPEED * 0.8
-
-	if state != State.RUN:
-		state = State.RUN
-
 	if not is_attacking:
 		play_anim("walk")
 
 	if abs(dist) > 220:
 		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
+		state = State.WALK
 		play_anim("walk")
 	else:
 		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
+		state = State.WALK
 		play_anim("walk")
 
 	# ---------------- AI ACTIONS ----------------
@@ -524,7 +507,7 @@ func start_spear():
 	if state == State.DEAD:
 		return
 
-	if action_locked:
+	if action_locked and not is_hurting:
 		return
 
 	action_locked = true
@@ -607,49 +590,31 @@ func shoot_player():
 
 	play_anim("shoot")
 
-	# ✅ MOVE MARKER FIRST
 	$Reptileshoot.position = Vector2(88.9 * facing, -14.6)
 
-	var bullet_scene: PackedScene
-
+	var bullet_scene: PackedScene = BULLET_SCENE
 	if special_bullet != null:
 		bullet_scene = special_bullet
 		special_bullet = null
-	else:
-		bullet_scene = BULLET_SCENE
 
 	var bullet = bullet_scene.instantiate()
 	get_tree().current_scene.add_child(bullet)
 
-	# optional but safe after add
 	await get_tree().process_frame
 
-	# ✅ NOW POSITION IS CORRECT
 	bullet.global_position = $Reptileshoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-	if bullet.has_node("Sprite2D"):
-		bullet.get_node("Sprite2D").flip_h = facing < 0
-
-	if bullet.has_node("AnimatedSprite2D"):
-		bullet.get_node("AnimatedSprite2D").flip_h = facing < 0
-
+	# wait shot lock
 	await get_tree().create_timer(0.25).timeout
 
+	# 🔥 HARD RESET (this is the important fix)
 	is_shooting = false
-
-	if is_hurting:
-		is_attacking = false
-		action_locked = false
-		return
-
-	if state == State.DEAD:
-		return
-
 	is_attacking = false
 	action_locked = false
 
-	play_anim("idle")
+	if state != State.DEAD and not is_hurting:
+		play_anim("idle")
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
@@ -730,7 +695,7 @@ func do_action(anim_name: String):
 	if spawn_locked:
 		return
 
-	if action_locked:
+	if action_locked and not is_hurting:
 		return
 
 	action_locked = true
@@ -843,6 +808,11 @@ func take_damage(amount: int):
 	if state == State.DEAD:
 		return
 
+	var frame := Engine.get_physics_frames()
+
+	if has_meta("last_damage_frame") and get_meta("last_damage_frame") == frame:
+		return
+
 	if spawn_protection:
 		return
 
@@ -856,13 +826,14 @@ func take_damage(amount: int):
 	health -= amount
 	health = max(health, 0)
 
-	print("Raiden took damage: ", amount, " HP=", health)
+	print("Reptile took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
 
-# ---------------- FINISH HIM ----------------
+	# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
+
 		trigger_finish_state()
 		return
 
@@ -873,7 +844,7 @@ func take_damage(amount: int):
 		die()
 		await get_tree().create_timer(0.5).timeout
 
-		get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 		return
 
 	# ---------------- NORMAL HURT ----------------
@@ -889,11 +860,20 @@ func take_damage(amount: int):
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
+# ---------------- NORMAL HURT ----------------
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+	state = State.IDLE
+	play_anim("hurt")
 	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
+
+	if state != State.DEAD:
+		play_anim("idle")
 
 func trigger_finish_state():
 
@@ -932,6 +912,21 @@ func trigger_finish_state():
 	is_hurting = false
 	is_blocking = false
 
+
+func recover_from_hurt():
+	if state == State.DEAD:
+		return
+
+	is_hurting = false
+	hurt_locked = false
+	action_locked = false
+	hurt_cooldown = false
+
+	if is_on_floor():
+		play_anim("idle")
+	else:
+		play_anim("jump")
+
 # ---------------- DEATH ----------------
 func die():
 
@@ -955,7 +950,7 @@ func die():
 	# optional delay before menu
 	await get_tree().create_timer(1.5).timeout
 
-	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
