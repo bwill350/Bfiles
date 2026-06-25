@@ -54,7 +54,10 @@ var is_finish_state := false
 var lock_timer := 0.0
 var stunned := false
 var hurt_cooldown := false
-
+var anim_lock_movement := false
+var attack_move_distance := 0.0
+var fly_start_x := 0.0
+var fly_max_distance := 2300.0
 
 # ---------------- CPU ----------------
 var is_cpu := false
@@ -110,7 +113,7 @@ func start_electricfly():
 	special_move_invincible = true
 	special_move_timer = 0.4
 
-	velocity.x = facing * 1800
+	velocity.x = facing * 2800
 	velocity.y = -300
 
 func apply_stun(duration: float):
@@ -261,7 +264,7 @@ func _physics_process(delta):
 	# ---------------- STUN ----------------
 	if stunned:
 		velocity = Vector2.ZERO
-		move_and_slide()
+		velocity.x = 0
 		return
 
 	# ---------------- DEATH / FINISH ----------------
@@ -309,8 +312,7 @@ func _physics_process(delta):
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
-	if action_locked:
-		return
+
 
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
@@ -327,20 +329,27 @@ func _physics_process(delta):
 	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
 	# =========================================================
-	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
+	# ---------------- MOVEMENT BLOCKED BY ANIMATION ----------------
+	# ---------------- MOVEMENT BLOCKED BY ANIMATION ----------------
+	if anim_lock_movement:
+		velocity.x = move_toward(velocity.x, 0, SPEED * 10 * delta)
 	else:
-		velocity.x = input_dir * SPEED
-
-		# ---------------- STATE ----------------
-		if not is_on_floor():
-			state = State.JUMP
-		elif input_dir != 0:
-			state = State.WALK
-		elif input_dir != 0:
-			state = State.RUN
+		if input_dir == 0:
+			velocity.x = 0
+			if is_on_floor() and not is_attacking:
+				state = State.IDLE
+				play_anim("idle")
 		else:
-			state = State.IDLE
+			if Input.is_action_pressed("run"):
+				run(input_dir)
+			else:
+				velocity.x = input_dir * SPEED
+
+	if electricfly_active and is_on_floor():
+		end_electricfly()
+
+	if action_locked:
+		return
 
 	# ---------------- ANIMS ----------------
 	match state:
@@ -415,13 +424,26 @@ func _physics_process(delta):
 
 	# ---------------- SPECIAL MOVES ----------------
 	if special_move:
-
 		if electricfly_active:
-			global_position.y = lerp(global_position.y, electricfly_y, 0.2)
+
 			special_move_timer -= delta
+
 			velocity.x = facing * 1300
-			velocity.y += GRAVITY * delta * 0.4
+			velocity.y += GRAVITY * delta
+
 			move_and_slide()
+
+			# FORCE END
+			if special_move_timer <= 0.0:
+				end_electricfly()
+
+func end_electricfly():
+	electricfly_active = false
+	special_move = false
+	special_move_invincible = false
+	special_move_timer = 0.0
+
+	state = State.JUMP
 
 func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
@@ -513,6 +535,8 @@ func cpu_logic(delta):
 					do_action("uppercut")
 				elif choice < 80:
 					do_action("roundhousekick")
+				elif choice < 85:
+					do_action("electricfly")
 				else:
 					shoot_player()
 
@@ -528,6 +552,8 @@ func cpu_logic(delta):
 					do_action("kick")
 				elif choice < 85:
 					do_action("uppercut")
+				elif choice < 85:
+					do_action("electricfly")
 				else:
 					do_action("roundhousekick")
 
@@ -625,14 +651,15 @@ func do_action(anim_name: String):
 	lock_timer = 0.3
 
 	play_anim(anim_name)
-
+	
 	# ---------------- NORMAL ATTACKS ----------------
 	if anim_name in [
 		"punch",
 		"kick",
 		"jumpkick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"electricfly"
 	]:
 		spawn_attack(anim_name)
 
@@ -646,9 +673,11 @@ func do_action(anim_name: String):
 
 			attack.global_position = $AttackMarker.global_position
 			attack.scale.x = facing
+	anim_lock_movement = true
+
 
 	# ---------------- OPTIONAL ELECTRIC BURST ----------------
-	elif anim_name == "electricburst":
+	if anim_name == "electricburst":
 
 		if has_node("AttackMarker"):
 			var attack = RAIDEN_ATTACK.instantiate()
@@ -658,6 +687,8 @@ func do_action(anim_name: String):
 			attack.scale.x = facing
 
 	await sprite.animation_finished
+
+	anim_lock_movement = false
 
 	is_attacking = false
 	action_locked = false
@@ -671,7 +702,8 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
-		"jumpkick"
+		"jumpkick",
+		"electricfly"
 	]:
 		return
 
@@ -694,6 +726,9 @@ func spawn_attack(anim_name: String):
 			dmg = 1
 		"jumpkick":
 			dmg = 1
+		"electricfly":
+			dmg = 1
+			attack_move_distance = 2300
 
 	if attack.has_method("set_damage"):
 		attack.set_damage(dmg)
