@@ -81,14 +81,14 @@ var shoot_cooldown: float = 0.0
 @export var combo_reset_time := 0.6
 
 # ---------------- PRELOADS ----------------
-const BULLET_SCENE = preload("res://Projectiles/KanoBullet.tscn")
+const BULLET_SCENE = preload("res://JohnnyCageBullet.tscn")
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
 const JOHNNY_CAGE_BULLET = preload("res://JohnnyCageBullet.tscn")
 const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
-const JOHNNY_CAGE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
+const JOHNNY_CAGE_ATTACK = preload("res://JohnnyCageAttack.tscn")
 
 const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
 
@@ -915,8 +915,8 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 	or area.is_in_group("RaidenElectricBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
-	or area.is_in_group("JohnnyCageBullet") \
 	or area.is_in_group("KanoBullet") \
+	or area.is_in_group("SonyaBullet") \
 	or area.is_in_group("IceBullet"):
 
 		hurt_cooldown = true
