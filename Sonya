@@ -329,8 +329,10 @@ func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		
-		velocity.x = -facing * 400
+		if is_spear_pulled:
+				velocity.x = -facing * -600
+		else:
+			velocity.x = -facing * 600
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -769,7 +771,7 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
 		hurt_cooldown = true
-
+		knockback_x = -facing * -600
 		health -= 1
 		health_changed.emit(health)
 
