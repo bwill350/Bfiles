@@ -63,6 +63,7 @@ var spawn_locked := true
 var is_spear_pulled := false
 var hurt_cooldown := false
 var climb_pressed := Input.is_action_pressed("climb")
+
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -91,6 +92,7 @@ const FIREBALL = preload("res://Fireball.tscn")
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var shoot_marker: Marker2D = $LiuKangshoot
 @onready var character = get_parent()
+
 # ---------------- PRELOADS ----------------
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
@@ -113,7 +115,6 @@ var combo_timer := 0.0
 
 # ---------------- COOLDOWNS ----------------
 var shoot_cooldown: float = 0.0
-
 
 # ---------------- READY ----------------
 func _ready():
@@ -174,7 +175,6 @@ func apply_stun(duration: float):
 	stunned = false
 	action_locked = false
 
-
 func start_flyingkick():
 	play_anim("flyingkick")
 	flyingkick_active = true
@@ -187,7 +187,6 @@ func start_flyingkick():
 	velocity.x = facing * 1300
 	velocity.y = 0
 
-
 func start_bicyclekick():
 	play_anim("bicyclekick")
 	bicyclekick_active = true
@@ -199,7 +198,6 @@ func start_bicyclekick():
 
 	velocity.x = facing * 1300
 	velocity.y = 0
-
 
 func update_state(input_dir, running):
 	if state == State.DEAD:
@@ -418,7 +416,6 @@ func _physics_process(delta):
 	# special collision hit check
 	handle_special_hit()
 
-
 	# ---------------- SPECIAL MOVES ----------------
 	if special_move:
 
@@ -488,7 +485,6 @@ func cpu_logic(delta):
 
 # GRAVITY
 	velocity.y += GRAVITY * delta
-
 
 # ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
@@ -646,7 +642,6 @@ func air_launch(x_speed: float, y_speed: float):
 	special_move_timer = 0.6
 
 	velocity.x = facing * x_speed
-	
 
 # ---------------- FIREBALL ----------------
 func shoot_fireball():
@@ -824,7 +819,6 @@ func spawn_attack(anim_name: String):
 		attack.damage = dmg
 
 	attack.owner = self
-
 
 # ---------------- DEATH ----------------
 func die():
