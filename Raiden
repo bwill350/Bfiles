@@ -106,15 +106,35 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
-func start_electricfly():
-	electricfly_y = global_position.y - 30
-	electricfly_active = true
-	special_move = true
-	special_move_invincible = true
-	special_move_timer = 0.4
+func start_electricfly(dir: float):
 
-	velocity.x = facing * 2800
-	velocity.y = -300
+	if state == State.DEAD:
+		return
+
+	if action_locked:
+		return
+
+	facing = dir
+	sprite.flip_h = facing > 0
+
+	electricfly_active = true
+	spawn_protection = true
+	action_locked = true
+	is_attacking = true
+
+	play_anim("electricfly")
+
+	velocity = Vector2(facing * 3600, -150)
+
+	await get_tree().create_timer(0.30).timeout
+
+	electricfly_active = false
+	spawn_protection = false
+	action_locked = false
+	is_attacking = false
+
+	if state != State.DEAD:
+		play_anim("idle")
 
 func apply_stun(duration: float):
 	if stunned:
@@ -127,6 +147,15 @@ func apply_stun(duration: float):
 	await get_tree().create_timer(duration).timeout
 
 	stunned = false
+
+func end_electricfly():
+	electricfly_active = false
+	spawn_protection = false
+	action_locked = false
+	is_attacking = false
+
+	if state != State.DEAD:
+		play_anim("idle")
 
 func _on_health_changed(h):
 
@@ -345,8 +374,12 @@ func _physics_process(delta):
 			else:
 				velocity.x = input_dir * SPEED
 
-	if electricfly_active and is_on_floor():
-		end_electricfly()
+	# ---------------- ELECTRIC FLY ----------------
+	if electricfly_active:
+		velocity.y = 0
+		velocity.x = facing * 1300
+		move_and_slide()
+		return
 
 	if action_locked:
 		return
@@ -421,29 +454,6 @@ func _physics_process(delta):
 		shoot_player()
 
 	move_and_slide()
-
-	# ---------------- SPECIAL MOVES ----------------
-	if special_move:
-		if electricfly_active:
-
-			special_move_timer -= delta
-
-			velocity.x = facing * 1300
-			velocity.y += GRAVITY * delta
-
-			move_and_slide()
-
-			# FORCE END
-			if special_move_timer <= 0.0:
-				end_electricfly()
-
-func end_electricfly():
-	electricfly_active = false
-	special_move = false
-	special_move_invincible = false
-	special_move_timer = 0.0
-
-	state = State.JUMP
 
 func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
@@ -646,26 +656,29 @@ func do_action(anim_name: String):
 	if action_locked:
 		return
 
+	# ---------------- RAIDEN SPECIAL ----------------
+	if anim_name == "electricfly":
+		start_electricfly(facing)
+		return
+
 	action_locked = true
 	is_attacking = true
 	lock_timer = 0.3
 
 	play_anim(anim_name)
-	
+
 	# ---------------- NORMAL ATTACKS ----------------
 	if anim_name in [
 		"punch",
 		"kick",
 		"jumpkick",
 		"uppercut",
-		"roundhousekick",
-		"electricfly"
+		"roundhousekick"
 	]:
 		spawn_attack(anim_name)
 
-	# ---------------- RAIDEN SPECIAL ----------------
-	elif anim_name == "electricfly":
-		start_electricfly()
+	# ---------------- ELECTRIC BURST ----------------
+	elif anim_name == "electricburst":
 
 		if has_node("AttackMarker"):
 			var attack = RAIDEN_ATTACK.instantiate()
@@ -673,18 +686,8 @@ func do_action(anim_name: String):
 
 			attack.global_position = $AttackMarker.global_position
 			attack.scale.x = facing
+
 	anim_lock_movement = true
-
-
-	# ---------------- OPTIONAL ELECTRIC BURST ----------------
-	if anim_name == "electricburst":
-
-		if has_node("AttackMarker"):
-			var attack = RAIDEN_ATTACK.instantiate()
-			get_parent().add_child(attack)
-
-			attack.global_position = $AttackMarker.global_position
-			attack.scale.x = facing
 
 	await sprite.animation_finished
 
@@ -693,6 +696,9 @@ func do_action(anim_name: String):
 	is_attacking = false
 	action_locked = false
 	hurt_locked = false
+
+	if state != State.DEAD:
+		play_anim("idle")
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
@@ -912,6 +918,16 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 		return
 
 	if not can_take_damage:
+		return
+
+# ---------------- ELECTRIC FLY DAMAGE ----------------
+	if electricfly_active:
+		if area.has_method("take_damage"):
+			area.take_damage(1)
+		elif area.get_parent() and area.get_parent().has_method("take_damage"):
+			area.get_parent().take_damage(1)
+
+		end_electricfly()
 		return
 
 	if area.is_in_group("HitBox") \
