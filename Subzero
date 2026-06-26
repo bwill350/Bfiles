@@ -89,7 +89,6 @@ const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 @onready var blood_marker: Marker2D = $BloodMarker
 @onready var smoke_marker: Marker2D = $SmokeMarker
 
-
 func _unhandled_input(event):
 	if is_cpu:
 		return
@@ -365,7 +364,6 @@ func cpu_logic(delta):
 # GRAVITY
 	velocity.y += GRAVITY * delta
 
-
 # ---------------- MOVEMENT ----------------
 	if not is_attacking:
 		play_anim("walk")
@@ -481,7 +479,6 @@ func spawn_attack(anim_name: String):
 	attack.add_to_group("HitBox")
 	attack.global_position = attack_marker.global_position
 	attack.scale.x = facing  # THIS replaces facing system
-
 
 	var dmg := 1
 
@@ -660,13 +657,10 @@ func die():
 	$Sprite.visible = false          # AnimatedSprite2D OFF
 	$Crispy.visible = true         # static image ON
 
-
 	# optional delay before menu
 	await get_tree().create_timer(1.5).timeout
 
 	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
-
-
 
 func spawn_fx(scene: PackedScene):
 
@@ -695,8 +689,6 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
-	if area.is_in_group("HitBox"):
-		$Hurt.play()
 	if hurt_cooldown:
 		return
 
@@ -706,6 +698,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if not can_take_damage:
 		return
 
+	$Hurt.play()
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
 		hurt_cooldown = true
@@ -725,19 +718,20 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_cooldown = false
 		return
 
-	# ---------------- NORMAL DAMAGE SOURCES ----------------
 	if area.is_in_group("HitBox") \
 	or area.is_in_group("ReptileAcid") \
 	or area.is_in_group("RaidenElectricBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
+	or area.is_in_group("SonyaBullet") \
 	or area.is_in_group("JohnnyCageBullet") \
 	or area.is_in_group("KanoBullet"):
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 600
+		knockback_x = -facing * 900
 		take_damage(1)
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
+
