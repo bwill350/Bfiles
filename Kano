@@ -443,8 +443,10 @@ func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		
-		velocity.x = -facing * 400
+		if is_spear_pulled:
+				velocity.x = -facing * -400
+		else:
+			velocity.x = -facing * 600
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -960,70 +962,50 @@ func spawn_attack_bullet(anim_name: String):
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 
-	if area.is_in_group("HitBox"):
-		$Hurt.play()
-
-	# ---------------- BASIC BLOCKS ----------------
-	if hurt_cooldown:
-		return
-
-	# Allow fatal blow during Finish Him state
-	if is_finish_state and health > 1:
-		return
-
 	if area == null or !is_instance_valid(area):
+		return
+
+	if hurt_cooldown:
 		return
 
 	if not can_take_damage:
 		return
 
-	# ---------------- SUBZERO BULLET ----------------
-	if area.is_in_group("SubzeroBullet"):
-		hurt_cooldown = true
+	$Hurt.play()
 
-		apply_stun(3.0)
-
-		knockback_x = 0
-		take_damage(1)
-
-		is_hurting = true
-		action_locked = true
-		is_attacking = false
-
-		await get_tree().create_timer(0.15).timeout
-		hurt_cooldown = false
-		return
-
-	# ---------------- SPEAR PRIORITY ----------------
+	# ---------------- SPEAR (MATCH SUBZERO STYLE) ----------------
 	if area.is_in_group("ReptileSpear"):
 		hurt_cooldown = true
-
+		knockback_x = -facing * -600
 		health -= 1
 		health_changed.emit(health)
 
+		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
 
 		await get_tree().create_timer(0.8).timeout
 
-
+		is_spear_pulled = false
 		is_hurting = false
 		action_locked = false
 		hurt_cooldown = false
 		return
 
-	# ---------------- NORMAL DAMAGE SOURCES ----------------
-	if area.is_in_group("ReptileAcid") \
+	# ---------------- NORMAL HITBOX DAMAGE ----------------
+	if area.is_in_group("HitBox") \
+	or area.is_in_group("ReptileAcid") \
 	or area.is_in_group("RaidenElectricBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
+	or area.is_in_group("SonyaBullet") \
 	or area.is_in_group("JohnnyCageBullet") \
 	or area.is_in_group("KanoBullet") \
 	or area.is_in_group("IceBullet"):
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 600
+		knockback_x = -facing * 900
 		take_damage(1)
 
 		await get_tree().create_timer(0.15).timeout
