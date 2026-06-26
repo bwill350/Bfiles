@@ -70,11 +70,9 @@ var cannonkick_timer := 0.0
 var electricfly_active := false
 var jump_requested := false
 
-
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 var speed
 var shoot_cooldown := 0.0
-
 
 # ---------------- EXPORTS ----------------
 @export var SPEED = 300.0
@@ -83,9 +81,6 @@ var shoot_cooldown := 0.0
 @export var max_health: int = 10
 @export var shoot_cooldown_time := 0.01
 @export var combo_reset_time := 0.6
-
-
-
 
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/SonyaBullet.tscn")
@@ -201,7 +196,6 @@ func _physics_process(delta):
 
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
-
 
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -331,8 +325,6 @@ func _physics_process(delta):
 
 	move_and_slide()
 
-
-
 func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
@@ -381,7 +373,6 @@ func cpu_logic(delta):
 
 # GRAVITY
 	velocity.y += GRAVITY * delta
-
 
 # ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
@@ -749,7 +740,6 @@ func die():
 	$Sprite.visible = false          # AnimatedSprite2D OFF
 	$Crispy.visible = true         # static image ON
 
-
 	# optional delay before menu
 	await get_tree().create_timer(1.5).timeout
 
@@ -764,20 +754,18 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 	sprite.play(anim_name)
 
-
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
-	if area.is_in_group("HitBox"):
-		$Hurt.play()
 	if hurt_cooldown:
 		return
 
 	if area == null or !is_instance_valid(area):
 		return
 
-	if area.is_in_group("HurtBox"):
+	if not can_take_damage:
 		return
 
+	$Hurt.play()
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
 		hurt_cooldown = true
@@ -797,23 +785,19 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_cooldown = false
 		return
 
-	if not can_take_damage:
-		return
-
 	if area.is_in_group("HitBox") \
 	or area.is_in_group("ReptileAcid") \
-	or area.is_in_group("KanoBullet") \
+	or area.is_in_group("RaidenElectricBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
+	or area.is_in_group("SonyaBullet") \
 	or area.is_in_group("JohnnyCageBullet") \
-	or area.is_in_group("SonyaBullet"):
+	or area.is_in_group("KanoBullet"):
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 700
+		knockback_x = -facing * 900
 		take_damage(1)
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
-
-
