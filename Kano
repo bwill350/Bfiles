@@ -35,6 +35,7 @@ var tap_time := 0.25
 var last_tap_time := 0.0
 var last_tap_dir := 0
 var run_locked := false
+var bullet_spawned := false
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
 
@@ -114,6 +115,9 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
+
+
+
 func apply_stun(duration: float):
 	if stunned:
 		play_anim("freeze")
@@ -136,12 +140,46 @@ func run(input_dir: float):
 	if not is_attacking:
 		play_anim("run")
 
+func _on_sprite_frame_changed():
+
+	if bullet_spawned:
+		return
+
+	match sprite.animation:
+
+		"punch":
+			if sprite.frame == 3:
+				bullet_spawned = true
+
+		"kick":
+			if sprite.frame == 4:
+				bullet_spawned = true
+
+		"roundhousekick":
+			if sprite.frame == 2:
+				bullet_spawned = true
+
+		"uppercut":
+			if sprite.frame == 3:
+				bullet_spawned = true
+
+		"jumpkick":
+			if sprite.frame == 1:
+				bullet_spawned = true
+				spawn_kano_bullet()
+
+		"fatality":
+			if sprite.frame == 2:
+				bullet_spawned = true
+				spawn_kano_bullet()
+
+
 # ---------------- READY ----------------
 func _ready():
 	$Crispy.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
-	add_to_group("LiuKang")
+	add_to_group("Kano")
 
 	add_to_group("FireDeath")
 	add_to_group("IceDeath")
@@ -200,6 +238,15 @@ func handle_double_tap_run(input_dir: float, delta: float) -> bool:
 
 	return false
 
+func spawn_kano_bullet():
+	var bullet = KANO_BULLET.instantiate()
+	get_tree().current_scene.add_child(bullet)
+
+	bullet.global_position = $KanoShoot.global_position
+
+	# direction
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
+
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -213,27 +260,26 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+	# ---------------- CANNONBALL LOCK ----------------
 	if cannonball_active:
 		velocity.y = 0
 		velocity.x = facing * 1300
 		move_and_slide()
 		return
 
-	# ---------------- DEATH / FINISH ----------------
-	if state == State.DEAD:
-		return
-
+	# ---------------- FINISH HIM ----------------
 	if is_finish_state:
 		state = State.IDLE
 		velocity.x = 0
+
 		if not is_hurting:
 			play_anim("idle")
+
 		move_and_slide()
 		return
 
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
-
 
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -248,31 +294,13 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	if state == State.DEAD:
-		return
-
-	if is_finish_state:
-		state = State.IDLE
-		velocity.x = 0
-
-		if not is_hurting:
-			play_anim("idle")
-
+	# ---------------- HARD LOCKS ----------------
+	if action_locked:
 		move_and_slide()
 		return
 
-	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
-
-	if action_locked:
-		return
-
+	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
-	var climb_pressed = Input.is_action_pressed("climb")
-
-	if cannonball_ready and input_dir != 0:
-		start_cannonball(input_dir)
-		cannonball_ready = false
 
 	# ---------------- FACING ----------------
 	if input_dir != 0:
@@ -280,35 +308,26 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing > 0
 
-	$AttackMarker.position = Vector2(63 * facing, -155)
-	$KanoShoot.position = Vector2(63 * facing, -155)
+	# ALWAYS KEEP MARKERS ALIGNED
+	$AttackMarker.position = Vector2(63 * facing, -100)
+	$KanoShoot.position = Vector2(63 * facing, -100)
 
-	# =========================================================
-	# 🟢 MOVEMENT (RUN ADDED HERE)
-	# =========================================================
+	# ---------------- MOVEMENT ----------------
 	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
+		run(input_dir)
 	else:
 		velocity.x = input_dir * SPEED
 
-		# ---------------- STATE ----------------
-		if not is_on_floor():
-			state = State.JUMP
-		elif input_dir != 0:
-			state = State.WALK
-		elif input_dir != 0:
-			state = State.RUN
-		else:
-			state = State.IDLE
+	# ---------------- STATE ----------------
+	if not is_on_floor():
+		state = State.JUMP
+	elif input_dir != 0:
+		state = State.WALK
+	else:
+		state = State.IDLE
 
-	# ---------------- ANIMS ----------------
+	# ---------------- ANIMATIONS ----------------
 	match state:
-
-		State.CLIMB:
-			velocity.y = -CLIMB_SPEED
-			if not is_attacking:
-				play_anim("idle")
-
 		State.JUMP:
 			if not is_attacking:
 				play_anim("jump")
@@ -325,8 +344,10 @@ func _physics_process(delta):
 			if not is_attacking:
 				play_anim("idle")
 
-	if is_hurting and hurt_locked:
-		return
+		State.CLIMB:
+			velocity.y = -CLIMB_SPEED
+			if not is_attacking:
+				play_anim("idle")
 
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
@@ -336,11 +357,12 @@ func _physics_process(delta):
 	if Input.is_action_just_pressed("punch"):
 		do_action("punch")
 
-	elif Input.is_action_just_pressed("roundhousekick"):
-		do_action("roundhousekick")
-
 	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
+		spawn_kano_bullet()
+
+	elif Input.is_action_just_pressed("roundhousekick"):
+		do_action("roundhousekick")
 
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
@@ -349,7 +371,7 @@ func _physics_process(delta):
 		shoot_player()
 
 	elif Input.is_action_just_pressed("cannonball"):
-		cannonball_ready = true
+		do_action("cannonball")
 
 	elif Input.is_action_pressed("fatality"):
 		do_action("fatality")
@@ -536,38 +558,51 @@ func cpu_logic(delta):
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
+
 	if state == State.DEAD:
 		return
 
 	if action_locked:
 		return
 
+	if is_attacking:
+		return
+
+	if health <= 1:
+		return
+
+	if is_finish_state:
+		return
+
+	if anim_name == "cannonball":
+		start_cannonball(facing)
+		return
+
 	is_attacking = true
 	action_locked = true
+	lock_timer = 0.6
+
+	bullet_spawned = false
 
 	play_anim(anim_name)
 
-	# spawn attack immediately OR sync via frame event (better below)
 	if anim_name in [
 		"punch",
 		"kick",
 		"roundhousekick",
 		"uppercut",
-		"jumpkick",
-		"fatality",
-		"start_cannonball"
+		"jumpkick"
 	]:
 		spawn_attack(anim_name)
 
-	# safer animation wait
 	await sprite.animation_finished
 
 	is_attacking = false
 	action_locked = false
+	hurt_locked = false
 
-	if not is_hurting and state != State.DEAD:
+	if state != State.DEAD:
 		play_anim("idle")
-
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
@@ -577,38 +612,31 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
-		"jumpkick",
-		"cannonball"
+		"jumpkick"
 	]:
 		return
 
 	var attack = KANO_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 
-	attack.global_position = attack_marker.global_position
-	attack.scale.x = facing  # THIS replaces facing system
+	attack.global_position = $AttackMarker.global_position
+	attack.scale.x = facing
 
 	var dmg := 1
 
 	match anim_name:
-		"punch":
-			dmg = 1
-		"kick":
-			dmg = 1
-		"uppercut":
-			dmg = 1
-		"roundhousekick":
-			dmg = 1
-		"jumpkick":
-			dmg = 1
-		"cannonball":
-			dmg = 1
+		"punch": dmg = 1
+		"kick": dmg = 1
+		"uppercut": dmg = 1
+		"roundhousekick": dmg = 1
+		"jumpkick": dmg = 1
 
 	if attack.has_method("set_damage"):
 		attack.set_damage(dmg)
 	else:
 		attack.damage = dmg
 
+	attack.owner = self
 	attack.owner = self
 
 func start_cannonball(dir: float):
@@ -623,7 +651,7 @@ func start_cannonball(dir: float):
 	sprite.flip_h = facing > 0
 
 	cannonball_active = true
-	spawn_protection = true
+	spawn_protection = true   # 🔥 IMMUNE START
 	action_locked = true
 	is_attacking = true
 
@@ -634,7 +662,7 @@ func start_cannonball(dir: float):
 	await get_tree().create_timer(0.6).timeout
 
 	cannonball_active = false
-	spawn_protection = false
+	spawn_protection = false  # 🔥 IMMUNE END
 	action_locked = false
 	is_attacking = false
 
@@ -703,6 +731,11 @@ func take_damage(amount: int):
 	if state == State.DEAD:
 		return
 
+	var frame := Engine.get_physics_frames()
+
+	if has_meta("last_damage_frame") and get_meta("last_damage_frame") == frame:
+		return
+
 	if spawn_protection:
 		return
 
@@ -716,13 +749,14 @@ func take_damage(amount: int):
 	health -= amount
 	health = max(health, 0)
 
-	print("Kano took damage: ", amount, " HP=", health)
+	print("JohnnyCage took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
 
-# ---------------- FINISH HIM ----------------
+	# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
+
 		trigger_finish_state()
 		return
 
@@ -749,11 +783,20 @@ func take_damage(amount: int):
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
+# ---------------- NORMAL HURT ----------------
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+	state = State.IDLE
+	play_anim("hurt")
 	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
+
+	if state != State.DEAD:
+		play_anim("idle")
 
 func trigger_finish_state():
 
@@ -904,15 +947,39 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
+
 	if area.is_in_group("HitBox"):
 		$Hurt.play()
+
+	# ---------------- BASIC BLOCKS ----------------
 	if hurt_cooldown:
+		return
+
+	# Allow fatal blow during Finish Him state
+	if is_finish_state and health > 1:
 		return
 
 	if area == null or !is_instance_valid(area):
 		return
 
 	if not can_take_damage:
+		return
+
+	# ---------------- SUBZERO BULLET ----------------
+	if area.is_in_group("SubzeroBullet"):
+		hurt_cooldown = true
+
+		apply_stun(3.0)
+
+		knockback_x = 0
+		take_damage(1)
+
+		is_hurting = true
+		action_locked = true
+		is_attacking = false
+
+		await get_tree().create_timer(0.15).timeout
+		hurt_cooldown = false
 		return
 
 	# ---------------- SPEAR PRIORITY ----------------
@@ -922,21 +989,19 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 		health -= 1
 		health_changed.emit(health)
 
-		is_spear_pulled = true
 		is_hurting = true
 		action_locked = true
 
 		await get_tree().create_timer(0.8).timeout
 
-		is_spear_pulled = false
+
 		is_hurting = false
 		action_locked = false
 		hurt_cooldown = false
 		return
 
 	# ---------------- NORMAL DAMAGE SOURCES ----------------
-	if area.is_in_group("HitBox") \
-	or area.is_in_group("ReptileAcid") \
+	if area.is_in_group("ReptileAcid") \
 	or area.is_in_group("RaidenElectricBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
