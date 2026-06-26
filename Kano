@@ -26,6 +26,7 @@ Kano (CharacterBody2D)
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
+
 var special_move := false
 var special_move_timer := 0.0
 var cannonball_hit_lock := false
@@ -150,29 +151,22 @@ func _on_sprite_frame_changed():
 		"punch":
 			if sprite.frame == 3:
 				bullet_spawned = true
+				spawn_attack_bullet("punch")
 
 		"kick":
 			if sprite.frame == 4:
 				bullet_spawned = true
+				spawn_attack_bullet("kick")
 
 		"roundhousekick":
-			if sprite.frame == 2:
+			if sprite.frame == 5:
 				bullet_spawned = true
+				spawn_attack_bullet("roundhousekick")
 
 		"uppercut":
 			if sprite.frame == 3:
 				bullet_spawned = true
-
-		"jumpkick":
-			if sprite.frame == 1:
-				bullet_spawned = true
-				spawn_kano_bullet()
-
-		"fatality":
-			if sprite.frame == 2:
-				bullet_spawned = true
-				spawn_kano_bullet()
-
+				spawn_attack_bullet("uppercut")
 
 # ---------------- READY ----------------
 func _ready():
@@ -356,6 +350,7 @@ func _physics_process(delta):
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("punch"):
 		do_action("punch")
+		spawn_kano_bullet()
 
 	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
@@ -363,6 +358,7 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
+		spawn_kano_bullet()
 
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
@@ -372,9 +368,12 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("cannonball"):
 		do_action("cannonball")
+		spawn_kano_bullet()
+
 
 	elif Input.is_action_pressed("fatality"):
 		do_action("fatality")
+		
 
 	elif Input.is_action_pressed("block"):
 		start_block()
@@ -590,10 +589,9 @@ func do_action(anim_name: String):
 		"punch",
 		"kick",
 		"roundhousekick",
-		"uppercut",
-		"jumpkick"
+		"uppercut"
 	]:
-		spawn_attack(anim_name)
+		spawn_attack_bullet(anim_name)
 
 	await sprite.animation_finished
 
@@ -944,6 +942,26 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 
 	sprite.play(anim_name)
+
+func spawn_attack_bullet(anim_name: String):
+
+	if anim_name not in [
+		"punch",
+		"kick",
+		"roundhousekick",
+		"uppercut"
+	]:
+		return
+
+	var bullet = KANO_BULLET.instantiate()
+	get_tree().current_scene.add_child(bullet)
+
+	bullet.global_position = $AttackMarker.global_position
+	bullet.scale.x = facing
+
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
+	bullet.damage = 1
+	bullet.owner = self
 
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
