@@ -30,6 +30,7 @@ var last_tap_time := 0.0
 var last_tap_dir := 0
 var run_locked := false
 var jump_requested := false
+var bullet_spawned := false
 
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
@@ -42,6 +43,7 @@ enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, ROUNDHOUSEKICK, BLOCK, PUNCH, CLIM
 
 var state: State = State.IDLE
 var speed
+
 # ---------------- FLAGS ----------------
 var is_blocking := false
 var is_hurting := false
@@ -79,12 +81,12 @@ const GRAVITY = 5000
 @export var max_health: int = 10
 @export var shoot_cooldown_time := 0.01
 @export var combo_reset_time := 0.6
+
 # ---------------- PROJECTILES ----------------
 const RAIDEN_ELECTRIC_BULLET = preload("res://Projectiles/RaidenElectricBullet.tscn")
 const RAIDEN_ATTACK = preload("res://Projectiles/RaidenAttack.tscn")
 const ELECTRIC_FORCE_FIELD = preload("res://Projectiles/ElectricForceField.tscn")
 const ELECTRIC_BURST = preload("res://Projectiles/ElectricBurst.tscn")
-
 const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 
@@ -106,8 +108,13 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
-func start_electricfly(dir: float):
+func apply_stun(duration: float):
+	if stunned:
+		play_anim("freeze")
+		return
 
+func start_electricfly(dir: float):
+	
 	if state == State.DEAD:
 		return
 
@@ -122,6 +129,7 @@ func start_electricfly(dir: float):
 	action_locked = true
 	is_attacking = true
 
+	var bullet_spawned := false
 	play_anim("electricfly")
 
 	velocity = Vector2(facing * 3600, -150)
@@ -136,17 +144,26 @@ func start_electricfly(dir: float):
 	if state != State.DEAD:
 		play_anim("idle")
 
-func apply_stun(duration: float):
-	if stunned:
-		play_anim("freeze")
+func spawn_raiden_bullet():
+	var bullet = RAIDEN_ELECTRIC_BULLET.instantiate()
+	get_tree().current_scene.add_child(bullet)
+
+	bullet.global_position = $Raidenshoot.global_position
+
+	# direction
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
+
+func _on_sprite_frame_changed():
+
+	if bullet_spawned:
 		return
 
-	stunned = true
-	velocity = Vector2.ZERO
+	match sprite.animation:
 
-	await get_tree().create_timer(duration).timeout
-
-	stunned = false
+		"electricfly":
+			if sprite.frame == 1: # or whatever frame you want
+				bullet_spawned = true
+				spawn_raiden_bullet()
 
 func end_electricfly():
 	electricfly_active = false
@@ -311,7 +328,6 @@ func _physics_process(delta):
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
-
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
@@ -340,8 +356,6 @@ func _physics_process(delta):
 
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
-
-
 
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
@@ -433,6 +447,7 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("electricfly"):
 		do_action("electricfly")
+		spawn_raiden_bullet()
 
 	elif Input.is_action_just_pressed("electricburst"):
 		do_action("electricburst")
