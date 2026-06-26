@@ -213,8 +213,6 @@ func _unhandled_input(event):
 	elif event.is_action_pressed("shoot"):
 		register_input("shoot")
 
-
-
 func handle_double_tap_run(input_dir: float, delta: float) -> bool:
 
 	if input_dir == 0:
@@ -240,7 +238,6 @@ func spawn_kano_bullet():
 
 	# direction
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
-
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -370,7 +367,6 @@ func _physics_process(delta):
 		do_action("cannonball")
 		spawn_kano_bullet()
 
-
 	elif Input.is_action_pressed("fatality"):
 		do_action("fatality")
 		
@@ -491,7 +487,6 @@ func cpu_logic(delta):
 
 # GRAVITY
 	velocity.y += GRAVITY * delta
-
 
 # ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
@@ -747,7 +742,7 @@ func take_damage(amount: int):
 	health -= amount
 	health = max(health, 0)
 
-	print("JohnnyCage took damage: ", amount, " HP=", health)
+	print("Kano took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
@@ -927,7 +922,6 @@ func die():
 	# 🔥 HARD SWAP SPRITES
 	$Sprite.visible = false          # AnimatedSprite2D OFF
 	$Crispy.visible = true         # static image ON
-
 
 	# optional delay before menu
 	await get_tree().create_timer(1.5).timeout
