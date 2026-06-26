@@ -775,7 +775,7 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 	if area == null or !is_instance_valid(area):
 		return
 
-	if not can_take_damage:
+	if area.is_in_group("HurtBox"):
 		return
 
 	# ---------------- SPEAR PRIORITY ----------------
@@ -797,21 +797,23 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_cooldown = false
 		return
 
-	# ---------------- NORMAL DAMAGE SOURCES ----------------
+	if not can_take_damage:
+		return
+
 	if area.is_in_group("HitBox") \
 	or area.is_in_group("ReptileAcid") \
-	or area.is_in_group("RaidenElectricBullet") \
+	or area.is_in_group("KanoBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
 	or area.is_in_group("JohnnyCageBullet") \
-	or area.is_in_group("KanoBullet") \
-	or area.is_in_group("IceBullet"):
+	or area.is_in_group("SonyaBullet"):
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 600
+		knockback_x = -facing * 700
 		take_damage(1)
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
+
 
