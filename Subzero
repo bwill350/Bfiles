@@ -702,7 +702,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
 		hurt_cooldown = true
-
+		knockback_x = -facing * -600
 		health -= 1
 		health_changed.emit(health)
 
