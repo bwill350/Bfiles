@@ -317,6 +317,7 @@ func _physics_process(delta):
 		do_action("roundhousekick")
 
 	elif Input.is_action_just_pressed("shoot"):
+		do_action("shoot")
 		var bullet = SONYA_BULLET.instantiate()
 		get_tree().current_scene.add_child(bullet)
 
@@ -436,7 +437,7 @@ func cpu_logic(delta):
 
 # ---------------- SHOOT ----------------
 func shoot_player():
-
+	play_anim("shoot")
 	if health <= 1:
 		return
 
@@ -449,7 +450,7 @@ func shoot_player():
 	is_attacking = true
 	action_locked = true
 
-	play_anim("shoot")
+
 
 	var bullet_scene: PackedScene
 
