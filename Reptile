@@ -326,9 +326,6 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("spear"):
 		start_spear()
 
-	elif Input.is_action_just_pressed("run"):
-		do_action("run")
-
 	else:
 		stop_block()
 
