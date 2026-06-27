@@ -332,9 +332,6 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("block"):
 		start_block()
 
-	elif Input.is_action_just_pressed("run"):
-		do_action("run")
-
 	else:
 		stop_block()
 
@@ -813,6 +810,8 @@ func check_combos():
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
+
+		shoot_player()
 		return
 
 	# ---------------- ICE ----------------
