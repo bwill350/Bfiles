@@ -129,14 +129,19 @@ func _ready():
 	sprite.flip_h = -facing < 0
 
 func run(input_dir: float):
+
 	if input_dir == 0:
 		return
 
-	state = State.RUN
-	velocity.x = input_dir * SPEED * 66  # faster than walk
+	if state == State.DEAD:
+		return
 
-	if not is_attacking:
-		play_anim("walk")
+	state = State.RUN
+
+	velocity.x = input_dir * SPEED * 4
+
+	if not is_attacking and not is_hurting:
+		play_anim("run")
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -285,9 +290,6 @@ func _physics_process(delta):
 		if shoot_cooldown <= 0:
 			shoot_player()
 
-	elif Input.is_action_pressed("run"):
-		do_action("run")
-
 	elif Input.is_action_pressed("block"):
 		start_block()
 
@@ -370,8 +372,8 @@ func cpu_logic(delta):
 
 	if abs(dist) > 220:
 		velocity.x = direction * SPEED * 0.8
-		state = State.WALK
-		play_anim("walk")
+		state = State.RUN
+		play_anim("run")
 	else:
 		velocity.x = direction * SPEED * 0.8
 		state = State.WALK
