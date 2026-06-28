@@ -84,6 +84,7 @@ const SPEAR_SCENE = preload("res://ReptileSpear.tscn")
 const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
+const REPTILE_BULLET = preload("res://Projectiles/ReptileBullet.tscn")
 
 # ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
@@ -110,6 +111,23 @@ const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
+
+func spawn_death_bullet():
+	var bullet = FIRE_BULLET.instantiate()
+	get_tree().current_scene.add_child(bullet)
+
+	bullet.global_position = $Reptileshoot.global_position
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
+
+func spawn_fire_bullet():
+
+	play_anim("shoot")
+
+	var bullet = FIRE_BULLET.instantiate()
+	get_tree().current_scene.add_child(bullet)
+
+	bullet.global_position = $Reptileshoot.global_position
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
 func apply_stun(duration: float):
 	if state == State.DEAD:
@@ -142,6 +160,8 @@ func run(input_dir: float):
 
 # ---------------- READY ----------------
 func _ready():
+	$Sprite.visible = true
+	$Crispy.visible = false
 	facing = 1
 	sprite.flip_h = -facing < 0
 	add_to_group("Fighter")
@@ -635,6 +655,7 @@ func spawn_fx(scene: PackedScene):
 	else:
 		fx.global_position = global_position + Vector2(80 * facing, 0)
 
+
 func check_combos():
 
 	# ---------------- ACID ----------------
@@ -654,6 +675,8 @@ func check_combos():
 
 		spawn_fx(FIRE_DEATH)
 
+		spawn_fire_bullet()
+
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
@@ -665,6 +688,8 @@ func check_combos():
 		combo_used.emit("ice")
 
 		spawn_fx(ICE_DEATH)
+
+		spawn_death_bullet()
 
 		special_bullet = ICE_BULLET
 
@@ -801,11 +826,6 @@ func take_damage(amount: int):
 	if state == State.DEAD:
 		return
 
-	var frame := Engine.get_physics_frames()
-
-	if has_meta("last_damage_frame") and get_meta("last_damage_frame") == frame:
-		return
-
 	if spawn_protection:
 		return
 
@@ -824,9 +844,8 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
-	# ---------------- FINISH HIM ----------------
+# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
-
 		trigger_finish_state()
 		return
 
@@ -853,20 +872,11 @@ func take_damage(amount: int):
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
-# ---------------- NORMAL HURT ----------------
-	is_hurting = true
-	hurt_locked = true
-	action_locked = true
-	state = State.IDLE
-	play_anim("hurt")
 	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
-
-	if state != State.DEAD:
-		play_anim("idle")
 
 func trigger_finish_state():
 
@@ -905,21 +915,6 @@ func trigger_finish_state():
 	is_hurting = false
 	is_blocking = false
 
-
-func recover_from_hurt():
-	if state == State.DEAD:
-		return
-
-	is_hurting = false
-	hurt_locked = false
-	action_locked = false
-	hurt_cooldown = false
-
-	if is_on_floor():
-		play_anim("idle")
-	else:
-		play_anim("jump")
-
 # ---------------- DEATH ----------------
 func die():
 
@@ -939,6 +934,10 @@ func die():
 	action_locked = true
 	hurt_locked = true
 	is_hurting = false
+
+	# 🔥 HARD SWAP SPRITES
+	$Sprite.visible = false          # AnimatedSprite2D OFF
+	$Crispy.visible = true         # static image ON
 
 	# optional delay before menu
 	await get_tree().create_timer(1.5).timeout
@@ -964,7 +963,7 @@ func spawn_attack_bullet(anim_name: String):
 	]:
 		return
 
-	var bullet = KANO_BULLET.instantiate()
+	var bullet = BULLET_SCENE.instantiate()
 	get_tree().current_scene.add_child(bullet)
 
 	bullet.global_position = $AttackMarker.global_position
