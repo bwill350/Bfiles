@@ -179,7 +179,6 @@ func _physics_process(delta):
 	# ---------------- STUN ----------------
 	if stunned:
 		velocity = Vector2.ZERO
-		move_and_slide()
 		return
 
 	# ---------------- DEATH / FINISH ----------------
@@ -191,7 +190,6 @@ func _physics_process(delta):
 		velocity.x = 0
 		if not is_hurting:
 			play_anim("idle")
-		move_and_slide()
 		return
 
 	# ---------------- GRAVITY ----------------
@@ -222,9 +220,6 @@ func _physics_process(delta):
 
 		move_and_slide()
 		return
-
-	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
 
 	if action_locked:
 		return
@@ -318,6 +313,7 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("shoot"):
 		do_action("shoot")
+		check_combos()
 		var bullet = SONYA_BULLET.instantiate()
 		get_tree().current_scene.add_child(bullet)
 
@@ -437,12 +433,13 @@ func cpu_logic(delta):
 
 # ---------------- SHOOT ----------------
 func shoot_player():
-	play_anim("shoot")
+
 	if health <= 1:
 		return
 
 	if is_finish_state:
 		return
+
 	if is_shooting:
 		return
 
@@ -450,49 +447,27 @@ func shoot_player():
 	is_attacking = true
 	action_locked = true
 
+	play_anim("shoot")
 
-
-	var bullet_scene: PackedScene
+	var bullet_scene: PackedScene = SONYA_BULLET
 
 	if special_bullet != null:
 		bullet_scene = special_bullet
 		special_bullet = null
-	else:
-		bullet_scene = SONYA_BULLET
 
 	var bullet = bullet_scene.instantiate()
 	get_tree().current_scene.add_child(bullet)
 
-	bullet.global_position = $SonyaShoot.global_position
+	await get_tree().process_frame
 
-	# ONLY THIS controls direction
+	bullet.global_position = $SonyaShoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
 	await get_tree().create_timer(0.25).timeout
 
 	is_shooting = false
-
-	if is_hurting or state == State.DEAD:
-		return
-
 	is_attacking = false
 	action_locked = false
-
-func spawn_fx(scene: PackedScene):
-
-	var fx = scene.instantiate()
-
-	# Tell the effect who spawned it
-	fx.owner_character = self
-
-	get_tree().current_scene.call_deferred("add_child", fx)
-
-	await get_tree().process_frame
-
-	if target and is_instance_valid(target):
-		fx.global_position = target.global_position + Vector2(60 * facing, 0)
-	else:
-		fx.global_position = global_position + Vector2(80 * facing, 0)
 
 # ---------------- BURST ----------------
 func spawn_burst():
@@ -503,27 +478,6 @@ func spawn_burst():
 
 	burst.global_position = attack_marker.global_position
 
-# ---------------- FORCE FIELD ----------------
-func spawn_force_field():
-
-	if action_locked:
-		return
-
-	action_locked = true
-	is_attacking = true
-
-	play_anim("doublepalmshocker")
-
-	var burst = SONYA_BULLET.instantiate()
-	get_tree().current_scene.add_child(burst)
-
-	# spawn from Raidenshoot marker
-	burst.global_position = $SonyaShoot.global_position
-
-	await sprite.animation_finished
-
-	action_locked = false
-	is_attacking = false
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
 
@@ -756,6 +710,78 @@ func play_anim(anim_name: String):
 
 	current_anim = anim_name
 	sprite.play(anim_name)
+
+
+
+func check_combos():
+
+	# ---------------- FIRE ----------------
+	if combo == FIRE_COMBO:
+
+		combo_used.emit("fire")
+
+		spawn_fx(FIRE_DEATH)
+
+		special_bullet = SONYA_BULLET
+
+		combo.clear()
+
+		shoot_player()   # ✅ USE YOUR REAL SHOOT FUNCTION
+
+		return
+
+	# ---------------- ICE ----------------
+	elif combo == ICE_COMBO:
+
+		combo_used.emit("ice")
+
+		spawn_fx(ICE_DEATH)
+
+		special_bullet = SONYA_BULLET
+
+		combo.clear()
+
+		do_action("shoot")
+		return
+
+
+	# ---------------- ELECTRIC ----------------
+	elif combo == ELECTRIC_COMBO:
+
+		combo_used.emit("electric")
+
+		spawn_fx(ELECTRIC_DEATH)
+
+		special_bullet = SONYA_BULLET
+
+		combo.clear()
+
+		do_action("shoot")
+		return
+
+
+	# ---------------- ACID (OPTIONAL) ----------------
+	elif combo == ACID_COMBO:
+
+		combo_used.emit("acid")
+
+		special_bullet = ACID_BULLET
+
+		combo.clear()
+
+		do_action("shoot")
+		return
+
+func spawn_fx(scene: PackedScene):
+	if scene == null:
+		return
+
+	var fx = scene.instantiate()
+	get_tree().current_scene.add_child(fx)
+
+	await get_tree().process_frame
+
+	fx.global_position = global_position + Vector2(80 * facing, 0)
 
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
