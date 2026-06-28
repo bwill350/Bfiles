@@ -4,39 +4,30 @@ extends Area2D
 
 @export var active_time := 0.2
 @export var lifetime := 0.6
+@export var damage := 1
 
 var active := false
 var has_hit := false
-var damage := 1
+var attack_owner: Node = null
+
 
 func _ready():
-
 	add_to_group("KanoAttack")
 
-	await get_tree().process_frame
-
-	enable_hitbox()
-
-	await get_tree().create_timer(active_time).timeout
-
-	disable_hitbox()
-
-	await get_tree().create_timer(lifetime).timeout
-
-	queue_free()
 
 func enable_hitbox():
 	active = true
 	monitoring = true
 	collision.disabled = false
 
+
 func disable_hitbox():
 	active = false
 	monitoring = false
 	collision.disabled = true
 
-func _on_area_entered(area: Area2D) -> void:
 
+func _on_area_entered(area: Area2D) -> void:
 	if not active:
 		return
 
@@ -46,9 +37,19 @@ func _on_area_entered(area: Area2D) -> void:
 	if area == null:
 		return
 
-	var target = area.get_parent()
+	var fighter := area.get_parent()
 
-	if target and target.has_method("take_damage"):
-		has_hit = true
-		target.take_damage(damage)
+	if fighter == null:
 		return
+
+	if not fighter.is_in_group("Fighter"):
+		return
+
+	if fighter == owner:
+		return
+
+	if not fighter.has_method("take_damage"):
+		return
+
+	has_hit = true
+	fighter.take_damage(damage)
