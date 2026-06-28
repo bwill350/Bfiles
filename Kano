@@ -874,21 +874,19 @@ func check_combos():
 		var fx = FIRE_DEATH.instantiate()
 		get_tree().current_scene.add_child(fx)
 
-		# ---------------- CPU / TARGET POSITION ----------------
+		# FX happens on CPU
 		if target and is_instance_valid(target):
 			fx.global_position = target.global_position
 		else:
 			fx.global_position = global_position
 
-		# ---------------- GIVE FIRE CONTROL ----------------
+		# GIVE FIREDEATH CONTROL
 		fx.owner_character = self
 
-		# spawn bullet from CPU position (or target position fallback)
-		if target and is_instance_valid(target):
-			fx.fire_spawn_position = target.global_position
-		else:
-			fx.fire_spawn_position = global_position
+		# 🔥 Spawn position from P1
+		fx.fire_spawn_position = $KanoShoot.global_position
 
+		# 🔥 Direction from P1
 		fx.fire_direction = facing
 
 		combo.clear()
