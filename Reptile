@@ -16,7 +16,6 @@ Reptile (CharacterBody2D)
 ├── Agent (NavigationAgent2D)
 ├── Camera2D (optional)
 
-
 signal health_changed(health)
 signal combo_used(combo_name: String)
 @onready var character = get_parent()
@@ -978,53 +977,27 @@ func spawn_attack_bullet(anim_name: String):
 	bullet.owner = self
 
 func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
-	if area.is_in_group("HitBox"):
-		$Hurt.play()
-
-	# ---------------- BASIC BLOCKS ----------------
-	if hurt_cooldown:
-		return
-
-	# Allow fatal blow during Finish Him state
-	if is_finish_state and health > 1:
-		return
-
 	if area == null or !is_instance_valid(area):
 		return
 
-	if not can_take_damage:
+	if not can_take_damage or hurt_cooldown:
 		return
 
-	# ---------------- SUBZERO BULLET ----------------
-	if area.is_in_group("SubzeroBullet"):
-		hurt_cooldown = true
-
-		apply_stun(3.0)
-
-		knockback_x = 0
-		take_damage(1)
-
-		is_hurting = true
-		action_locked = true
-		is_attacking = false
-
-		await get_tree().create_timer(0.15).timeout
-		hurt_cooldown = false
-		return
-
-	# ---------------- NORMAL DAMAGE SOURCES ----------------
-	if area.is_in_group("RaidenElectricBullet") \
-	or area.is_in_group("FireBullet") \
-	or area.is_in_group("Fireball") \
-	or area.is_in_group("JohnnyCageBullet") \
-	or area.is_in_group("KanoBullet") \
+	if area.is_in_group("HitBox") \
+		or area.is_in_group("ReptileAcid") \
+		or area.is_in_group("ReptileBullet") \
+		or area.is_in_group("KanoBullet") \
+		or area.is_in_group("FireBullet") \
+		or area.is_in_group("Fireball") \
+		or area.is_in_group("JohnnyCageBullet") \
 		or area.is_in_group("SonyaBullet") \
-	or area.is_in_group("IceBullet"):
+		or area.is_in_group("FireDeath"):
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 600
-		take_damage(1)
+	$Hurt.play()
+	knockback_x = -facing * 600
+	take_damage(1)
 
-		await get_tree().create_timer(0.15).timeout
-		hurt_cooldown = false
+	await get_tree().create_timer(0.15).timeout
+	hurt_cooldown = false
