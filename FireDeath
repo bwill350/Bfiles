@@ -1,4 +1,5 @@
 extends Area2D
+class_name FireDeath
 
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var sound: AudioStreamPlayer2D = $FireSound
@@ -7,151 +8,91 @@ extends Area2D
 @onready var p1: CPUParticles2D = $CPUParticles2D
 @onready var p2: CPUParticles2D = $CPUParticles2D2
 @onready var p3: CPUParticles2D = $CPUParticles2D3
+var owner_character = null
 
-const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
-
+# 🔥 FIRE CONTROL (from Kano combo)
+var fire_bullet_scene: PackedScene = null
+var fire_spawn_position: Vector2 = Vector2.ZERO
+var fire_direction: float = 1
+var fire_triggered := false
 var flicker_on := true
 var finished := false
-var owner_character = null
 var damage_done := false
 
 # ---------------- READY ----------------
 func _ready():
 	$CleanupTimer.start()
-	$Sprite.play("fade")
+
 	add_to_group("FireDeath")
 	add_to_group("HurtBox")
-	$".".add_to_group("HurtBox")
+
 	self.scale = Vector2.ZERO
-	area_entered.connect(_on_area_entered)
-	if not is_inside_tree():
-		return
-	if sprite:
-		sprite.play("charge")
 
 	if sound:
 		sound.play()
 
+	# 🔥 EVERYTHING STARTS HERE
 	start_flicker()
 	start_main_animation()
 	start_shockwave()
 	start_particle_burst()
 
-	# SINGLE LIFETIME
 	await get_tree().create_timer(2.5).timeout
-
-	await $Sprite.animation_finished
+	await sprite.animation_finished
 
 	stop_fatality()
 
-	await get_tree().process_frame
-
-
 # ---------------- STOP EVERYTHING ----------------
 func stop_fatality():
-
 	if finished:
 		return
 
 	finished = true
 
-	# stop animation
-	if sprite:
-		sprite.stop()
-		sprite.modulate = Color.WHITE
+	sprite.stop()
+	sprite.modulate = Color.WHITE
 
-	# stop sound
 	if sound:
 		sound.stop()
 
-	# fade ring instantly
 	if ring:
 		ring.modulate.a = 0.0
 
-	# stop particles
 	for p in [p1, p2, p3]:
-
 		if p:
 			p.emitting = false
 
-	# shrink out
 	var t = create_tween()
-
-	t.tween_property(
-		self,
-		"scale",
-		Vector2.ZERO,
-		5.35
-	).set_trans(Tween.TRANS_QUAD)\
-	 .set_ease(Tween.EASE_IN)
+	t.tween_property(self, "scale", Vector2.ZERO, 0.5)
 
 	await t.finished
-
-	$CleanupTimer.start()
 
 	queue_free()
 
 # ---------------- FLICKER ----------------
 func start_flicker():
-
 	var flicker = create_tween()
-
 	flicker.set_loops(8)
 
 	flicker.tween_callback(func():
-
 		if finished:
 			return
 
 		flicker_on = !flicker_on
-
-		if flicker_on:
-			sprite.modulate = Color(1, 1, 1)
-		else:
-			sprite.modulate = Color(0.4, 0.8, 1.5)
-
+		sprite.modulate = Color(1,1,1) if flicker_on else Color(0.4,0.8,1.5)
 	).set_delay(0.05)
 
 # ---------------- MAIN ANIMATION ----------------
 func start_main_animation():
-
 	var t = create_tween()
 
-	t.tween_property(
-		self,
-		"scale",
-		Vector2.ONE,
-		0.15
-	).set_trans(Tween.TRANS_BACK)\
-	 .set_ease(Tween.EASE_OUT)
-
-	t.tween_property(
-		self,
-		"scale",
-		Vector2(6, 6),
-		0.12
-	).set_trans(Tween.TRANS_EXPO)\
-	 .set_ease(Tween.EASE_OUT)
-
-	t.tween_property(
-		self,
-		"scale",
-		Vector2.ONE,
-		0.18
-	).set_trans(Tween.TRANS_SINE)\
-	 .set_ease(Tween.EASE_IN_OUT)
-
-	t.tween_property(
-		self,
-		"scale",
-		Vector2.ZERO,
-		0.2
-	).set_trans(Tween.TRANS_QUAD)\
-	 .set_ease(Tween.EASE_IN)
+	t.tween_property(self, "scale", Vector2.ONE, 0.15)
+	t.tween_property(self, "scale", Vector2(6, 6), 0.12)
+	t.tween_property(self, "scale", Vector2.ONE, 0.18)
+	t.tween_property(self, "scale", Vector2.ZERO, 0.2)
 
 # ---------------- SHOCKWAVE ----------------
 func start_shockwave():
-
 	if ring == null:
 		return
 
@@ -160,30 +101,15 @@ func start_shockwave():
 
 	var t = create_tween()
 
-	t.tween_property(
-		ring,
-		"scale",
-		Vector2(10, 10),
-		0.35
-	).set_trans(Tween.TRANS_EXPO)\
-	 .set_ease(Tween.EASE_OUT)
-
-	t.parallel().tween_property(
-		ring,
-		"modulate:a",
-		0.0,
-		0.35
-	)
+	t.tween_property(ring, "scale", Vector2(10, 10), 0.35)
+	t.parallel().tween_property(ring, "modulate:a", 0.0, 0.35)
 
 # ---------------- PARTICLES ----------------
 func start_particle_burst():
-
 	var parts = [p1, p2, p3]
 
 	for i in range(parts.size()):
-
 		var p = parts[i]
-
 		if p == null:
 			continue
 
@@ -194,70 +120,22 @@ func start_particle_burst():
 		var delay = i * 0.06
 
 		var t_in = create_tween()
-
 		t_in.tween_interval(delay)
 
 		t_in.tween_callback(func():
-
 			if finished:
 				return
-
 			p.emitting = true
 		)
 
-		t_in.tween_property(
-			p,
-			"scale",
-			Vector2.ONE,
-			0.15
-		)
+		t_in.tween_property(p, "scale", Vector2.ONE, 0.15)
+		t_in.tween_property(p, "modulate:a", 1.0, 0.1)
 
-		t_in.tween_property(
-			p,
-			"modulate:a",
-			1.0,
-			0.1
-		)
+# ---------------- OPTIONAL: FIRE BULLET FROM DEATH ----------------
+func spawn_fire_bullet():
+	var bullet = preload("res://Projectiles/FireBullet.tscn").instantiate()
 
-		var t_out = create_tween()
+	get_tree().current_scene.add_child(bullet)
 
-		t_out.tween_interval(0.25 + delay)
-
-		t_out.tween_property(
-			p,
-			"scale",
-			Vector2.ZERO,
-			0.2
-		)
-
-		t_out.tween_property(
-			p,
-			"modulate:a",
-			0.0,
-			0.2
-		)
-
-		t_out.tween_callback(func():
-			p.emitting = false
-		)
-
-func _on_cleanup_timer_timeout():
-	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
-
-
-func _on_area_entered(area: Area2D):
-	if damage_done or area == null:
-		return
-
-	var enemy = area.get_parent()
-
-	# Ignore the fighter that created this effect
-	if owner_character and enemy == owner_character:
-		return
-
-	if not area.is_in_group("HurtBox"):
-		return
-
-	if enemy and enemy.has_method("take_damage"):
-		enemy.take_damage(1)
-		damage_done = true
+	bullet.global_position = global_position
+	bullet.velocity = Vector2(1, 0) * bullet.speed
