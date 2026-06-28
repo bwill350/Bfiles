@@ -15,7 +15,7 @@ Reptile (CharacterBody2D)
 ├── HitFlashTimer (Timer)
 ├── Agent (NavigationAgent2D)
 ├── Camera2D (optional)
-└── AnimationPlayer (optional)
+
 
 signal health_changed(health)
 signal combo_used(combo_name: String)
