@@ -648,6 +648,12 @@ func air_launch(x_speed: float, y_speed: float):
 # ---------------- FIREBALL ----------------
 func shoot_fireball():
 
+	if health <= 1:
+		return
+
+	if is_finish_state:
+		return
+
 	if is_shooting:
 		return
 
@@ -657,16 +663,26 @@ func shoot_fireball():
 
 	play_anim("shoot")
 
-	var fireball = FIREBALL.instantiate()
-	get_tree().current_scene.add_child(fireball)
+	var bullet_scene: PackedScene
 
-	fireball.global_position = $LiuKangshoot.global_position
+	# 🔥 Combo override bullet
+	if special_bullet != null:
+		bullet_scene = special_bullet
+		special_bullet = null
+	else:
+		bullet_scene = FIREBALL
 
-	# Always use facing direction
-	fireball.direction = facing
+	var bullet = bullet_scene.instantiate()
+	get_tree().current_scene.add_child(bullet)
 
-	# Fallback for older fireball scripts
-	fireball.velocity = Vector2(fireball.direction, 0) * fireball.speed
+	await get_tree().process_frame
+
+	bullet.global_position = $LiuKangshoot.global_position
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
+
+	# Flip sprite if needed
+	if bullet.has_node("Sprite2D"):
+		bullet.get_node("Sprite2D").flip_h = facing > 0
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -677,8 +693,6 @@ func shoot_fireball():
 
 	is_attacking = false
 	action_locked = false
-
-	play_anim("idle")
 
 func take_damage(amount: int):
 
@@ -899,6 +913,8 @@ func check_combos():
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
+
+		shoot_fireball()
 		return
 
 	# ---------------- ICE ----------------
