@@ -1,0 +1,142 @@
+extends Area2D
+class_name PinkDeath
+
+@onready var sprite: AnimatedSprite2D = $Sprite
+@onready var sound: AudioStreamPlayer2D = $FireSound
+@onready var ring: Sprite2D = $ShockwaveRing
+
+@onready var p1: CPUParticles2D = $CPUParticles2D
+@onready var p2: CPUParticles2D = $CPUParticles2D2
+@onready var p3: CPUParticles2D = $CPUParticles2D3
+
+var owner_character = null
+
+var flicker_on := true
+var finished := false
+var flicker_tween: Tween
+
+
+# ---------------- READY ----------------
+func _ready():
+	add_to_group("HitBox")
+	add_to_group("PinkDeath")
+
+	if sprite == null:
+		return
+
+	sprite.play("pink")
+	scale = Vector2.ZERO
+
+	if sound:
+		sound.play()
+
+	await get_tree().process_frame
+
+	if sprite.sprite_frames and sprite.sprite_frames.has_animation("pink"):
+		sprite.play("pink")
+	else:
+		push_error("PinkDeath: missing animation 'pink'")
+
+	if is_instance_valid($CleanupTimer):
+		$CleanupTimer.start()
+
+	start_flicker()
+	start_main_animation()
+	start_shockwave()
+	start_particle_burst()
+
+	await sprite.animation_finished
+
+	stop_fatality()
+	start_scene_timer()
+
+
+# ---------------- STOP EVERYTHING ----------------
+func stop_fatality():
+	if finished:
+		return
+
+	finished = true
+
+	if flicker_tween:
+		flicker_tween.kill()
+
+	if is_instance_valid(sprite):
+		sprite.stop()
+		sprite.modulate = Color.WHITE
+
+	if sound:
+		sound.stop()
+
+	if is_instance_valid(ring):
+		ring.modulate.a = 0.0
+
+	for p in [p1, p2, p3]:
+		if is_instance_valid(p):
+			p.emitting = false
+
+	var t = create_tween()
+	t.tween_property(self, "scale", Vector2.ZERO, 0.4)
+
+	await t.finished
+	queue_free()
+
+
+# ---------------- SCENE TIMER ----------------
+func start_scene_timer():
+	await get_tree().create_timer(1.2).timeout
+	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
+
+
+# ---------------- FLICKER ----------------
+func start_flicker():
+	pass
+
+func _flicker_tick():
+	pass
+
+
+# ---------------- MAIN ANIMATION ----------------
+func start_main_animation():
+		create_tween()\
+		.tween_property(self, "scale", Vector2(6, 6), 0.25)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+
+
+# ---------------- SHOCKWAVE ----------------
+func start_shockwave():
+	if not is_instance_valid(ring):
+		return
+
+	ring.scale = Vector2.ZERO
+	ring.modulate.a = 1.0
+
+	var t = create_tween()
+	t.tween_property(ring, "scale", Vector2(10, 10), 0.35)
+	t.parallel().tween_property(ring, "modulate:a", 0.0, 0.35)
+
+
+# ---------------- PARTICLES ----------------
+func start_particle_burst():
+	var parts = [p1, p2, p3]
+
+	for i in range(parts.size()):
+		var p = parts[i]
+		if not is_instance_valid(p):
+			continue
+
+		p.emitting = false
+		p.scale = Vector2.ZERO
+		p.modulate.a = 0.0
+
+		var t = create_tween()
+		t.tween_interval(i * 0.06)
+
+		t.tween_callback(func():
+			if not finished and is_instance_valid(p):
+				p.emitting = true
+		)
+
+		t.tween_property(p, "scale", Vector2.ONE, 0.15)
+		t.tween_property(p, "modulate:a", 1.0, 0.1)
