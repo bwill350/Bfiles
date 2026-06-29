@@ -23,6 +23,9 @@ Sonya (CharacterBody2D)
 │       └── Sprite2D
 └── SonyaAttack.tscn
 
+extends CharacterBody2D
+class_name Sonya
+
 signal health_changed(health)
 signal combo_used(combo_name: String)
 @onready var character = get_parent()
@@ -37,6 +40,10 @@ var special_move_invincible := false
 var tap_time := 0.25
 var last_tap_time := 0.0
 var last_tap_dir := 0
+var input_buffer: Array[String] = []
+const COMBO_TIME := 0.6
+var combo_timer := 0.0
+
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -83,6 +90,7 @@ var shoot_cooldown := 0.0
 @export var combo_reset_time := 0.6
 
 # ---------------- PRELOADS ----------------
+const PINK_DEATH_SCENE = preload("res://PinkDeath.tscn")
 const BULLET_SCENE = preload("res://Projectiles/SonyaBullet.tscn")
 const SONYA_BULLET = preload("res://Projectiles/SonyaBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
@@ -110,12 +118,51 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 @onready var blood_marker: Marker2D = $BloodMarker
 # ---------------- COMBOS ----------------
 var combo := []
-var combo_timer := 0.0
 
 const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
+
+func trigger_fire_death():
+	var fire = preload("res://Deaths/FireDeath.tscn").instantiate()
+	get_tree().current_scene.add_child(fire)
+
+	fire.global_position = global_position
+	fire.owner_character = self
+
+func _process(delta):
+	combo_timer -= delta
+
+	if combo_timer <= 0:
+		input_buffer.clear()
+
+	if Input.is_action_just_pressed("left"):
+		_register_input("L")
+
+	if Input.is_action_just_pressed("down"):
+		_register_input("D")
+
+	if Input.is_action_just_pressed("right"):
+		_register_input("R")
+
+	_check_fire_death_combo()
+	_check_pink_combo()
+
+func _register_input(i: String):
+	if combo_timer <= 0:
+		input_buffer.clear()
+
+	input_buffer.append(i)
+	combo_timer = COMBO_TIME
+
+
+func _check_fire_death_combo():
+	if input_buffer.size() >= 3:
+		var last3 = input_buffer.slice(input_buffer.size() - 3, input_buffer.size())
+
+		if last3 == ["L", "D", "R"]:
+			trigger_fire_death()
 
 func apply_stun(duration: float):
 	if state == State.DEAD:
@@ -782,6 +829,26 @@ func spawn_fx(scene: PackedScene):
 	await get_tree().process_frame
 
 	fx.global_position = global_position + Vector2(80 * facing, 0)
+
+func trigger_pink_death():
+	if target == null or !is_instance_valid(target):
+		return
+
+	var pink = preload("res://PinkDeath.tscn").instantiate()
+	get_tree().current_scene.add_child(pink)
+
+	pink.global_position = target.global_position
+	pink.owner_character = self
+
+func _check_pink_combo():
+	if input_buffer.size() < 3:
+		return
+
+	var last3 = input_buffer.slice(input_buffer.size() - 3, input_buffer.size())
+
+	if last3 == ["L", "D", "R"]:
+		input_buffer.clear() # IMPORTANT anti-spam fix
+		trigger_pink_death()
 
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
