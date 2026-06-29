@@ -23,9 +23,6 @@ Sonya (CharacterBody2D)
 │       └── Sprite2D
 └── SonyaAttack.tscn
 
-extends CharacterBody2D
-class_name Sonya
-
 signal health_changed(health)
 signal combo_used(combo_name: String)
 @onready var character = get_parent()
@@ -93,18 +90,13 @@ var shoot_cooldown := 0.0
 const PINK_DEATH_SCENE = preload("res://PinkDeath.tscn")
 const BULLET_SCENE = preload("res://Projectiles/SonyaBullet.tscn")
 const SONYA_BULLET = preload("res://Projectiles/SonyaBullet.tscn")
-const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
-const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
-const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
 
-const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
 const SONYA_ATTACK = preload("res://Projectiles/SonyaAttack.tscn")
 
 const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
 
 # ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
-const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 
@@ -118,18 +110,6 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 @onready var blood_marker: Marker2D = $BloodMarker
 # ---------------- COMBOS ----------------
 var combo := []
-
-const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
-const FIRE_COMBO = ["down", "right", "shoot"]
-const ICE_COMBO = ["left", "left", "shoot"]
-const ELECTRIC_COMBO = ["up", "down", "shoot"]
-
-func trigger_fire_death():
-	var fire = preload("res://Deaths/FireDeath.tscn").instantiate()
-	get_tree().current_scene.add_child(fire)
-
-	fire.global_position = global_position
-	fire.owner_character = self
 
 func _process(delta):
 	combo_timer -= delta
@@ -146,7 +126,6 @@ func _process(delta):
 	if Input.is_action_just_pressed("right"):
 		_register_input("R")
 
-	_check_fire_death_combo()
 	_check_pink_combo()
 
 func _register_input(i: String):
@@ -155,14 +134,6 @@ func _register_input(i: String):
 
 	input_buffer.append(i)
 	combo_timer = COMBO_TIME
-
-
-func _check_fire_death_combo():
-	if input_buffer.size() >= 3:
-		var last3 = input_buffer.slice(input_buffer.size() - 3, input_buffer.size())
-
-		if last3 == ["L", "D", "R"]:
-			trigger_fire_death()
 
 func apply_stun(duration: float):
 	if state == State.DEAD:
@@ -360,7 +331,6 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("shoot"):
 		do_action("shoot")
-		check_combos()
 		var bullet = SONYA_BULLET.instantiate()
 		get_tree().current_scene.add_child(bullet)
 
@@ -757,67 +727,6 @@ func play_anim(anim_name: String):
 
 	current_anim = anim_name
 	sprite.play(anim_name)
-
-
-
-func check_combos():
-
-	# ---------------- FIRE ----------------
-	if combo == FIRE_COMBO:
-
-		combo_used.emit("fire")
-
-		spawn_fx(FIRE_DEATH)
-
-		special_bullet = SONYA_BULLET
-
-		combo.clear()
-
-		shoot_player()   # ✅ USE YOUR REAL SHOOT FUNCTION
-
-		return
-
-	# ---------------- ICE ----------------
-	elif combo == ICE_COMBO:
-
-		combo_used.emit("ice")
-
-		spawn_fx(ICE_DEATH)
-
-		special_bullet = SONYA_BULLET
-
-		combo.clear()
-
-		do_action("shoot")
-		return
-
-
-	# ---------------- ELECTRIC ----------------
-	elif combo == ELECTRIC_COMBO:
-
-		combo_used.emit("electric")
-
-		spawn_fx(ELECTRIC_DEATH)
-
-		special_bullet = SONYA_BULLET
-
-		combo.clear()
-
-		do_action("shoot")
-		return
-
-
-	# ---------------- ACID (OPTIONAL) ----------------
-	elif combo == ACID_COMBO:
-
-		combo_used.emit("acid")
-
-		special_bullet = ACID_BULLET
-
-		combo.clear()
-
-		do_action("shoot")
-		return
 
 func spawn_fx(scene: PackedScene):
 	if scene == null:
