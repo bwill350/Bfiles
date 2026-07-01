@@ -12,6 +12,7 @@ var has_hit := false
 @onready var sprite: Sprite2D = $Sprite2D
 
 func _ready():
+	add_to_group("HitBox")
 	add_to_group("JohnnyCageBullet")
 
 	# Flip sprite based on direction
