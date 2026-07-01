@@ -1,7 +1,7 @@
 extends Area2D
 class_name FireBullet
 
-@export var speed: float = 600.0
+@export var speed: float = 1600.0
 @export var turn_speed: float = 6.0
 @export var lifetime: float = 3.0
 @export var damage: int = 1
@@ -15,30 +15,25 @@ func _ready():
 
 	area_entered.connect(_on_area_entered)
 
-	# 🔥 Ensure bullet ALWAYS moves even if spawn code forgets velocity
-	if velocity == Vector2.ZERO:
-		velocity = Vector2.RIGHT * speed
-
-	# auto cleanup
-	await get_tree().create_timer(lifetime).timeout
-	queue_free()
-
-	# find target (first Subzero in scene)
+	# find target (optional homing)
 	var players = get_tree().get_nodes_in_group("Subzero")
 	if players.size() > 0:
 		target = players[0]
 
+	# auto delete after time
+	await get_tree().create_timer(lifetime).timeout
+	queue_free()
 
 func _physics_process(delta):
 
-	# straight movement if no target
-	if target == null or not is_instance_valid(target):
+	# ---------------- STRAIGHT MOVEMENT ----------------
+	if target == null or !is_instance_valid(target):
 		global_position += velocity * delta
 		return
 
+	# ---------------- HOMING MOVEMENT ----------------
 	var dir = (target.global_position - global_position).normalized()
 
-	# smooth homing
 	velocity = velocity.lerp(dir * speed, turn_speed * delta)
 
 	global_position += velocity * delta
@@ -58,9 +53,6 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 
 	if not fighter.is_in_group("Fighter"):
-		return
-
-	if fighter.is_in_group("LiuKang"):
 		return
 
 	has_hit = true
