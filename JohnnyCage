@@ -117,25 +117,32 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
-func apply_stun(duration: float):
+func apply_stun(_duration := 4.0):
+
 	if state == State.DEAD:
 		return
 
-	# already stunned
-	if stunned:
-		return
-
 	stunned = true
+
+	is_hurting = true
+	hurt_locked = true
 	action_locked = true
+
 	is_attacking = false
 	is_shooting = false
+	is_blocking = false
+
 	velocity = Vector2.ZERO
+	knockback_x = 0
 
-	play_anim("freeze")
+	play_anim("idle")
 
-	await get_tree().create_timer(duration).timeout
+	await get_tree().create_timer(4.0).timeout
 
 	stunned = false
+
+	is_hurting = false
+	hurt_locked = false
 	action_locked = false
 
 func run(input_dir: float):
@@ -771,22 +778,34 @@ func register_input(input: String):
 
 	check_combos()
 
-func spawn_fx(scene: PackedScene):
+func spawn_fx(scene: PackedScene) -> void:
+
+	if scene == null:
+		return
 
 	var fx = scene.instantiate()
+	get_tree().current_scene.add_child(fx)
 
-	# IMPORTANT: set owner BEFORE it can collide
-	fx.owner_character = self
-	fx.damage_done = false
+	# safe setup for FX scripts that support it
+	if "owner_character" in fx:
+		fx.owner_character = self
 
-	get_tree().current_scene.call_deferred("add_child", fx)
+	if "damage_done" in fx:
+		fx.damage_done = false
 
 	await get_tree().process_frame
 
+	var spawn_pos: Vector2
+
 	if target and is_instance_valid(target):
-		fx.global_position = target.global_position + Vector2(80 * facing, 0)
+		spawn_pos = target.global_position
 	else:
-		fx.global_position = global_position + Vector2(80 * facing, 0)
+		spawn_pos = global_position
+
+	# forward offset based on facing
+	spawn_pos += Vector2(80 * facing, -10)
+
+	fx.global_position = spawn_pos
 
 func check_combos():
 
@@ -880,8 +899,7 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
-	if area.is_in_group("HitBox"):
-		$Hurt.play()
+
 	if hurt_cooldown:
 		return
 
@@ -890,6 +908,8 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 
 	if not can_take_damage:
 		return
+
+		$Hurt.play()
 
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
