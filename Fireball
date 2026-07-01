@@ -1,39 +1,30 @@
 extends Area2D
 class_name Fireball
 
-@export var speed: float = 900.0
+@export var speed: float = 1600.0
 @export var lifetime: float = 3.0
 @export var damage: int = 1
 
-@onready var sprite: Sprite2D = $Sprite2D
-
 var velocity: Vector2 = Vector2.ZERO
-var direction := 1
 var has_hit := false
 
+@onready var sprite: Sprite2D = $Sprite
+
 func _ready():
+	add_to_group("HitBox")
 	add_to_group("Fireball")
+
+	# Flip based on direction
+	sprite.flip_h = velocity.x < 0
 
 	area_entered.connect(_on_area_entered)
 
 	await get_tree().create_timer(lifetime).timeout
-
 	if is_instance_valid(self):
 		queue_free()
 
 func _physics_process(delta):
-	position.x += direction * speed * delta
-
-	if velocity != Vector2.ZERO:
-		rotation = velocity.angle()
-
-func set_direction(dir: Vector2):
-	velocity = dir.normalized() * speed
-
-	if dir.x < 0:
-		direction = -1
-	else:
-		direction = 1
+	global_position += velocity * delta
 
 func _on_area_entered(area: Area2D) -> void:
 	if has_hit:
@@ -44,15 +35,13 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 
 	var fighter = area.get_parent()
-
 	if fighter == null:
 		return
 
-	# Only hit fighters
 	if not fighter.is_in_group("Fighter"):
 		return
 
-	# Don't hit Liu Kang's own hitbox
+	# don't hit LiuKang himself
 	if fighter.is_in_group("LiuKang"):
 		return
 
