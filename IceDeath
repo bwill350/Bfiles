@@ -170,4 +170,4 @@ func start_particle_burst():
 		)
 
 func _on_cleanup_timer_timeout():
-	get_tree().change_scene_to_file("res://CharacterSelect.tscn")
+	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
