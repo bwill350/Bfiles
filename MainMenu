@@ -1,107 +1,53 @@
 extends Control
 
-@onready var reptile_btn = $ReptileButton
-@onready var subzero_btn = $SubzeroButton
-@onready var raiden_btn = $RaidenButton
-@onready var liu_kang_btn = $LiuKangButton
-@onready var sonya_btn = $SonyaButton
-@onready var kano_btn = $KanoButton
-@onready var johnny_cage_btn = $JohnnyCageButton
+@onready var difficulty_btn = $DifficultyButton
+@onready var difficulty_label = $DifficultyLabel
 
-@onready var mode_button = $ModeButton
-@onready var start_button = $StartButton
+@onready var coolstuff_btn = $CoolStuffButton
+@onready var coolstuff_label = $CoolStuffLabel
 
-@onready var p1_label = $P1Label
-@onready var p2_label = $P2Label
-@onready var cpu_label = $CPULabel
+var difficulty_clicks := 0
 
-# ---------------- CHARACTER DATA ----------------
-const REPTILE_DATA = preload("res://Data/Reptile.tres")
-const SUBZERO_DATA = preload("res://Data/Subzero.tres")
-const RAIDEN_DATA = preload("res://Data/Raiden.tres")
-const LIU_KANG_DATA = preload("res://Data/LiuKang.tres")
-const SONYA_DATA = preload("res://Data/Sonya.tres")
-const KANO_DATA = preload("res://Data/Kano.tres")
-const JOHNNY_CAGE_DATA = preload("res://Data/JohnnyCage.tres")
 
 func _ready():
-	reptile_btn.pressed.connect(func(): _select_character("Reptile"))
-	subzero_btn.pressed.connect(func(): _select_character("Subzero"))
-	raiden_btn.pressed.connect(func(): _select_character("Raiden"))
-	liu_kang_btn.pressed.connect(func(): _select_character("LiuKang"))
-	sonya_btn.pressed.connect(func(): _select_character("Sonya"))
-	kano_btn.pressed.connect(func(): _select_character("Kano"))
-	johnny_cage_btn.pressed.connect(func(): _select_character("JohnnyCage"))
 
-	mode_button.pressed.connect(_toggle_mode)
-	start_button.pressed.connect(_start_game)
+	difficulty_btn.pressed.connect(_on_difficulty_pressed)
+	coolstuff_btn.pressed.connect(_on_cool_pressed)
 
-func _select_character(char_name: String):
+	_update_difficulty()
+	_update_coolstuff()
 
-	# ---------------- P1 ----------------
-	if Game.p1_character == "":
-		Game.p1_character = char_name
 
-		match char_name:
-			"Reptile":
-				Game.p1_data = REPTILE_DATA
-			"Subzero":
-				Game.p1_data = SUBZERO_DATA
-			"Raiden":
-				Game.p1_data = RAIDEN_DATA
-			"LiuKang":
-				Game.p1_data = LIU_KANG_DATA
-			"Sonya":
-				Game.p1_data = SONYA_DATA
-			"Kano":
-				Game.p1_data = KANO_DATA
-			"JohnnyCage":
-				Game.p1_data = JOHNNY_CAGE_DATA
+# ---------------- DIFFICULTY (1 click = Easy, 2 clicks = Hard) ----------------
+func _on_difficulty_pressed():
 
-		p1_label.text = "P1: " + char_name
-		return
+	difficulty_clicks += 1
 
-	# ---------------- P2 (PvP ONLY) ----------------
-	if not Game.vs_cpu:
-		if Game.p2_character == "":
-			Game.p2_character = char_name
-
-			match char_name:
-				"Reptile":
-					Game.p2_data = REPTILE_DATA
-				"Subzero":
-					Game.p2_data = SUBZERO_DATA
-				"Raiden":
-					Game.p2_data = RAIDEN_DATA
-				"LiuKang":
-					Game.p2_data = LIU_KANG_DATA
-				"Sonya":
-					Game.p2_data = SONYA_DATA
-				"Kano":
-					Game.p2_data = KANO_DATA
-				"JohnnyCage":
-					Game.p2_data = JOHNNY_CAGE_DATA
-
-			p2_label.text = "P2: " + char_name
-			return
-
-func _toggle_mode():
-	Game.vs_cpu = !Game.vs_cpu
-
-	Game.p1_character = ""
-	Game.p2_character = ""
-
-	Game.p1_data = null
-	Game.p2_data = null
-
-	p1_label.text = "P1: Not Selected"
-	p2_label.text = "P2: Not Selected"
-	cpu_label.text = "CPU: Not Selected"
-
-	if Game.vs_cpu:
-		mode_button.text = "Mode: VS CPU"
+	if difficulty_clicks == 1:
+		Game.difficulty = "Easy"
+	elif difficulty_clicks == 2:
+		Game.difficulty = "Hard"
 	else:
-		mode_button.text = "Mode: PVP"
+		difficulty_clicks = 0
+		Game.difficulty = "Easy"
 
-func _start_game():
-	get_tree().change_scene_to_file("res://Scenes/Levels/Level1.tscn")
+	_update_difficulty()
+
+
+func _update_difficulty():
+
+	difficulty_label.text = "Difficulty: " + Game.difficulty
+	difficulty_btn.text = "Click 2x for Hard" if Game.difficulty == "Easy" else "Click 1x for Easy"
+
+
+# ---------------- COOL STUFF ----------------
+func _on_cool_pressed():
+
+	Game.cool_stuff = !Game.cool_stuff
+	_update_coolstuff()
+
+
+func _update_coolstuff():
+
+	coolstuff_label.text = "Cool Stuff: " + ("ON" if Game.cool_stuff else "OFF")
+	coolstuff_btn.text = "Disable" if Game.cool_stuff else "Enable"
