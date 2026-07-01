@@ -8,12 +8,10 @@ class_name SubzeroBullet
 
 var velocity: Vector2 = Vector2.ZERO
 
-@onready var sprite: Sprite2D = $Sprite2D
+@onready var sprite: AnimatedSprite2D = $Sprite2D
 
 func _ready():
 	add_to_group("SubzeroBullet")
-
-	area_entered.connect(_on_area_entered)
 
 	# default direction safety
 	if velocity == Vector2.ZERO:
