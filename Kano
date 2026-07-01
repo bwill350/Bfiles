@@ -118,19 +118,33 @@ const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
 
+func apply_stun(_duration := 4.0):
 
-
-func apply_stun(duration: float):
-	if stunned:
-		play_anim("freeze")
+	if state == State.DEAD:
 		return
 
 	stunned = true
-	velocity = Vector2.ZERO
 
-	await get_tree().create_timer(duration).timeout
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
+	velocity = Vector2.ZERO
+	knockback_x = 0
+
+	play_anim("idle")
+
+	await get_tree().create_timer(4.0).timeout
 
 	stunned = false
+
+	is_hurting = false
+	hurt_locked = false
+	action_locked = false
 
 func run(input_dir: float):
 	if input_dir == 0:
