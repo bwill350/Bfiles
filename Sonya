@@ -97,6 +97,7 @@ const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
 
 # ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
+const FIRE_DEATH_SCENE = preload("res://Deaths/FireDeath.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 
@@ -127,6 +128,7 @@ func _process(delta):
 		_register_input("R")
 
 	_check_pink_combo()
+	_check_fire_combo()
 
 func _register_input(i: String):
 	if combo_timer <= 0:
@@ -135,25 +137,32 @@ func _register_input(i: String):
 	input_buffer.append(i)
 	combo_timer = COMBO_TIME
 
-func apply_stun(duration: float):
+func apply_stun(_duration := 4.0):
+
 	if state == State.DEAD:
 		return
 
-	# already stunned
-	if stunned:
-		return
-
 	stunned = true
+
+	is_hurting = true
+	hurt_locked = true
 	action_locked = true
+
 	is_attacking = false
 	is_shooting = false
+	is_blocking = false
+
 	velocity = Vector2.ZERO
+	knockback_x = 0
 
-	play_anim("freeze")
+	play_anim("idle")
 
-	await get_tree().create_timer(duration).timeout
+	await get_tree().create_timer(4.0).timeout
 
 	stunned = false
+
+	is_hurting = false
+	hurt_locked = false
 	action_locked = false
 
 func run(input_dir: float):
@@ -749,6 +758,16 @@ func trigger_pink_death():
 	pink.global_position = target.global_position
 	pink.owner_character = self
 
+func trigger_fire_death():
+	if target == null or !is_instance_valid(target):
+		return
+
+	var fire = preload("res://Deaths/FireDeath.tscn").instantiate()
+	get_tree().current_scene.add_child(fire)
+
+	fire.global_position = target.global_position
+	fire.owner_character = self
+
 func _check_pink_combo():
 	if input_buffer.size() < 3:
 		return
@@ -759,18 +778,30 @@ func _check_pink_combo():
 		input_buffer.clear() # IMPORTANT anti-spam fix
 		trigger_pink_death()
 
+func _check_fire_combo():
+	if input_buffer.size() < 3:
+		return
+
+	var last3 = input_buffer.slice(input_buffer.size() - 3, input_buffer.size())
+
+	if last3 == ["L", "L", "R"]:
+		input_buffer.clear() # IMPORTANT anti-spam fix
+		trigger_fire_death()
+
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
+
 	if hurt_cooldown:
 		return
 
 	if area == null or !is_instance_valid(area):
 		return
 
-	if not can_take_damage:
+	if area.is_in_group("HurtBox"):
 		return
 
-	$Hurt.play()
+		$Hurt.play()
+
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
 		hurt_cooldown = true
@@ -790,18 +821,21 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 		hurt_cooldown = false
 		return
 
+	if not can_take_damage:
+		return
+
 	if area.is_in_group("HitBox") \
 	or area.is_in_group("ReptileAcid") \
-	or area.is_in_group("RaidenElectricBullet") \
+	or area.is_in_group("ReptileBullet") \
+	or area.is_in_group("KanoBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
-	or area.is_in_group("SonyaBullet") \
 	or area.is_in_group("JohnnyCageBullet") \
-	or area.is_in_group("KanoBullet"):
+	or area.is_in_group("SonyaBullet"):
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 900
+		knockback_x = -facing * 700
 		take_damage(1)
 
 		await get_tree().create_timer(0.15).timeout
