@@ -31,6 +31,7 @@ var last_tap_dir := 0
 var run_locked := false
 var jump_requested := false
 var bullet_spawned := false
+var special_bullet : PackedScene = null
 
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
@@ -88,6 +89,15 @@ const RAIDEN_ATTACK = preload("res://Projectiles/RaidenAttack.tscn")
 const ELECTRIC_FORCE_FIELD = preload("res://Projectiles/ElectricForceField.tscn")
 const ELECTRIC_BURST = preload("res://Projectiles/ElectricBurst.tscn")
 const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
+const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
+const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
+const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
+const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
+
+# ---------------- DEATH FX ----------------
+const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
+const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
+const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 
 # ---------------- NODES ----------------
@@ -108,10 +118,33 @@ const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
 
-func apply_stun(duration: float):
-	if stunned:
-		play_anim("freeze")
+func apply_stun(_duration := 4.0):
+
+	if state == State.DEAD:
 		return
+
+	stunned = true
+
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
+	velocity = Vector2.ZERO
+	knockback_x = 0
+
+	play_anim("idle")
+
+	await get_tree().create_timer(4.0).timeout
+
+	stunned = false
+
+	is_hurting = false
+	hurt_locked = false
+	action_locked = false
 
 func start_electricfly(dir: float):
 	
@@ -252,25 +285,6 @@ func register_input(input: String):
 	combo.append(input)
 	combo_timer = 0.0
 	check_combos()
-
-# ---------------- CHECK COMBOS ----------------
-func check_combos():
-
-	if combo == FIRE_COMBO:
-		combo_used.emit("fire")
-		combo.clear()
-
-	elif combo == ICE_COMBO:
-		combo_used.emit("ice")
-		combo.clear()
-
-	elif combo == ELECTRIC_COMBO:
-		combo_used.emit("electric")
-		combo.clear()
-
-	elif combo == ACID_COMBO:
-		combo_used.emit("acid")
-		combo.clear()
 
 func handle_double_tap_run(input_dir: float, delta: float) -> bool:
 	if input_dir == 0:
@@ -586,8 +600,13 @@ func cpu_logic(delta):
 
 # ---------------- SHOOT ----------------
 func shoot_player():
-	if spawn_locked:
+
+	if health <= 1:
 		return
+
+	if is_finish_state:
+		return
+
 	if is_shooting:
 		return
 
@@ -597,14 +616,27 @@ func shoot_player():
 
 	play_anim("shoot")
 
-	var bullet = RAIDEN_ELECTRIC_BULLET.instantiate()
+	var bullet_scene: PackedScene
+
+	# 🔥 Combo override bullet
+	if special_bullet != null:
+		bullet_scene = special_bullet
+		special_bullet = null
+	else:
+		# ⚡ DEFAULT RAIDEN BULLET
+		bullet_scene = RAIDEN_ELECTRIC_BULLET
+
+	var bullet = bullet_scene.instantiate()
 	get_tree().current_scene.add_child(bullet)
 
-	# 🔥 SPAWN FROM MARKER
-	bullet.global_position = $Raidenshoot.global_position
+	await get_tree().process_frame
 
-	# 🔥 FIXED DIRECTION
-	bullet.velocity = Vector2.RIGHT * sign(facing) * bullet.speed
+	bullet.global_position = $Raidenshoot.global_position
+	bullet.velocity = Vector2(facing, 0) * bullet.speed
+
+	# Flip sprite if needed
+	if bullet.has_node("Sprite2D"):
+		bullet.get_node("Sprite2D").flip_h = facing > 0
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -615,24 +647,6 @@ func shoot_player():
 
 	is_attacking = false
 	action_locked = false
-
-	play_anim("idle")
-
-func spawn_fx(scene: PackedScene):
-
-	var fx = scene.instantiate()
-
-	# Tell the effect who spawned it
-	fx.owner_character = self
-
-	get_tree().current_scene.call_deferred("add_child", fx)
-
-	await get_tree().process_frame
-
-	if target and is_instance_valid(target):
-		fx.global_position = target.global_position + Vector2(60 * facing, 0)
-	else:
-		fx.global_position = global_position + Vector2(80 * facing, 0)
 
 # ---------------- BURST ----------------
 func spawn_burst():
@@ -903,9 +917,81 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 	sprite.play(anim_name)
 
+func spawn_fx(scene: PackedScene):
+
+	var fx = scene.instantiate()
+
+	# IMPORTANT: set owner BEFORE it can collide
+	fx.owner_character = self
+	fx.damage_done = false
+
+	get_tree().current_scene.call_deferred("add_child", fx)
+
+	await get_tree().process_frame
+
+	if target and is_instance_valid(target):
+		fx.global_position = target.global_position + Vector2(60 * facing, 0)
+	else:
+		fx.global_position = global_position + Vector2(80 * facing, 0)
+
+func check_combos():
+
+	if combo == ACID_COMBO:
+
+		combo_used.emit("acid")
+
+		special_bullet = ACID_BULLET
+
+		combo.clear()
+
+		shoot_player()
+		return
+
+
+	# ---------------- FIRE ----------------
+	if combo == FIRE_COMBO:
+
+		combo_used.emit("fire")
+
+		spawn_fx(FIRE_DEATH)
+
+		special_bullet = FIRE_BULLET
+
+		combo.clear()
+
+		shoot_player()
+		return
+
+
+	elif combo == ICE_COMBO:
+
+		combo_used.emit("ice")
+
+		spawn_fx(ICE_DEATH)
+
+		special_bullet = ICE_BULLET
+
+		combo.clear()
+
+		shoot_player()
+		return
+
+
+	elif combo == ELECTRIC_COMBO:
+
+		combo_used.emit("electric")
+
+		spawn_fx(ELECTRIC_DEATH)
+
+		special_bullet = ELECTRIC_BULLET
+
+		combo.clear()
+
+		shoot_player()
+		return
+
 func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
-	if area.is_in_group("HitBox"):
-		$Hurt.play()
+
 	if hurt_cooldown:
 		return
 
@@ -914,6 +1000,8 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 
 	if area.is_in_group("HurtBox"):
 		return
+
+		$Hurt.play()
 
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
@@ -949,6 +1037,7 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 
 	if area.is_in_group("HitBox") \
 	or area.is_in_group("ReptileAcid") \
+	or area.is_in_group("ReptileBullet") \
 	or area.is_in_group("KanoBullet") \
 	or area.is_in_group("FireBullet") \
 	or area.is_in_group("Fireball") \
