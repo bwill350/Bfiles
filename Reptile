@@ -128,23 +128,32 @@ func spawn_fire_bullet():
 	bullet.global_position = $Reptileshoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
-func apply_stun(duration: float):
+func apply_stun(_duration := 4.0):
+
 	if state == State.DEAD:
 		return
 
-	# already stunned → refresh timer only
-	if stunned:
-		return
-
 	stunned = true
+
+	is_hurting = true
+	hurt_locked = true
 	action_locked = true
+
 	is_attacking = false
 	is_shooting = false
-	velocity = Vector2.ZERO
+	is_blocking = false
 
-	await get_tree().create_timer(duration).timeout
+	velocity = Vector2.ZERO
+	knockback_x = 0
+
+	play_anim("idle")
+
+	await get_tree().create_timer(4.0).timeout
 
 	stunned = false
+
+	is_hurting = false
+	hurt_locked = false
 	action_locked = false
 
 func run(input_dir: float):
@@ -977,11 +986,17 @@ func spawn_attack_bullet(anim_name: String):
 	bullet.owner = self
 
 func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
+
+	if hurt_cooldown:
+		return
+
 	if area == null or !is_instance_valid(area):
 		return
 
-	if not can_take_damage or hurt_cooldown:
+	if not can_take_damage:
 		return
+
+	$Hurt.play()
 
 	if area.is_in_group("HitBox") \
 		or area.is_in_group("ReptileAcid") \
