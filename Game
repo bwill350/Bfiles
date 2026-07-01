@@ -1,31 +1,42 @@
 extends Node
 
-signal points_changed(points)
-# ---------------- SCORE ----------------
+# ---------------- MATCH STATE ----------------
+var p1_character: String = ""
+var p2_character: String = ""
+
+var p1_data: Resource = null
+var p2_data: Resource = null
+
 var points: int = 0
+var vs_cpu: bool = true
 
-func add_points(amount: int):
-	points += amount
-	points_changed.emit(points)
+# ---------------- GAME SETTINGS ----------------
+var difficulty: String = "Easy"
+var cool_stuff: bool = false
 
-func reset_points():
-	points = 0
-	points_changed.emit(points)
+# ---------------- MATCH FLOW ----------------
+var match_started: bool = false
 
-# ---------------- OLD SYSTEM ----------------
-var p1_character := ""
-var p2_character := ""
-var vs_cpu := true
 
-# ---------------- NEW SYSTEM ----------------
-var p1_data: CharacterData = null
-var p2_data: CharacterData = null
-
-# ---------------- RESET ----------------
+# ---------------- RESET FUNCTIONS ----------------
 func reset_match():
+
 	p1_character = ""
 	p2_character = ""
 	p1_data = null
 	p2_data = null
-	vs_cpu = true
-	reset_points()
+	match_started = false
+	points = 0
+
+
+func reset_all():
+	reset_match()
+
+
+func print_state():
+	print("P1:", p1_character)
+	print("P2:", p2_character)
+	print("VS CPU:", vs_cpu)
+	print("Difficulty:", difficulty)
+	print("Cool Stuff:", cool_stuff)
+	print("Points:", points)
