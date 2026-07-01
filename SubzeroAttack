@@ -3,21 +3,22 @@ class_name SubzeroAttack
 
 @onready var collision: CollisionShape2D = $CollisionShape2D
 
-@export var active_time := 60.2
-@export var lifetime := 60.6
+@export var active_time := 0.2
+@export var lifetime := 0.6
 
 var active := false
 var has_hit := false
 var damage := 1
 
+var hit_targets := {}
 
 func _ready():
-
+	print("wheniamused")
 	add_to_group("SubzeroAttack")
 
 	await get_tree().process_frame
 
-	area_entered.connect(_on_area_entered)
+	body_entered.connect(_on_body_entered)
 
 	enable_hitbox()
 
@@ -26,7 +27,6 @@ func _ready():
 
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
-
 
 func enable_hitbox():
 	active = true
@@ -42,30 +42,23 @@ func disable_hitbox():
 		collision.disabled = true
 
 
-func _on_area_entered(area: Area2D) -> void:
+func _on_body_entered(body: Node) -> void:
 
 	if not active:
 		return
 
-	if has_hit:
+	if body == null:
 		return
 
-	if area == null:
+	if not body.is_in_group("Fighter"):
 		return
 
-	var target = area.get_parent()
-
-	if target == null:
+	if hit_targets.has(body):
 		return
 
-	if not target.is_in_group("Fighter"):
+	if not body.has_method("take_damage"):
 		return
 
-	if target == get_parent():
-		return
-
-	if not target.has_method("take_damage"):
-		return
-
-	has_hit = true
-	target.take_damage(damage)
+	hit_targets[body] = true
+	body.take_damage(damage)
+	print("wheniamatttacking")
