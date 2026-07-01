@@ -34,7 +34,7 @@ func _physics_process(delta):
 
 
 func _on_area_entered(area: Area2D):
-
+	
 	if has_hit:
 		return
 
@@ -60,6 +60,19 @@ func _on_area_entered(area: Area2D):
 
 	destroy()
 
+	print_stack()
+	print("Subzero took damage:")
+
+func destroy():
+
+	if dead:
+		return
+
+	dead = true
+
+	velocity = Vector2.ZERO
+
+	queue_free()
 
 func destroy():
 
