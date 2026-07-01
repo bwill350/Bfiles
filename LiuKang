@@ -39,6 +39,7 @@ var last_tap_time := 0.0
 var last_tap_dir := 0
 var run_locked := false
 var jump_requested := false
+var dragon_invisible := false
 # ---------------- CPU ----------------
 var special_move_invincible := false
 var is_cpu := false
@@ -58,11 +59,12 @@ var spawn_protection := false
 var is_flying := false
 var hurt_recovery := false
 var lock_timer := 0.0
-var special_move_y := 0.0
 var spawn_locked := true
 var is_spear_pulled := false
 var hurt_cooldown := false
 var climb_pressed := Input.is_action_pressed("climb")
+var dragon_active := false
+var normal_modulate := Color(1, 1, 1, 1)
 
 # ---------------- MOVEMENT ----------------
 var facing := 1
@@ -104,10 +106,14 @@ const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
+const DRAGON_DEATH = preload("res://DragonDeath.tscn")
 const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
+const DRAGON_COMBO = ["left", "down", "left", "right"]
+var special_move_x := 0.0
+var special_move_y := 0.0
 
 # ---------------- COMBOS ----------------
 var combo := []
@@ -118,6 +124,7 @@ var shoot_cooldown: float = 0.0
 
 # ---------------- READY ----------------
 func _ready():
+	$Sprite.modulate = Color(1, 1, 1, 1)
 	$Crispy.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
@@ -132,72 +139,132 @@ func _ready():
 	health = max_health
 	health_changed.emit(health)
 
-	play_anim("idle")
+	current_anim = ""
+	sprite.play("idle")
+	current_anim = "idle"
 
 	ai_timer = randf_range(0.2, 0.6)
 	facing = 1
 	sprite.flip_h = -facing < 0
+	print("START ANIM:", sprite.animation)
 
 func _unhandled_input(event):
 
 	if event.is_action_pressed("jump"):
 		jump_requested = true
 
-	if event.is_action_pressed("up"):
-		register_input("up")
+	var inputs = ["up", "down", "left", "right", "shoot"]
 
-	elif event.is_action_pressed("down"):
-		register_input("down")
+	for i in inputs:
+		if event.is_action_pressed(i):
+			register_input(i)
 
-	elif event.is_action_pressed("left"):
-		play_anim("walk")
-		register_input("left")
+func apply_stun(_duration := 4.0):
 
-	elif event.is_action_pressed("right"):
-		play_anim("walk")
-		register_input("right")
-
-	elif event.is_action_pressed("shoot"):
-		register_input("shoot")
-
-func apply_stun(duration: float):
-	if stunned:
+	if state == State.DEAD:
 		return
 
 	stunned = true
-	is_attacking = false
-	action_locked = true
-	velocity = Vector2.ZERO
-	play_anim("hurt") # or "idle" if you don't have freeze
 
-	await get_tree().create_timer(duration).timeout
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
+	velocity = Vector2.ZERO
+	knockback_x = 0
+
+	play_anim("idle")
+
+	await get_tree().create_timer(4.0).timeout
 
 	stunned = false
+
+	is_hurting = false
+	hurt_locked = false
 	action_locked = false
 
 func start_flyingkick():
 	play_anim("flyingkick")
-	flyingkick_active = true
-	special_move_invincible = true
-	special_move = true
-	special_move_timer = 0.6
 
-	special_move_y = $BloodMarker.global_position.y
+	flyingkick_active = true
+	special_move = true
+	special_move_invincible = true
+	special_move_timer = 10.6
+
+	special_move_y = global_position.y - 100
 
 	velocity.x = facing * 1300
 	velocity.y = 0
 
 func start_bicyclekick():
 	play_anim("bicyclekick")
-	bicyclekick_active = true
-	special_move_invincible = true
-	special_move = true
-	special_move_timer = 0.55
 
-	special_move_y = $BloodMarker.global_position.y
+	bicyclekick_active = true
+	special_move = true
+	special_move_invincible = true
+	special_move_timer = 10.6
+
+	special_move_y = global_position.y - 100
 
 	velocity.x = facing * 1300
 	velocity.y = 0
+
+func handle_flyingkick(delta):
+
+	# lock height exactly where it started
+	global_position.y = special_move_y
+
+	# keep moving forward
+	velocity.x = facing * 1300
+	velocity.y = 0
+
+	# STOP WHEN INPUT RELEASED
+	if not Input.is_action_pressed("flyingkick"):
+		flyingkick_active = false
+		special_move = false
+		special_move_invincible = false
+		return
+
+	move_and_slide()
+
+func handle_bicyclekick(delta):
+
+	global_position.y = special_move_y
+
+	velocity.x = facing * 1300
+	velocity.y = 0
+
+	# STOP ON RELEASE
+	if not Input.is_action_pressed("bicyclekick"):
+		bicyclekick_active = false
+		special_move = false
+		special_move_invincible = false
+		return
+
+	move_and_slide()
+
+func handle_special_hit():
+
+	if not special_move:
+		return
+
+	for i in range(get_slide_collision_count()):
+		var col = get_slide_collision(i)
+		var body = col.get_collider()
+
+		if body and body != self and body.has_method("take_damage"):
+			body.take_damage(1)
+
+			special_move = false
+			flyingkick_active = false
+			bicyclekick_active = false
+			special_move_invincible = false
+			velocity = Vector2.ZERO
+			return
 
 func update_state(input_dir, running):
 	if state == State.DEAD:
@@ -226,6 +293,7 @@ func update_anim():
 			play_anim("walk")
 		State.IDLE:
 			play_anim("idle")
+
  
 func handle_double_tap_run(input_dir: float, delta: float) -> bool:
 	if input_dir == 0:
@@ -262,16 +330,23 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
-	# ---------------- STUN ----------------
-	if stunned:
+	# ---------------- GLOBAL LOCKS ----------------
+	if dragon_active or stunned:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
 
-	# ---------------- DEATH / FINISH ----------------
-	if state == State.DEAD:
+	if flyingkick_active:
+		handle_flyingkick(delta)
+		move_and_slide()
 		return
 
+	if bicyclekick_active:
+		handle_bicyclekick(delta)
+		move_and_slide()
+		return
+
+	# ---------------- FINISH STATE ----------------
 	if is_finish_state:
 		state = State.IDLE
 		velocity.x = 0
@@ -280,9 +355,8 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# ---------------- GRAVITY ----------------
+	# ---------------- GRAVITY (ONLY ONCE) ----------------
 	velocity.y += GRAVITY * delta
-
 
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -297,115 +371,75 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	if state == State.DEAD:
-		return
-
-	if is_finish_state:
-		state = State.IDLE
-		velocity.x = 0
-
-		if not is_hurting:
-			play_anim("idle")
-
+	if action_locked:
 		move_and_slide()
 		return
 
-	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
-
-	if action_locked:
-		return
-
+	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
-	var climb_pressed = Input.is_action_pressed("climb")
 
-	# ---------------- FACING ----------------
 	if input_dir != 0:
 		facing = input_dir
 
 	sprite.flip_h = facing > 0
-
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$LiuKangshoot.position = Vector2(63 * facing, -155)
 
-	# =========================================================
-	# 🟢 MOVEMENT (RUN ADDED HERE)
-	# =========================================================
+	# ---------------- MOVEMENT ----------------
 	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
+		run(input_dir)
 	else:
 		velocity.x = input_dir * SPEED
 
-		# ---------------- STATE ----------------
 		if not is_on_floor():
 			state = State.JUMP
 		elif input_dir != 0:
 			state = State.WALK
-		elif input_dir != 0:
-			state = State.RUN
 		else:
 			state = State.IDLE
 
-	# ---------------- ANIMS ----------------
+	# ---------------- ANIMATIONS ----------------
 	match state:
-
-		State.CLIMB:
-			velocity.y = -CLIMB_SPEED
-			if not is_attacking:
-				play_anim("idle")
-
 		State.JUMP:
 			if not is_attacking:
 				play_anim("jump")
-
 		State.WALK:
 			if not is_attacking:
 				play_anim("walk")
-
 		State.RUN:
 			if not is_attacking:
 				play_anim("run")
-
 		State.IDLE:
 			if not is_attacking:
 				play_anim("idle")
 
-	if is_hurting and hurt_locked:
-		return
-
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
-		$Sprite.play("jump")
 		velocity.y = jump_velocity
 
-	# ---------------- ATTACKS ----------------
+	# ---------------- ATTACK INPUT ----------------
 	if Input.is_action_just_pressed("jumpkick"):
 		do_action("jumpkick")
-
 	elif Input.is_action_just_pressed("punch"):
 		do_action("punch")
-
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
-
 	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
-
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
-
 	elif Input.is_action_pressed("shoot"):
 		shoot_fireball()
-
 	elif Input.is_action_pressed("block"):
 		start_block()
-
 	elif Input.is_action_pressed("flyingkick"):
 		start_flyingkick()
-
 	elif Input.is_action_pressed("bicyclekick"):
 		start_bicyclekick()
-
+	elif Input.is_action_pressed("invisible"):
+		invisible()
+	elif Input.is_action_pressed("visible"):
+		sprite.visible = true
 	elif Input.is_action_pressed("block"):
 		start_block()
 	else:
@@ -413,7 +447,7 @@ func _physics_process(delta):
 
 	move_and_slide()
 
-	# special collision hit check
+	# ---------------- SPECIAL HIT CHECK ----------------
 	handle_special_hit()
 
 	# ---------------- SPECIAL MOVES ----------------
@@ -435,6 +469,9 @@ func _physics_process(delta):
 
 				velocity = Vector2.ZERO
 				return
+
+func invisible():
+	sprite.visible = false
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
@@ -547,61 +584,6 @@ func cpu_logic(delta):
 					do_action("roundhousekick")
 				else:
 					shoot_fireball()
-
-func handle_flyingkick(delta):
-
-	play_anim("flyingkick")
-
-	special_move_timer -= delta
-
-	velocity.x = facing * 1300
-
-	# let gravity bring him down
-	velocity.y += GRAVITY * delta
-
-	move_and_slide()
-
-	if special_move_timer <= 0:
-		flyingkick_active = false
-		special_move = false
-		special_move_invincible = false
-
-func handle_bicyclekick(delta):
-
-	play_anim("bicyclekick")
-
-	special_move_timer -= delta
-
-	velocity.x = facing * 1300
-
-	# let gravity bring him down
-	velocity.y += GRAVITY * delta
-
-	move_and_slide()
-
-	if special_move_timer <= 0:
-		bicyclekick_active = false
-		special_move = false
-		special_move_invincible = false
-
-func handle_special_hit():
-
-	if not special_move:
-		return
-
-	for i in range(get_slide_collision_count()):
-		var col = get_slide_collision(i)
-		var body = col.get_collider()
-
-		if body and body != self and body.has_method("take_damage"):
-			body.take_damage(1)
-
-			special_move = false
-			flyingkick_active = false
-			bicyclekick_active = false
-			special_move_invincible = false
-			velocity = Vector2.ZERO
-			return
 
 func do_action(anim_name: String):
 
@@ -868,6 +850,8 @@ func die():
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim: String):
+	if dragon_invisible:
+		return
 
 	if current_anim == anim:
 		return
@@ -877,6 +861,9 @@ func play_anim(anim: String):
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
+
+	if combo.size() > 10:
+		combo.pop_front()
 
 	combo.append(input)
 
@@ -941,6 +928,23 @@ func check_combos():
 		combo.clear()
 		return
 
+# ---------------- DRAGON ----------------
+	elif combo == DRAGON_COMBO:
+
+		print("DRAGON COMBO HIT")
+
+		combo_used.emit("dragon")
+
+		var fx = DRAGON_DEATH.instantiate()
+		get_tree().current_scene.add_child(fx)
+
+		fx.global_position = global_position + Vector2(0 * facing, 0)
+
+		play_anim("dragon")
+
+		combo.clear()
+		return
+
 # ---------------- BLOCK ----------------
 func start_block():
 
@@ -960,6 +964,7 @@ func stop_block():
 
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
+
 	if hurt_cooldown:
 		return
 
