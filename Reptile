@@ -354,6 +354,11 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("spear"):
 		start_spear()
 
+	elif Input.is_action_pressed("invisible"):
+		invisible()
+	elif Input.is_action_pressed("visible"):
+		sprite.visible = true
+
 	else:
 		stop_block()
 
@@ -398,6 +403,9 @@ func shoot_acid():
 
 	is_attacking = false
 	action_locked = false
+
+func invisible():
+	sprite.visible = false
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
