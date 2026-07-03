@@ -519,7 +519,7 @@ func cpu_logic(delta):
 					do_action("kick")
 				elif choice < 85:
 					do_action("uppercut")
-				elif choice < 70:
+				elif choice < 90:
 					do_action("cannonkick")
 				else:
 					do_action("roundhousekick")
@@ -616,30 +616,37 @@ func cannonkick(dir := 0):
 	if action_locked:
 		return
 
-	# if no direction passed, use facing
+	# default direction
 	if dir == 0:
 		dir = facing
 
 	facing = dir
 	sprite.flip_h = facing > 0
 
+	# lock movement/state
 	cannonkick_active = true
 	action_locked = true
 	is_attacking = true
 
-	# 🔥 VISUAL EFFECT: turn green
+	# 🔥 turn green instantly
 	sprite.modulate = Color(0, 1, 0)
+	await get_tree().process_frame  # forces visual update immediately
 
+	# animation + state
 	state = State.RUN
-	play_anim("cannonkick") # or "cannonkick" if you have it
+	play_anim("cannonkick")
 
-	velocity.x = facing * 1400  # 🔥 FLY SPEED
-
-	# optional: slight upward arc (feels more MK style)
+	# movement burst
+	velocity.x = facing * 1400
 	velocity.y = 0
 
+	# duration of move
 	await get_tree().create_timer(0.4).timeout
 
+	# 🔥 RESET COLOR (THIS FIXES “stays green”)
+	sprite.modulate = Color(1, 1, 1)
+
+	# unlock
 	cannonkick_active = false
 	is_attacking = false
 	action_locked = false
