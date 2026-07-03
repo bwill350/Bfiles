@@ -39,7 +39,7 @@ var last_tap_dir := 0
 var run_locked := false
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
@@ -112,6 +112,7 @@ var combo_timer := 0.0
 var is_running := false
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 @onready var character = get_parent()
+const PUNCH_COMBO = ["right", "down", "right"]
 const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
@@ -204,6 +205,10 @@ func _physics_process(delta):
 	# ---------------- STUN ----------------
 	if stunned:
 		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
+	if cannonkick_active:
 		move_and_slide()
 		return
 
@@ -317,8 +322,8 @@ func _physics_process(delta):
 		velocity.y = jump_velocity
 
 	# ---------------- ATTACKS ----------------
-	if Input.is_action_just_pressed("jumpkick"):
-		do_action("jumpkick")
+	if Input.is_action_just_pressed("kick"):
+		do_action("kick")
 
 	elif Input.is_action_just_pressed("punch"):
 		do_action("punch")
@@ -326,18 +331,28 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
 
-	elif Input.is_action_just_pressed("kick"):
-		do_action("kick")
+	elif Input.is_action_just_pressed("cannonkick"):
+		do_action("cannonkick")
+		var dir := Input.get_axis("left", "right")
+
+		# fallback if no directional input
+		if dir == 0:
+			dir = facing
+
+		cannonkick(dir)
 
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
 
-	elif Input.is_action_just_pressed("shoot"):
+	elif Input.is_action_just_pressed("nutcracker"):
+		do_action("nutcracker")
+
+	elif Input.is_action_just_pressed("shoot"):	
 		if shoot_cooldown <= 0:
 			shoot_player()
 
 	elif Input.is_action_pressed("block"):
-		start_block()
+			start_block()
 
 	else:
 		stop_block()
@@ -402,7 +417,7 @@ func cpu_logic(delta):
 		if is_spear_pulled:
 				velocity.x = -facing * -600
 		else:
-			velocity.x = -facing * 600
+			velocity.x = -facing * 100
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -487,6 +502,8 @@ func cpu_logic(delta):
 					do_action("uppercut")
 				elif choice < 80:
 					do_action("roundhousekick")
+				elif choice < 80:
+					do_action("cannonkick")
 				else:
 					shoot_player()
 
@@ -502,6 +519,8 @@ func cpu_logic(delta):
 					do_action("kick")
 				elif choice < 85:
 					do_action("uppercut")
+				elif choice < 70:
+					do_action("cannonkick")
 				else:
 					do_action("roundhousekick")
 
@@ -534,7 +553,8 @@ func do_action(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
-		"jumpkick"
+		"nutcracker",
+		"cannonkick"
 	]:
 		spawn_attack(anim_name)
 
@@ -554,7 +574,8 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
-		"jumpkick"
+		"nutcracker",
+		"cannonkick"
 	]:
 		return
 
@@ -575,7 +596,9 @@ func spawn_attack(anim_name: String):
 			dmg = 1
 		"roundhousekick":
 			dmg = 1
-		"jumpkick":
+		"nutcracker":
+			dmg = 1
+		"cannonkick":
 			dmg = 1
 
 	if attack.has_method("set_damage"):
@@ -585,7 +608,7 @@ func spawn_attack(anim_name: String):
 
 	attack.owner = self
 
-func start_cannonkick():
+func cannonkick(dir := 0):
 
 	if state == State.DEAD:
 		return
@@ -593,16 +616,36 @@ func start_cannonkick():
 	if action_locked:
 		return
 
+	# if no direction passed, use facing
+	if dir == 0:
+		dir = facing
+
+	facing = dir
+	sprite.flip_h = facing > 0
+
 	cannonkick_active = true
-	cannonkick_timer = 0.40
+	action_locked = true
+	is_attacking = true
 
-	special_move = true
-	special_move_timer = 0.40
+	# 🔥 VISUAL EFFECT: turn green
+	sprite.modulate = Color(0, 1, 0)
 
-	sprite.play("cannonkick")
+	state = State.RUN
+	play_anim("cannonkick") # or "cannonkick" if you have it
 
-	velocity.x = facing * 700
+	velocity.x = facing * 1400  # 🔥 FLY SPEED
+
+	# optional: slight upward arc (feels more MK style)
 	velocity.y = 0
+
+	await get_tree().create_timer(0.4).timeout
+
+	cannonkick_active = false
+	is_attacking = false
+	action_locked = false
+
+	if state != State.DEAD:
+		state = State.IDLE
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -857,6 +900,44 @@ func check_combos():
 		combo.clear()
 		return
 
+	elif combo == PUNCH_COMBO:
+
+		combo_used.emit("punch_combo")
+
+		combo.clear()
+
+		start_punch_combo()
+		return
+
+func start_punch_combo():
+
+	if action_locked:
+		return
+
+	await combo_attack([
+		"punch",
+		"kick",
+		"punch",
+		"roundhousekick",
+		"uppercut",
+		"nutcracker"
+	])
+
+func combo_attack(attacks: Array):
+
+	action_locked = true
+	is_attacking = true
+
+	for attack in attacks:
+
+		play_anim(attack)
+		spawn_attack(attack)
+
+		await sprite.animation_finished
+
+	is_attacking = false
+	action_locked = false
+
 # ---------------- DEATH ----------------
 func die():
 
@@ -942,7 +1023,7 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 600
+		knockback_x = -facing * 100
 		take_damage(1)
 
 		await get_tree().create_timer(0.15).timeout
