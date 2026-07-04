@@ -254,8 +254,7 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
+
 
 	if action_locked:
 		return
@@ -302,6 +301,8 @@ func _physics_process(delta):
 			if not is_attacking:
 				play_anim("jump")
 
+
+
 		State.WALK:
 			if not is_attacking:
 				play_anim("walk")
@@ -320,6 +321,8 @@ func _physics_process(delta):
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
+		state = State.JUMP
+		play_anim("jump")
 
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("kick"):
@@ -333,7 +336,11 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("cannonkick"):
 		do_action("cannonkick")
+		sprite.modulate = Color(0, 1, 0)
 		var dir := Input.get_axis("left", "right")
+		await sprite.animation_finished
+
+		sprite.modulate = Color(1, 1, 1)
 
 		# fallback if no directional input
 		if dir == 0:
@@ -434,9 +441,6 @@ func cpu_logic(delta):
 		velocity.x = 0
 		return
 
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
@@ -457,10 +461,6 @@ func cpu_logic(delta):
 	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
-
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
 
 # ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
