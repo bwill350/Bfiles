@@ -27,7 +27,7 @@ signal health_changed(health)
 signal combo_used(combo_name: String)
 @onready var character = get_parent()
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 var is_spear_pulled := false
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
@@ -39,7 +39,6 @@ var last_tap_time := 0.0
 var last_tap_dir := 0
 var input_buffer: Array[String] = []
 const COMBO_TIME := 0.6
-var combo_timer := 0.0
 
 # ---------------- CPU ----------------
 var is_cpu := false
@@ -100,6 +99,10 @@ const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH_SCENE = preload("res://Deaths/FireDeath.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
+const PUNCH_COMBO = ["right", "down", "right"]
+var combo := []
+var combo_timer := 0.0
+
 
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
@@ -110,7 +113,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
 # ---------------- COMBOS ----------------
-var combo := []
+
 
 func _process(delta):
 	combo_timer -= delta
@@ -127,6 +130,7 @@ func _process(delta):
 	if Input.is_action_just_pressed("right"):
 		_register_input("R")
 
+	_check_punch_combo()
 	_check_pink_combo()
 	_check_fire_combo()
 
@@ -314,11 +318,6 @@ func _physics_process(delta):
 
 	move_and_slide()
 
-	# ---------------- JUMP ----------------
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jump_velocity
-		state = State.JUMP
-
 	# =====================================================
 	# ATTACKS
 	# =====================================================
@@ -328,9 +327,6 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
-
-	elif Input.is_action_just_pressed("jumpkick"):
-		do_action("jumpkick")
 
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
@@ -355,7 +351,7 @@ func cpu_logic(delta):
 		if is_spear_pulled:
 				velocity.x = -facing * -600
 		else:
-			velocity.x = -facing * 600
+			velocity.x = -facing * 100
 
 	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -523,7 +519,6 @@ func do_action(anim_name: String):
 	if anim_name in [
 		"punch",
 		"kick",
-		"jumpkick",
 		"uppercut",
 		"roundhousekick"
 	]:
@@ -532,16 +527,6 @@ func do_action(anim_name: String):
 	# ---------------- SPECIAL ----------------
 	elif anim_name == "shoot":
 		do_action("shoot")
-
-		if has_node("AttackMarker"):
-			var attack = SONYA_ATTACK.instantiate()
-			get_parent().add_child(attack)
-
-			attack.global_position = $AttackMarker.global_position
-			attack.scale.x = facing
-
-	# ---------------- OPTIONAL ELECTRIC BURST ----------------
-	elif anim_name == "electricburst":
 
 		if has_node("AttackMarker"):
 			var attack = SONYA_ATTACK.instantiate()
@@ -563,8 +548,7 @@ func spawn_attack(anim_name: String):
 		"punch",
 		"kick",
 		"uppercut",
-		"roundhousekick",
-		"jumpkick"
+		"roundhousekick"
 	]:
 		return
 
@@ -584,8 +568,6 @@ func spawn_attack(anim_name: String):
 		"uppercut":
 			dmg = 1
 		"roundhousekick":
-			dmg = 1
-		"jumpkick":
 			dmg = 1
 
 	if attack.has_method("set_damage"):
@@ -788,6 +770,60 @@ func _check_fire_combo():
 		input_buffer.clear() # IMPORTANT anti-spam fix
 		trigger_fire_death()
 
+func _check_punch_combo():
+
+	if input_buffer.size() < 3:
+		return
+
+	var last3 = input_buffer.slice(
+		input_buffer.size() - 3,
+		input_buffer.size()
+	)
+
+	if last3 == ["R", "D", "R"]:
+
+		input_buffer.clear()
+
+		start_punch_combo()
+
+func _check_combo():
+	if combo == PUNCH_COMBO:
+
+		combo_used.emit("punch_combo")
+
+		combo.clear()
+
+		start_punch_combo()
+
+
+func start_punch_combo():
+
+	if action_locked:
+		return
+
+	await combo_attack([
+		"punch",
+		"kick",
+		"punch",
+		"roundhousekick",
+		"uppercut"
+	])
+
+func combo_attack(attacks: Array):
+
+	action_locked = true
+	is_attacking = true
+
+	for attack in attacks:
+
+		play_anim(attack)
+		spawn_attack(attack)
+
+		await sprite.animation_finished
+
+	is_attacking = false
+	action_locked = false
+
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 
@@ -825,18 +861,21 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 		return
 
 	if area.is_in_group("HitBox") \
-	or area.is_in_group("ReptileAcid") \
-	or area.is_in_group("ReptileBullet") \
-	or area.is_in_group("KanoBullet") \
-	or area.is_in_group("FireBullet") \
-	or area.is_in_group("Fireball") \
-	or area.is_in_group("JohnnyCageBullet") \
-	or area.is_in_group("SonyaBullet"):
+		or area.is_in_group("ReptileAcid") \
+		or area.is_in_group("RaidenElectricBullet") \
+		or area.is_in_group("FireBullet") \
+		or area.is_in_group("Fireball") \
+		or area.is_in_group("SonyaBullet") \
+		or area.is_in_group("JohnnyCageBullet") \
+		or area.is_in_group("KanoBullet") \
+		or area.is_in_group("IceBullet") \
+		or area.is_in_group("KanoAttack"):
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 700
+		knockback_x = -facing * 100
 		take_damage(1)
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
+
