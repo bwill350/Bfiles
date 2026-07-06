@@ -22,7 +22,6 @@ signal combo_used(combo_name: String)
 
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
-const KANO_BULLET = preload("res://Projectiles/KanoBullet.tscn")
 var immune_groups := ["FireDeath", "IceDeath", "ElectricDeath"]
 var fire_finish_immunity := false
 var state: State = State.IDLE
@@ -110,6 +109,7 @@ const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
 const FIRE_COMBO = ["down", "right", "shoot"]
 const ICE_COMBO = ["left", "left", "shoot"]
 const ELECTRIC_COMBO = ["up", "down", "shoot"]
+const PUNCH_COMBO = ["down", "up", "left", "right"]
 
 func spawn_death_bullet():
 	var bullet = FIRE_BULLET.instantiate()
@@ -187,23 +187,14 @@ func _ready():
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
 
-	if is_cpu:
-		return
+	if event.is_action_pressed("jump"):
+		velocity.y = jump_velocity
 
-	if event.is_action_pressed("up"):
-		register_input("up")
+	var inputs = ["up", "down", "left", "right", "shoot"]
 
-	elif event.is_action_pressed("down"):
-		register_input("down")
-
-	elif event.is_action_pressed("left"):
-		register_input("left")
-
-	elif event.is_action_pressed("right"):
-		register_input("right")
-
-	elif event.is_action_pressed("shoot"):
-		register_input("shoot")
+	for i in inputs:
+		if event.is_action_pressed(i):
+			register_input(i)
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -326,10 +317,7 @@ func _physics_process(delta):
 		velocity.y = jump_velocity
 
 	# ---------------- ATTACKS ----------------
-	if Input.is_action_just_pressed("jumpkick"):
-		do_action("jumpkick")
-
-	elif Input.is_action_just_pressed("punch"):
+	if Input.is_action_just_pressed("punch"):
 		do_action("punch")
 
 	elif Input.is_action_just_pressed("roundhousekick"):
@@ -417,7 +405,7 @@ func cpu_logic(delta):
 			velocity.x = -facing * -600
 		else:
 			# normal knockback
-			velocity.x = -facing * 600
+			velocity.x = -facing * 100
 
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
@@ -724,6 +712,43 @@ func check_combos():
 		combo.clear()
 		return
 
+	elif combo == PUNCH_COMBO:
+
+		combo_used.emit("punch_combo")
+
+		combo.clear()
+
+		start_punch_combo()
+		return
+
+func start_punch_combo():
+
+	if action_locked:
+		return
+
+	await combo_attack([
+		"punch",
+		"kick",
+		"punch",
+		"roundhousekick",
+		"uppercut"
+	])
+
+func combo_attack(attacks: Array):
+
+	action_locked = true
+	is_attacking = true
+
+	for attack in attacks:
+
+		play_anim(attack)
+		spawn_attack(attack)
+
+		await sprite.animation_finished
+
+	is_attacking = false
+	action_locked = false
+
 func do_action(anim_name: String):
 
 	if spawn_locked:
@@ -773,7 +798,6 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
-		"jumpkick"
 	]:
 
 		var attack = REPTILE_ATTACK.instantiate()
@@ -793,8 +817,6 @@ func spawn_attack(anim_name: String):
 				dmg = 1
 			"roundhousekick":
 				dmg = 1
-			"jumpkick":
-				dmg = 1
 
 		if attack.has_method("set_damage"):
 			attack.set_damage(dmg)
@@ -803,6 +825,48 @@ func spawn_attack(anim_name: String):
 
 		attack.owner = self
 		return
+
+# ---------------- AI ACTIONS ----------------
+	if ai_timer <= 0:
+
+		match Game.difficulty:
+
+			"Hard":
+
+				# Very fast reactions
+				ai_timer = randf_range(0.05, 0.15)
+
+				var choice = randi() % 100
+
+				if choice < 20:
+					do_action("punch")
+				elif choice < 40:
+					do_action("kick")
+				elif choice < 65:
+					do_action("uppercut")
+				elif choice < 80:
+					do_action("roundhousekick")
+				elif choice < 80:
+					do_action("spear")
+				else:
+					shoot_player()
+
+			"Easy":
+
+				ai_timer = randf_range(0.5, 0.9)
+
+				var choice = randi() % 100
+
+				if choice < 40:
+					do_action("punch")
+				elif choice < 70:
+					do_action("kick")
+				elif choice < 85:
+					do_action("uppercut")
+				elif choice < 85:
+					do_action("spear")
+				else:
+					do_action("roundhousekick")
 
 
 	# ---------------- SPEAR ATTACK ----------------
@@ -1008,18 +1072,19 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 
 	if area.is_in_group("HitBox") \
 		or area.is_in_group("ReptileAcid") \
-		or area.is_in_group("ReptileBullet") \
-		or area.is_in_group("KanoBullet") \
+		or area.is_in_group("RaidenElectricBullet") \
 		or area.is_in_group("FireBullet") \
 		or area.is_in_group("Fireball") \
-		or area.is_in_group("JohnnyCageBullet") \
 		or area.is_in_group("SonyaBullet") \
-		or area.is_in_group("FireDeath"):
+		or area.is_in_group("JohnnyCageBullet") \
+		or area.is_in_group("KanoBullet") \
+		or area.is_in_group("IceBullet") \
+		or area.is_in_group("KanoAttack"):
 
 		hurt_cooldown = true
 
 	$Hurt.play()
-	knockback_x = -facing * 600
+	knockback_x = -facing * 100
 	take_damage(1)
 
 	await get_tree().create_timer(0.15).timeout
