@@ -178,23 +178,14 @@ func _ready():
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
 
-	if is_cpu:
-		return
+	if event.is_action_pressed("jump"):
+		velocity.y = jump_velocity
 
-	if event.is_action_pressed("up"):
-		register_input("up")
+	var inputs = ["up", "down", "left", "right", "shoot"]
 
-	elif event.is_action_pressed("down"):
-		register_input("down")
-
-	elif event.is_action_pressed("left"):
-		register_input("left")
-
-	elif event.is_action_pressed("right"):
-		register_input("right")
-
-	elif event.is_action_pressed("shoot"):
-		register_input("shoot")
+	for i in inputs:
+		if event.is_action_pressed(i):
+			register_input(i)
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
@@ -323,6 +314,8 @@ func _physics_process(delta):
 		velocity.y = jump_velocity
 		state = State.JUMP
 		play_anim("jump")
+
+
 
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("kick"):
@@ -553,7 +546,6 @@ func do_action(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
-		"nutcracker",
 		"cannonkick"
 	]:
 		spawn_attack(anim_name)
@@ -574,7 +566,6 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
-		"nutcracker",
 		"cannonkick"
 	]:
 		return
@@ -1020,13 +1011,15 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 
 	# ---------------- NORMAL DAMAGE SOURCES ----------------
 	if area.is_in_group("HitBox") \
-	or area.is_in_group("ReptileAcid") \
-	or area.is_in_group("RaidenElectricBullet") \
-	or area.is_in_group("FireBullet") \
-	or area.is_in_group("Fireball") \
-	or area.is_in_group("KanoBullet") \
-	or area.is_in_group("SonyaBullet") \
-	or area.is_in_group("IceBullet"):
+		or area.is_in_group("ReptileAcid") \
+		or area.is_in_group("RaidenElectricBullet") \
+		or area.is_in_group("FireBullet") \
+		or area.is_in_group("Fireball") \
+		or area.is_in_group("SonyaBullet") \
+		or area.is_in_group("JohnnyCageBullet") \
+		or area.is_in_group("KanoBullet") \
+		or area.is_in_group("IceBullet") \
+		or area.is_in_group("KanoAttack"):
 
 		hurt_cooldown = true
 
