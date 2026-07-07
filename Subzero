@@ -133,7 +133,7 @@ func run(input_dir: float):
 		return
 
 	state = State.RUN
-	velocity.x = input_dir * SPEED * 34  # faster than walk
+	velocity.x = input_dir * SPEED * 4  # faster than walk
 
 	if not is_attacking:
 		play_anim("run")
