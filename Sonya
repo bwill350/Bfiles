@@ -181,15 +181,14 @@ func run(input_dir: float):
 
 # ---------------- READY ----------------
 func _ready():
+
+	$Sprite.visible = true
 	$Crispy.visible = false
+
 	add_to_group("Fighter")
 	add_to_group("enemy")
-	add_to_group("JohnnyCage")
+	add_to_group("Sonya")
 
-	add_to_group("FireDeath")
-	add_to_group("IceDeath")
-	add_to_group("ElectricDeath")
-	
 	spawn_locked = false
 
 	health = max_health
@@ -198,6 +197,7 @@ func _ready():
 	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
+
 	facing = 1
 	sprite.flip_h = -facing < 0
 
@@ -503,7 +503,16 @@ func spawn_burst():
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
 
-	if spawn_locked:
+	if is_attacking:
+		return
+
+	if health <= 1:
+		return
+
+	if is_finish_state:
+		return
+
+	if state == State.DEAD:
 		return
 
 	if action_locked:
@@ -511,11 +520,10 @@ func do_action(anim_name: String):
 
 	action_locked = true
 	is_attacking = true
-	lock_timer = 0.3
+	lock_timer = 0.6
 
 	play_anim(anim_name)
 
-	# ---------------- NORMAL ATTACKS ----------------
 	if anim_name in [
 		"punch",
 		"kick",
@@ -524,22 +532,13 @@ func do_action(anim_name: String):
 	]:
 		spawn_attack(anim_name)
 
-	# ---------------- SPECIAL ----------------
-	elif anim_name == "shoot":
-		do_action("shoot")
-
-		if has_node("AttackMarker"):
-			var attack = SONYA_ATTACK.instantiate()
-			get_parent().add_child(attack)
-
-			attack.global_position = $AttackMarker.global_position
-			attack.scale.x = facing
-
 	await sprite.animation_finished
 
 	is_attacking = false
 	action_locked = false
 	hurt_locked = false
+
+	play_anim("idle")
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
@@ -693,19 +692,18 @@ func die():
 	get_tree().current_scene.add_child(death)
 	death.global_position = global_position
 
-	# stop everything
 	velocity = Vector2.ZERO
+
 	is_attacking = false
 	is_shooting = false
-	action_locked = true
-	hurt_locked = true
 	is_hurting = false
 
-	# 🔥 HARD SWAP SPRITES
-	$Sprite.visible = false          # AnimatedSprite2D OFF
-	$Crispy.visible = true         # static image ON
+	action_locked = true
+	hurt_locked = true
 
-	# optional delay before menu
+	$Sprite.visible = false
+	$Crispy.visible = true
+
 	await get_tree().create_timer(1.5).timeout
 
 	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
@@ -878,4 +876,3 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
-
