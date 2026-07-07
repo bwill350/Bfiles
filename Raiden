@@ -379,21 +379,20 @@ func _physics_process(delta):
 	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
 	# =========================================================
-	# ---------------- MOVEMENT BLOCKED BY ANIMATION ----------------
-	# ---------------- MOVEMENT BLOCKED BY ANIMATION ----------------
-	if anim_lock_movement:
-		velocity.x = move_toward(velocity.x, 0, SPEED * 10 * delta)
+	if Input.is_action_pressed("run") and input_dir != 0:
+		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
 	else:
-		if input_dir == 0:
-			velocity.x = 0
-			if is_on_floor() and not is_attacking:
-				state = State.IDLE
-				play_anim("idle")
+		velocity.x = input_dir * SPEED
+
+		# ---------------- STATE ----------------
+		if not is_on_floor():
+			state = State.JUMP
+		elif input_dir != 0:
+			state = State.WALK
+		elif input_dir != 0:
+			state = State.RUN
 		else:
-			if Input.is_action_pressed("run"):
-				run(input_dir)
-			else:
-				velocity.x = input_dir * SPEED
+			state = State.IDLE
 
 	# ---------------- ELECTRIC FLY ----------------
 	if electricfly_active:
@@ -435,7 +434,6 @@ func _physics_process(delta):
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
-		state = State.JUMP
 
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("punch"):
@@ -491,16 +489,12 @@ func cpu_logic(delta):
 			knockback_x = 0
 			is_hurting = false
 
-			velocity.y += GRAVITY * delta
 			move_and_slide()
 			return
 
 	if target == null or !is_instance_valid(target):
 		velocity.x = 0
 		return
-
-# GRAVITY
-	velocity.y += GRAVITY * delta
 
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
@@ -519,13 +513,8 @@ func cpu_logic(delta):
 
 	ai_timer -= delta
 
-	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
-
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
 
 # ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
