@@ -115,20 +115,13 @@ var combo_timer := 0.0
 # ---------------- COMBOS ----------------
 
 
-func _process(delta):
-	combo_timer -= delta
+func _unhandled_input(event):
 
-	if combo_timer <= 0:
-		input_buffer.clear()
+	var inputs = ["up", "down", "left", "right", "shoot"]
 
-	if Input.is_action_just_pressed("left"):
-		_register_input("L")
-
-	if Input.is_action_just_pressed("down"):
-		_register_input("D")
-
-	if Input.is_action_just_pressed("right"):
-		_register_input("R")
+	for i in inputs:
+		if event.is_action_pressed(i):
+			register_input(i)
 
 	_check_punch_combo()
 	_check_pink_combo()
@@ -174,10 +167,10 @@ func run(input_dir: float):
 		return
 
 	state = State.RUN
-	velocity.x = input_dir * SPEED * 4  # faster than walk
+	velocity.x = input_dir * SPEED * 2.5  # faster than walk
 
 	if not is_attacking:
-		play_anim("run")
+		play_anim("walk")
 
 # ---------------- READY ----------------
 func _ready():
@@ -717,6 +710,15 @@ func play_anim(anim_name: String):
 	current_anim = anim_name
 	sprite.play(anim_name)
 
+# ---------------- COMBOS ----------------
+func register_input(input: String):
+
+	combo.append(input)
+
+	combo_timer = 0.0
+
+	check_combo()
+
 func spawn_fx(scene: PackedScene):
 	if scene == null:
 		return
@@ -784,7 +786,7 @@ func _check_punch_combo():
 
 		start_punch_combo()
 
-func _check_combo():
+func check_combo():
 	if combo == PUNCH_COMBO:
 
 		combo_used.emit("punch_combo")
