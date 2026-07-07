@@ -21,7 +21,7 @@ signal combo_used(combo_name: String)
 @onready var character = get_parent()
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, BLOCK, PUNCH, CLIMB, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 var immune_groups := ["FireDeath", "IceDeath", "ElectricDeath"]
 var fire_finish_immunity := false
 var state: State = State.IDLE
@@ -249,9 +249,6 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
-
 	if action_locked:
 		return
 
@@ -420,9 +417,6 @@ func cpu_logic(delta):
 		velocity.x = 0
 		return
 
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
@@ -439,13 +433,8 @@ func cpu_logic(delta):
 		return
 
 	ai_timer -= delta
-
-	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
-
-# GRAVITY
-	velocity.y += GRAVITY * delta
 
 # ---------------- MOVEMENT ----------------
 	if not is_attacking:
@@ -767,7 +756,6 @@ func do_action(anim_name: String):
 	if anim_name in [
 		"punch",
 		"kick",
-		"jumpkick",
 		"uppercut",
 		"roundhousekick"
 	]:
