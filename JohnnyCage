@@ -256,8 +256,7 @@ func _physics_process(delta):
 	# ---------------- FACING ----------------
 	if input_dir != 0:
 		facing = input_dir
-
-	sprite.flip_h = facing > 0
+		sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$JohnnyShoot.position = Vector2(63 * facing, -155)
