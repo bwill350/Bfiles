@@ -178,9 +178,6 @@ func _ready():
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
 
-	if event.is_action_pressed("jump"):
-		velocity.y = jump_velocity
-
 	var inputs = ["up", "down", "left", "right", "shoot"]
 
 	for i in inputs:
@@ -492,6 +489,8 @@ func cpu_logic(delta):
 					do_action("roundhousekick")
 				elif choice < 80:
 					do_action("cannonkick")
+				elif choice < 90:
+					do_action("nutcracker")
 				else:
 					shoot_player()
 
@@ -509,6 +508,8 @@ func cpu_logic(delta):
 					do_action("uppercut")
 				elif choice < 90:
 					do_action("cannonkick")
+				elif choice < 95:
+					do_action("nutcracker")
 				else:
 					do_action("roundhousekick")
 
@@ -541,6 +542,7 @@ func do_action(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
+		"nutcracker",
 		"cannonkick"
 	]:
 		spawn_attack(anim_name)
@@ -561,6 +563,7 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
+		"nutcracker",
 		"cannonkick"
 	]:
 		return
