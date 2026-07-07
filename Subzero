@@ -158,9 +158,6 @@ func handle_double_tap_run(input_dir: float, delta: float) -> bool:
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
-	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
-
 	if state == State.DEAD:
 		return
 
@@ -178,7 +175,6 @@ func _physics_process(delta):
 
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
-
 
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -273,12 +269,6 @@ func _physics_process(delta):
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
 
-	move_and_slide()
-
-	# ---------------- JUMP ----------------
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jump_velocity
-
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("punch"):
 		do_action("punch")
@@ -344,9 +334,6 @@ func cpu_logic(delta):
 		velocity.x = 0
 		return
 
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
@@ -363,13 +350,8 @@ func cpu_logic(delta):
 		return
 
 	ai_timer -= delta
-
-	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
-
-# GRAVITY
-	velocity.y += GRAVITY * delta
 
 # ---------------- MOVEMENT ----------------
 	if not is_attacking:
