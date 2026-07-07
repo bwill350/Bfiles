@@ -31,6 +31,10 @@ var spawn_locked := true
 var spawn_protection := false
 var is_spear_pulled := false
 var last_hit_frame := 1
+var tap_time := 0.25
+var last_tap_time := 0.0
+var last_tap_dir := 0
+var run_locked := false
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 var state: State = State.IDLE
@@ -125,19 +129,31 @@ func _ready():
 	sprite.flip_h = -facing < 0
 
 func run(input_dir: float):
-
 	if input_dir == 0:
 		return
 
-	if state == State.DEAD:
-		return
-
 	state = State.RUN
+	velocity.x = input_dir * SPEED * 34  # faster than walk
 
-	velocity.x = input_dir * SPEED * 4
-
-	if not is_attacking and not is_hurting:
+	if not is_attacking:
 		play_anim("run")
+
+func handle_double_tap_run(input_dir: float, delta: float) -> bool:
+
+	if input_dir == 0:
+		return false
+
+	var now := Time.get_ticks_msec() / 1000.0
+
+	if input_dir == last_tap_dir:
+		if now - last_tap_time <= tap_time:
+			run_locked = true
+			return true
+
+	last_tap_time = now
+	last_tap_dir = input_dir
+
+	return false
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
