@@ -14,6 +14,7 @@ var owner_character = null
 var flicker_on := true
 var finished := false
 var flicker_tween: Tween
+var damage_done := false
 
 
 # ---------------- READY ----------------
@@ -140,3 +141,22 @@ func start_particle_burst():
 
 		t.tween_property(p, "scale", Vector2.ONE, 0.15)
 		t.tween_property(p, "modulate:a", 1.0, 0.1)
+
+
+# ---------------- DAMAGE ----------------
+func _on_area_entered(area: Area2D):
+	if damage_done or area == null:
+		return
+
+	var enemy = area.get_parent()
+
+	# Ignore the fighter that created this effect
+	if owner_character and enemy == owner_character:
+		return
+
+	if not area.is_in_group("HurtBox"):
+		return
+
+	if enemy and enemy.has_method("take_damage"):
+		enemy.take_damage(1)
+		damage_done = true
