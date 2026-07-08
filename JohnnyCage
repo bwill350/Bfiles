@@ -113,10 +113,10 @@ var is_running := false
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 @onready var character = get_parent()
 const PUNCH_COMBO = ["right", "down", "right"]
-const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
-const FIRE_COMBO = ["down", "right", "shoot"]
-const ICE_COMBO = ["left", "left", "shoot"]
-const ELECTRIC_COMBO = ["up", "down", "shoot"]
+const ACID_COMBO = ["down", "down", "down", "right"]
+const FIRE_COMBO = ["down", "up"]
+const ICE_COMBO = ["up", "down"]
+const ELECTRIC_COMBO = ["up", "down", "right"]
 
 func apply_stun(_duration := 4.0):
 
