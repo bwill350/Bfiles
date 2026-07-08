@@ -62,8 +62,8 @@ var lock_timer := 0.0
 var health: int
 var can_take_damage := true
 var is_blocking := false
-const ICE_COMBO = ["right", "down", "shoot"]
-const PUNCH_COMBO = ["down", "up", "right", "right"]
+const ICE_COMBO = ["up", "down"]
+const PUNCH_COMBO = ["right", "down", "right"]
 const BLOOD_EFFECT = preload("res://Bloodeffect.tscn")
 const SMOKE_EFFECT = preload("res://SmokeEffect.tscn")
 const GRAVITY = 5000
