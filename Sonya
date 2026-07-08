@@ -127,13 +127,6 @@ func _unhandled_input(event):
 	_check_pink_combo()
 	_check_fire_combo()
 
-func _register_input(i: String):
-	if combo_timer <= 0:
-		input_buffer.clear()
-
-	input_buffer.append(i)
-	combo_timer = COMBO_TIME
-
 func apply_stun(_duration := 4.0):
 
 	if state == State.DEAD:
@@ -713,9 +706,11 @@ func play_anim(anim_name: String):
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 
-	combo.append(input)
+	if combo_timer <= 0:
+		input_buffer.clear()
 
-	combo_timer = 0.0
+	input_buffer.append(input)
+	combo_timer = COMBO_TIME
 
 	check_combo()
 
@@ -756,7 +751,7 @@ func _check_pink_combo():
 
 	var last3 = input_buffer.slice(input_buffer.size() - 3, input_buffer.size())
 
-	if last3 == ["L", "D", "R"]:
+	if last3 == ["left", "down", "right"]:
 		input_buffer.clear() # IMPORTANT anti-spam fix
 		trigger_pink_death()
 
@@ -764,9 +759,9 @@ func _check_fire_combo():
 	if input_buffer.size() < 3:
 		return
 
-	var last3 = input_buffer.slice(input_buffer.size() - 3, input_buffer.size())
+	var last2 = input_buffer.slice(input_buffer.size() - 3, input_buffer.size())
 
-	if last3 == ["L", "L", "R"]:
+	if last2 == ["down", "up"]:
 		input_buffer.clear() # IMPORTANT anti-spam fix
 		trigger_fire_death()
 
@@ -780,7 +775,7 @@ func _check_punch_combo():
 		input_buffer.size()
 	)
 
-	if last3 == ["R", "D", "R"]:
+	if last3 == ["right", "down", "right"]:
 
 		input_buffer.clear()
 
