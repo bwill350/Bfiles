@@ -113,10 +113,10 @@ const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 var combo := []
 var combo_timer := 0.0
 var electricfly_y := 0.0
-const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
-const FIRE_COMBO = ["down", "right", "shoot"]
-const ICE_COMBO = ["left", "left", "shoot"]
-const ELECTRIC_COMBO = ["up", "down", "shoot"]
+const ACID_COMBO = ["down", "down", "down", "right"]
+const FIRE_COMBO = ["down", "up"]
+const ICE_COMBO = ["up", "down"]
+const ELECTRIC_COMBO = ["up", "down", "right"]
 const PUNCH_COMBO = ["right", "down", "right"]
 
 func apply_stun(_duration := 4.0):
@@ -266,9 +266,6 @@ func _ready():
 
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
-
-	if event.is_action_pressed("jump"):
-		velocity.y = jump_velocity
 
 	var inputs = ["up", "down", "left", "right", "shoot"]
 
