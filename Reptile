@@ -105,11 +105,11 @@ var combo_timer := 0.0
 
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
-const ACID_COMBO = ["down", "down", "down", "right", "shoot"]
-const FIRE_COMBO = ["down", "right", "shoot"]
-const ICE_COMBO = ["left", "left", "shoot"]
-const ELECTRIC_COMBO = ["up", "down", "shoot"]
-const PUNCH_COMBO = ["down", "up", "left", "right"]
+const ACID_COMBO = ["down", "down", "down", "right"]
+const FIRE_COMBO = ["down", "up"]
+const ICE_COMBO = ["up", "down"]
+const ELECTRIC_COMBO = ["up", "down", "right"]
+const PUNCH_COMBO = ["right", "down", "right"]
 
 func spawn_death_bullet():
 	var bullet = FIRE_BULLET.instantiate()
@@ -186,9 +186,6 @@ func _ready():
 	ai_timer = randf_range(0.2, 0.6)
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
-
-	if event.is_action_pressed("jump"):
-		velocity.y = jump_velocity
 
 	var inputs = ["up", "down", "left", "right", "shoot"]
 
@@ -662,7 +659,7 @@ func check_combos():
 		return
 
 	# ---------------- FIRE ----------------
-	elif combo == FIRE_COMBO:
+	elif combo == FIRE_COMBO: 
 
 		combo_used.emit("fire")
 
@@ -673,6 +670,7 @@ func check_combos():
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
+
 		return
 
 	# ---------------- ICE ----------------
