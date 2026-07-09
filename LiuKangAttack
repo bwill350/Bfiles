@@ -9,12 +9,13 @@ class_name LiuKangAttack
 var active := false
 var has_hit := false
 var damage := 1
+var attack_owner: Node = null
+var attack_name := ""
+var attack_type := ""
 
 func _ready():
 
 	add_to_group("LiuKangAttack")
-
-	add_to_group("HitBox")
 
 	await get_tree().process_frame
 
@@ -30,22 +31,20 @@ func _ready():
 
 
 func enable_hitbox():
+
 	active = true
 	monitoring = true
-
-	if collision:
-		collision.disabled = false
+	collision.disabled = false
 
 
 func disable_hitbox():
+
 	active = false
 	monitoring = false
-
-	if collision:
-		collision.disabled = true
+	collision.disabled = true
 
 
-func _on_area_entered(area: Area2D) -> void:
+func _on_area_entered(area):
 
 	if not active:
 		return
@@ -58,17 +57,37 @@ func _on_area_entered(area: Area2D) -> void:
 
 	var target = area.get_parent()
 
+	if attack_owner != null and target == attack_owner:
+		return
+
 	if target == null:
 		return
 
 	if not target.is_in_group("Fighter"):
 		return
 
-	if target == get_parent():
-		return
-
 	if not target.has_method("take_damage"):
 		return
 
+
 	has_hit = true
+
+
+	# =========================
+	# UPPERCUT LAUNCH
+	# =========================
+	if attack_name == "uppercut":
+
+		if "velocity" in target:
+
+			var dir = 1
+
+			if attack_owner != null:
+				dir = attack_owner.facing
+
+			target.velocity.x = dir * 100
+			target.velocity.y = -600
+			if "uppercut_launched" in target:
+				target.uppercut_launched = true
+
 	target.take_damage(damage)
