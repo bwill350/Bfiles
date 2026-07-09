@@ -1,12 +1,17 @@
 extends Area2D
+class_name ReptileAttack
 
 @onready var collision: CollisionShape2D = $CollisionShape2D
 
 @export var active_time := 0.2
 @export var lifetime := 0.6
+
 var active := false
 var has_hit := false
 var damage := 1
+var attack_owner: Node = null
+var attack_name := ""
+var attack_type := ""
 
 func _ready():
 
@@ -14,27 +19,37 @@ func _ready():
 
 	await get_tree().process_frame
 
+	area_entered.connect(_on_area_entered)
+
 	enable_hitbox()
 
 	await get_tree().create_timer(active_time).timeout
-
 	disable_hitbox()
 
 	await get_tree().create_timer(lifetime).timeout
 	queue_free()
 
+
 func enable_hitbox():
+
 	active = true
 	monitoring = true
 	collision.disabled = false
 
+
 func disable_hitbox():
+
 	active = false
 	monitoring = false
 	collision.disabled = true
 
-func _on_area_entered(area: Area2D) -> void:
+
+func _on_area_entered(area):
+
 	if not active:
+		return
+
+	if has_hit:
 		return
 
 	if area == null:
@@ -42,14 +57,37 @@ func _on_area_entered(area: Area2D) -> void:
 
 	var target = area.get_parent()
 
+	if attack_owner != null and target == attack_owner:
+		return
+
 	if target == null:
 		return
 
 	if not target.is_in_group("Fighter"):
 		return
 
-	if target == get_parent():
+	if not target.has_method("take_damage"):
 		return
 
-	if target.has_method("take_damage"):
-		target.take_damage(damage)
+
+	has_hit = true
+
+
+	# =========================
+	# UPPERCUT LAUNCH
+	# =========================
+	if attack_name == "uppercut":
+
+		if "velocity" in target:
+
+			var dir = 1
+
+			if attack_owner != null:
+				dir = attack_owner.facing
+
+			target.velocity.x = dir * 100
+			target.velocity.y = -600
+			if "uppercut_launched" in target:
+				target.uppercut_launched = true
+
+	target.take_damage(damage)
