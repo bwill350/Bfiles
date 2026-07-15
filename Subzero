@@ -25,6 +25,7 @@ Subzero (CharacterBody2D)
 
 signal health_changed(health)
 signal combo_used(combo_name: String)
+@onready var character = get_parent()
 var combo := []
 var combo_timer := 0.0
 var spawn_locked := true
@@ -35,18 +36,19 @@ var tap_time := 0.25
 var last_tap_time := 0.0
 var last_tap_dir := 0
 var run_locked := false
+
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 var state: State = State.IDLE
 var is_finish_state := false
 var hurt_cooldown := false
+
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
 var knockback_x := 0.0
 var hit_from_reptileacid := false
-@onready var character = get_parent()
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
 # ---------------- COMBAT ----------------
@@ -64,8 +66,8 @@ var can_take_damage := true
 var is_blocking := false
 const ICE_COMBO = ["up", "down"]
 const PUNCH_COMBO = ["right", "down", "right"]
-const BLOOD_EFFECT = preload("res://Bloodeffect.tscn")
-const SMOKE_EFFECT = preload("res://SmokeEffect.tscn")
+const BLOOD_EFFECT = preload("res://Projectiles/Bloodeffect.tscn")
+const SMOKE_EFFECT = preload("res://Projectiles/SmokeEffect.tscn")
 const GRAVITY = 5000
 
 # ---------------- EXPORTS ----------------
@@ -77,19 +79,21 @@ const GRAVITY = 5000
 @export var shoot_cooldown_time: float = 0.25
 @export var combo_reset_time := 1.0
 var shoot_cooldown := 0.0
+
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/Subzerobullet.tscn")
 const SUBZERO_ATTACK = preload("res://Projectiles/SubzeroAttack.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
-const SMOKE_DEATH = preload("res://SmokeEffect.tscn")
+const SMOKE_DEATH = preload("res://Deaths/SmokeDeath.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
+
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
 @onready var hit_box: Area2D = $SubzeroHurtBox
-@onready var shoot_marker: Marker2D = $Subzeroshoot
+@onready var shoot_marker: Marker2D = $SubzeroShoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
 @onready var smoke_marker: Marker2D = $SmokeMarker
@@ -107,12 +111,16 @@ func _unhandled_input(event):
 
 
 func update_facing_offsets():
-	$AttackMarker.position = Vector2(34 * facing, -124)
-	$SubzeroHurtBox/CollisionShape2D.position = Vector2(34 * facing, -81)
+	$AttackMarker.position = Vector2(63 * facing, -155)
+
 
 # ---------------- READY ----------------
 func _ready():
+
+	print("SUBZERO READY:", self)
+
 	$Crispy.visible = false
+
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Subzero")
@@ -120,13 +128,21 @@ func _ready():
 	spawn_locked = false
 
 	health = max_health
-	health_changed.emit(health)
+
+	# Wait until Level1 connects health_changed
+	call_deferred("emit_health")
 
 	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
+
 	facing = 1
 	sprite.flip_h = -facing < 0
+
+
+func emit_health():
+
+	health_changed.emit(health)
 
 func run(input_dir: float):
 	if input_dir == 0:
@@ -218,7 +234,7 @@ func _physics_process(delta):
 	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
-	$Subzeroshoot.position = Vector2(63 * facing, -155)
+	$SubzeroShoot.position = Vector2(63 * facing, -155)
 
 	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
@@ -543,7 +559,7 @@ func shoot_player():
 	var bullet = bullet_scene.instantiate()
 	get_tree().current_scene.add_child(bullet)
 
-	bullet.global_position = shoot_marker.global_position
+	bullet.global_position = $SubzeroShoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
 	await get_tree().create_timer(0.25).timeout
@@ -760,4 +776,3 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
-
