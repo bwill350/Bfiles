@@ -39,6 +39,9 @@ var last_tap_time := 0.0
 var last_tap_dir := 0
 var input_buffer: Array[String] = []
 const COMBO_TIME := 0.6
+var attack_owner: Node = null
+var attack_type := ""
+var uppercut_launched := false
 
 # ---------------- CPU ----------------
 var is_cpu := false
@@ -86,13 +89,13 @@ var shoot_cooldown := 0.0
 @export var combo_reset_time := 0.6
 
 # ---------------- PRELOADS ----------------
-const PINK_DEATH_SCENE = preload("res://PinkDeath.tscn")
+const PINK_DEATH_SCENE = preload("res://Deaths/PinkDeath.tscn")
 const BULLET_SCENE = preload("res://Projectiles/SonyaBullet.tscn")
 const SONYA_BULLET = preload("res://Projectiles/SonyaBullet.tscn")
 
 const SONYA_ATTACK = preload("res://Projectiles/SonyaAttack.tscn")
 
-const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
+const BLOOD_EFFECT = preload("res://Projectiles/Bloodeffect.tscn")
 
 # ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
@@ -212,6 +215,15 @@ func _physics_process(delta):
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
+	if uppercut_launched:
+
+		move_and_slide()
+
+		if is_on_floor():
+			uppercut_launched = false
+
+		return
+
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
@@ -301,8 +313,6 @@ func _physics_process(delta):
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
-
-	move_and_slide()
 
 	# =====================================================
 	# ATTACKS
@@ -537,13 +547,19 @@ func spawn_attack(anim_name: String):
 	]:
 		return
 
+
 	var attack = SONYA_ATTACK.instantiate()
+
 	get_tree().current_scene.add_child(attack)
 
-	attack.global_position = $AttackMarker.global_position
+	attack.add_to_group("HitBox")
+
+	attack.global_position = attack_marker.global_position
 	attack.scale.x = facing  # THIS replaces facing system
 
+
 	var dmg := 1
+
 
 	match anim_name:
 		"punch":
@@ -555,12 +571,18 @@ func spawn_attack(anim_name: String):
 		"roundhousekick":
 			dmg = 1
 
+
 	if attack.has_method("set_damage"):
 		attack.set_damage(dmg)
 	else:
 		attack.damage = dmg
 
+
+	# UPPERCUT KNOCKBACK SYSTEM
 	attack.owner = self
+	attack.attack_owner = self
+	attack.attack_name = anim_name
+	attack.attack_type = anim_name
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
@@ -729,7 +751,7 @@ func trigger_pink_death():
 	if target == null or !is_instance_valid(target):
 		return
 
-	var pink = preload("res://PinkDeath.tscn").instantiate()
+	var pink = preload("res://Deaths/PinkDeath.tscn").instantiate()
 	get_tree().current_scene.add_child(pink)
 
 	pink.global_position = target.global_position
@@ -756,7 +778,7 @@ func _check_pink_combo():
 		trigger_pink_death()
 
 func _check_fire_combo():
-	if input_buffer.size() < 3:
+	if input_buffer.size() < 2:
 		return
 
 	var last2 = input_buffer.slice(input_buffer.size() - 3, input_buffer.size())
