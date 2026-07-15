@@ -31,6 +31,10 @@ var spawn_protection := false
 var special_move_invincible := false
 var special_move_timer := 0.0
 var dead_locked := false
+var attack_owner: Node = null
+var attack_type := ""
+var uppercut_launched := false
+
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
@@ -78,10 +82,10 @@ const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
-const SPEAR_SCENE = preload("res://ReptileSpear.tscn")
+const SPEAR_SCENE = preload("res://Projectiles/ReptileSpear.tscn")
 const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
-const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
+const BLOOD_EFFECT = preload("res://Deaths/GreenBloodEffect.tscn")
 const REPTILE_BULLET = preload("res://Projectiles/ReptileBullet.tscn")
 
 # ---------------- DEATH FX ----------------
@@ -110,6 +114,7 @@ const FIRE_COMBO = ["down", "up"]
 const ICE_COMBO = ["up", "down"]
 const ELECTRIC_COMBO = ["up", "down", "right"]
 const PUNCH_COMBO = ["right", "down", "right"]
+const FATALITY_COMBO = ["down", "right","up"]
 
 func spawn_death_bullet():
 	var bullet = FIRE_BULLET.instantiate()
@@ -220,6 +225,15 @@ func _physics_process(delta):
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
+	if uppercut_launched:
+
+		move_and_slide()
+
+		if is_on_floor():
+			uppercut_launched = false
+
+		return
+
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
@@ -254,7 +268,7 @@ func _physics_process(delta):
 
 	# ---------------- FACING ----------------
 	if input_dir != 0:
-		facing = input_dir
+		facing = sign(input_dir)
 
 	sprite.flip_h = facing > 0
 
@@ -332,6 +346,9 @@ func _physics_process(delta):
 
 	elif Input.is_action_pressed("block"):
 		start_block()
+
+	elif Input.is_action_pressed("fatalitycombo"):
+		do_action("fatalitycombo")
 
 	elif Input.is_action_just_pressed("spear"):
 		start_spear()
@@ -479,7 +496,7 @@ func pull_enemy(enemy: CharacterBody2D):
 	enemy.is_hurting = true
 	enemy.stunned = true
 
-	var target_pos = $AttackMarker.global_position + Vector2(35 * facing, 0)
+	var target_pos = $AttackMarker.global_position + Vector2(5 * facing, -5)
 
 	while is_instance_valid(enemy) and enemy.global_position.distance_to(target_pos) > 8:
 
@@ -699,6 +716,7 @@ func check_combos():
 		combo.clear()
 		return
 
+	# ---------------- PUNCH ----------------
 	elif combo == PUNCH_COMBO:
 
 		combo_used.emit("punch_combo")
@@ -707,6 +725,29 @@ func check_combos():
 
 		start_punch_combo()
 		return
+
+	# ---------------- FATALITY_COMBO ----------------
+	elif combo == FATALITY_COMBO:
+
+		combo_used.emit("fatality_combo")
+
+		combo.clear()
+
+		do_action("fatalitycombo")
+		return
+
+func start_fatality():
+
+	action_locked = true
+	is_attacking = true
+
+	play_anim("fatalitycombo")
+	spawn_attack("fatalitycombo")
+
+	await sprite.animation_finished
+
+	is_attacking = false
+	action_locked = false
 
 func start_punch_combo():
 
@@ -755,7 +796,8 @@ func do_action(anim_name: String):
 		"punch",
 		"kick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"fatalitycombo"
 	]:
 		spawn_attack(anim_name)
 
@@ -769,48 +811,66 @@ func do_action(anim_name: String):
 			attack.global_position = $AttackMarker.global_position
 			attack.scale.x = facing
 
-	await sprite.animation_finished
+	await get_tree().create_timer(0.5).timeout
 
 	is_attacking = false
 	action_locked = false
 	hurt_locked = false
+	play_anim("idle")
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
 
-	# ---------------- NORMAL MELEE ----------------
-	if anim_name in [
+	if anim_name not in [
 		"punch",
 		"kick",
 		"uppercut",
 		"roundhousekick",
+		"fatalitycombo",
+		"FATALITY_COMBO"
 	]:
-
-		var attack = REPTILE_ATTACK.instantiate()
-		get_tree().current_scene.add_child(attack)
-
-		attack.global_position = $AttackMarker.global_position
-		attack.scale.x = facing
-
-		var dmg := 1
-
-		match anim_name:
-			"punch":
-				dmg = 1
-			"kick":
-				dmg = 1
-			"uppercut":
-				dmg = 1
-			"roundhousekick":
-				dmg = 1
-
-		if attack.has_method("set_damage"):
-			attack.set_damage(dmg)
-		else:
-			attack.damage = dmg
-
-		attack.owner = self
 		return
+
+
+	var attack = REPTILE_ATTACK.instantiate()
+
+	get_tree().current_scene.add_child(attack)
+
+	attack.add_to_group("HitBox")
+
+	attack.global_position = attack_marker.global_position
+	attack.scale.x = facing  # THIS replaces facing system
+
+
+	var dmg := 1
+
+
+	match anim_name:
+		"punch":
+			dmg = 1
+		"kick":
+			dmg = 1
+		"uppercut":
+			dmg = 1
+		"roundhousekick":
+			dmg = 1
+		"FATALITY_COMBO":
+			dmg = 1
+		"fatalitycombo":
+			dmg = 1
+
+
+	if attack.has_method("set_damage"):
+		attack.set_damage(dmg)
+	else:
+		attack.damage = dmg
+
+
+	# UPPERCUT KNOCKBACK SYSTEM
+	attack.owner = self
+	attack.attack_owner = self
+	attack.attack_name = anim_name
+	attack.attack_type = anim_name
 
 # ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
@@ -880,20 +940,26 @@ func spawn_attack(anim_name: String):
 
 func take_damage(amount: int):
 
-	if not can_take_damage:
+	# ALREADY DEAD / INVINCIBLE
+	if state == State.DEAD:
 		return
 
-	can_take_damage = false
+	if is_hurting:
+		return
 
-	await get_tree().create_timer(0.25).timeout
-
-	can_take_damage = true
-
-	if state == State.DEAD:
+	if not can_take_damage:
 		return
 
 	if spawn_protection:
 		return
+
+	can_take_damage = false
+
+	# hit cooldown
+	await get_tree().create_timer(0.25).timeout
+
+	can_take_damage = true
+
 
 	# BLOCK REDUCTION
 	if is_blocking:
@@ -902,41 +968,53 @@ func take_damage(amount: int):
 	if amount <= 0:
 		return
 
+
 	health -= amount
 	health = max(health, 0)
 
-	print("Reptile took damage: ", amount, " HP=", health)
+	print("LiuKang HP:", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
 
-# ---------------- FINISH HIM ----------------
+
+	# ==========================
+	# FINISH HIM STATE
+	# ==========================
 	if health == 1 and not is_finish_state:
 		trigger_finish_state()
 		return
 
-	# ---------------- FINAL HIT ----------------
+
+	# ==========================
+	# DEAD
+	# ==========================
 	if health <= 0:
-
-		finish_label.visible = false
 		die()
-		await get_tree().create_timer(0.5).timeout
-
-		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 		return
 
-	# ---------------- NORMAL HURT ----------------
+
+	# ==========================
+	# NORMAL HIT
+	# ==========================
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
 
 	state = State.IDLE
 
 	play_anim("hurt")
 
-	var blood = BLOOD_EFFECT.instantiate()
-	get_tree().current_scene.add_child(blood)
-	blood.global_position = $BloodMarker.global_position
+
+	if has_node("BloodMarker"):
+		var blood = BLOOD_EFFECT.instantiate()
+		get_tree().current_scene.add_child(blood)
+		blood.global_position = $BloodMarker.global_position
+
 
 	await get_tree().create_timer(0.25).timeout
 
