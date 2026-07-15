@@ -37,7 +37,7 @@ var tap_time := 0.25
 var last_tap_time := 0.0
 var last_tap_dir := 0
 var run_locked := false
-
+var waiting_for_cannonkick_direction := false
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 
@@ -81,16 +81,16 @@ var shoot_cooldown: float = 0.0
 @export var combo_reset_time := 0.6
 
 # ---------------- PRELOADS ----------------
-const BULLET_SCENE = preload("res://JohnnyCageBullet.tscn")
+const BULLET_SCENE = preload("res://Projectiles/JohnnyCageBullet.tscn")
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
-const JOHNNY_CAGE_BULLET = preload("res://JohnnyCageBullet.tscn")
+const JOHNNY_CAGE_BULLET = preload("res://Projectiles/JohnnyCageBullet.tscn")
 const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
-const JOHNNY_CAGE_ATTACK = preload("res://JohnnyCageAttack.tscn")
+const JOHNNY_CAGE_ATTACK = preload("res://Projectiles/JohnnyCageAttack.tscn")
 
-const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
+const BLOOD_EFFECT = preload("res://Deaths/GreenBloodEffect.tscn")
 
 # ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
@@ -249,14 +249,14 @@ func _physics_process(delta):
 
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
-
+	
 	# ---------------- FACING ----------------
 	if input_dir != 0:
 		facing = input_dir
 		sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
-	$JohnnyShoot.position = Vector2(63 * facing, -155)
+	$JohnnyCageShoot.position = Vector2(63 * facing, -155)
 
 	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
@@ -320,24 +320,16 @@ func _physics_process(delta):
 		do_action("roundhousekick")
 
 	elif Input.is_action_just_pressed("cannonkick"):
-		do_action("cannonkick")
-		sprite.modulate = Color(0, 1, 0)
-		var dir := Input.get_axis("left", "right")
-		await sprite.animation_finished
-
-		sprite.modulate = Color(1, 1, 1)
-
-		# fallback if no directional input
-		if dir == 0:
-			dir = facing
-
-		cannonkick(dir)
+		cannonkick(facing)
 
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
 
 	elif Input.is_action_just_pressed("nutcracker"):
 		do_action("nutcracker")
+
+	elif Input.is_action_just_pressed("kickfatality"):
+		do_action("kickfatality")
 
 	elif Input.is_action_just_pressed("shoot"):	
 		if shoot_cooldown <= 0:
@@ -543,7 +535,8 @@ func do_action(anim_name: String):
 		"uppercut",
 		"roundhousekick",
 		"nutcracker",
-		"cannonkick"
+		"cannonkick",
+		"kickfatality"
 	]:
 		spawn_attack(anim_name)
 
@@ -564,7 +557,8 @@ func spawn_attack(anim_name: String):
 		"uppercut",
 		"roundhousekick",
 		"nutcracker",
-		"cannonkick"
+		"cannonkick",
+		"kickfatality"
 	]:
 		return
 
@@ -589,6 +583,8 @@ func spawn_attack(anim_name: String):
 			dmg = 1
 		"cannonkick":
 			dmg = 1
+		"kickfatality":
+			dmg = 1
 
 	if attack.has_method("set_damage"):
 		attack.set_damage(dmg)
@@ -600,9 +596,6 @@ func spawn_attack(anim_name: String):
 func cannonkick(dir := 0):
 
 	if state == State.DEAD:
-		return
-
-	if action_locked:
 		return
 
 	# default direction
@@ -672,7 +665,7 @@ func shoot_player():
 
 	get_tree().current_scene.add_child(bullet)
 
-	bullet.global_position = $JohnnyShoot.global_position
+	bullet.global_position = $JohnnyCageShoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
 	# Flip sprite when facing right
