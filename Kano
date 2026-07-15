@@ -38,6 +38,10 @@ var last_tap_time := 0.0
 var last_tap_dir := 0
 var run_locked := false
 var bullet_spawned := false
+var attack_owner: Node = null
+var attack_type := ""
+var uppercut_launched := false
+
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 
@@ -91,15 +95,15 @@ const KANO_BULLET = preload("res://Projectiles/KanoBullet.tscn")
 const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
 const KANO_ATTACK = preload("res://Projectiles/KanoAttack.tscn")
 
-const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
+const BLOOD_EFFECT = preload("res://Deaths/GreenBloodEffect.tscn")
 
 # ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
-const SMOKE_DEATH = preload("res://SmokeEffect.tscn")
-const SMOKE_EFFECT = preload("res://SmokeEffect.tscn")
+const SMOKE_DEATH = preload("res://Deaths/SmokeDeath.tscn")
+const SMOKE_EFFECT = preload("res://Projectiles/SmokeEffect.tscn")
 
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
@@ -124,7 +128,7 @@ const ELECTRIC_COMBO = ["up", "down", "right"]
 const PUNCH_COMBO = ["right", "down", "right"]
 
 # ---------------- INPUT ----------------
-func _unhandled_input(event):
+func unhandled_input(event):
 
 	var inputs = ["up", "down", "left", "right", "shoot"]
 
@@ -243,6 +247,15 @@ func _physics_process(delta):
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
+	if uppercut_launched:
+
+		move_and_slide()
+
+		if is_on_floor():
+			uppercut_launched = false
+
+		return
+
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
@@ -286,9 +299,9 @@ func _physics_process(delta):
 
 	# ---------------- FACING ----------------
 	if input_dir != 0:
-		facing = input_dir
-		sprite.flip_h = facing > 0
-		update_attack_marker()
+		facing = sign(input_dir)
+
+	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$KanoShoot.position = Vector2(63 * facing, -155)
@@ -367,7 +380,7 @@ func _physics_process(delta):
 
 	elif Input.is_action_pressed("fatality"):
 		do_action("fatality")
-		
+
 
 	elif Input.is_action_pressed("block"):
 		start_block()
@@ -403,7 +416,7 @@ func cpu_logic(delta):
 		if is_spear_pulled:
 			velocity.x = -facing * -400
 		else:
-			velocity.x = -facing * 600
+			velocity.x = -facing * 100
 
 		# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -556,7 +569,8 @@ func do_action(anim_name: String):
 		"punch",
 		"kick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"cannonball"
 	]:
 		spawn_attack(anim_name)
 
@@ -579,38 +593,54 @@ func do_action(anim_name: String):
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
-	print("spawning kano attack")
-	update_attack_marker()
 
 	if anim_name not in [
 		"punch",
 		"kick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"cannonball"
 	]:
 		return
+
 
 	var attack = KANO_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
 
-	attack.add_to_group("HitBox")
 	attack.global_position = $AttackMarker.global_position
 	attack.scale.x = facing
+
 
 	var dmg := 1
 
 	match anim_name:
+
 		"punch":
 			dmg = 1
+
 		"kick":
 			dmg = 1
+
 		"uppercut":
 			dmg = 1
+
 		"roundhousekick":
 			dmg = 1
 
-	attack.damage = dmg
+		"cannonball":
+			dmg = 1
+
+
+	if attack.has_method("set_damage"):
+		attack.set_damage(dmg)
+	else:
+		attack.damage = dmg
+
+
+	# SEND ATTACK INFO TO HITBOX
+	attack.owner = self
 	attack.attack_owner = self
+	attack.attack_name = anim_name
 
 func start_cannonball(dir: float):
 
