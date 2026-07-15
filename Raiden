@@ -32,6 +32,9 @@ var run_locked := false
 var jump_requested := false
 var bullet_spawned := false
 var special_bullet : PackedScene = null
+var attack_owner: Node = null
+var attack_type := ""
+var uppercut_launched := false
 
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
@@ -88,7 +91,7 @@ const RAIDEN_ELECTRIC_BULLET = preload("res://Projectiles/RaidenElectricBullet.t
 const RAIDEN_ATTACK = preload("res://Projectiles/RaidenAttack.tscn")
 const ELECTRIC_FORCE_FIELD = preload("res://Projectiles/ElectricForceField.tscn")
 const ELECTRIC_BURST = preload("res://Projectiles/ElectricBurst.tscn")
-const BLOOD_EFFECT = preload("res://GreenBloodEffect.tscn")
+const BLOOD_EFFECT = preload("res://Deaths/GreenBloodEffect.tscn")
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
@@ -334,6 +337,15 @@ func _physics_process(delta):
 
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
+
+	if uppercut_launched:
+
+		move_and_slide()
+
+		if is_on_floor():
+			uppercut_launched = false
+
+		return
 
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -715,18 +727,23 @@ func spawn_attack(anim_name: String):
 		"punch",
 		"kick",
 		"uppercut",
-		"roundhousekick",
-		"electricfly"
+		"roundhousekick"
 	]:
 		return
 
+
 	var attack = RAIDEN_ATTACK.instantiate()
+
 	get_tree().current_scene.add_child(attack)
 
-	attack.global_position = $AttackMarker.global_position
+	attack.add_to_group("HitBox")
+
+	attack.global_position = attack_marker.global_position
 	attack.scale.x = facing  # THIS replaces facing system
 
+
 	var dmg := 1
+
 
 	match anim_name:
 		"punch":
@@ -737,16 +754,19 @@ func spawn_attack(anim_name: String):
 			dmg = 1
 		"roundhousekick":
 			dmg = 1
-		"electricfly":
-			dmg = 1
-			attack_move_distance = 2300
+
 
 	if attack.has_method("set_damage"):
 		attack.set_damage(dmg)
 	else:
 		attack.damage = dmg
 
+
+	# UPPERCUT KNOCKBACK SYSTEM
 	attack.owner = self
+	attack.attack_owner = self
+	attack.attack_name = anim_name
+	attack.attack_type = anim_name
 
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
