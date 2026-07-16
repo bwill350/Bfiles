@@ -38,6 +38,9 @@ var last_tap_time := 0.0
 var last_tap_dir := 0
 var run_locked := false
 var waiting_for_cannonkick_direction := false
+var jump_held := false
+var uppercut_launched := false
+
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 
@@ -49,6 +52,7 @@ var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
 var stunned := false
+
 # ---------------- FLAGS ----------------
 var is_blocking := false
 var is_hurting := false
@@ -62,6 +66,7 @@ var lock_timer := 0.0
 var cannonkick_active := false
 var cannonkick_timer := 0.0
 var hurt_cooldown := false
+
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -106,6 +111,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 @onready var shoot_marker: Marker2D = $JohnnyShoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
+
 # ---------------- COMBOS ----------------
 var combo := []
 var combo_timer := 0.0
@@ -151,10 +157,10 @@ func run(input_dir: float):
 		return
 
 	state = State.RUN
-	velocity.x = input_dir * SPEED * 4  # faster than walk
+	velocity.x = input_dir * SPEED * 4
 
-	if not is_attacking:
-		play_anim("walk")
+	if not is_attacking and is_on_floor():
+		play_anim("run")
 
 # ---------------- READY ----------------
 func _ready():
@@ -196,10 +202,6 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	if cannonkick_active:
-		move_and_slide()
-		return
-
 	# ---------------- DEATH / FINISH ----------------
 	if state == State.DEAD:
 		return
@@ -215,6 +217,14 @@ func _physics_process(delta):
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
+	if uppercut_launched:
+
+		move_and_slide()
+
+		if is_on_floor():
+			uppercut_launched = false
+
+		return
 
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -242,18 +252,17 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-
-
 	if action_locked:
 		return
 
 	var input_dir = Input.get_axis("left", "right")
 	var climb_pressed = Input.is_action_pressed("climb")
-	
+
 	# ---------------- FACING ----------------
 	if input_dir != 0:
-		facing = input_dir
-		sprite.flip_h = facing > 0
+		facing = sign(input_dir)
+
+	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$JohnnyCageShoot.position = Vector2(63 * facing, -155)
@@ -288,8 +297,6 @@ func _physics_process(delta):
 			if not is_attacking:
 				play_anim("jump")
 
-
-
 		State.WALK:
 			if not is_attacking:
 				play_anim("walk")
@@ -308,6 +315,7 @@ func _physics_process(delta):
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
+		play_anim("jump")
 
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("kick"):
@@ -331,7 +339,7 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("kickfatality"):
 		do_action("kickfatality")
 
-	elif Input.is_action_just_pressed("shoot"):	
+	elif Input.is_action_just_pressed("shoot"):
 		if shoot_cooldown <= 0:
 			shoot_player()
 
@@ -377,7 +385,7 @@ func shoot_acid():
 
 	get_tree().current_scene.add_child(bullet)
 
-	bullet.global_position = $JohnnyShoot.global_position
+	bullet.global_position = $JohnnyCageShoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
 	# 🔴 ONLY KANO'S VERSION IS RED
@@ -479,9 +487,9 @@ func cpu_logic(delta):
 					do_action("uppercut")
 				elif choice < 80:
 					do_action("roundhousekick")
-				elif choice < 80:
-					do_action("cannonkick")
 				elif choice < 90:
+					do_action("cannonkick")
+				elif choice < 95:
 					do_action("nutcracker")
 				else:
 					shoot_player()
@@ -689,9 +697,7 @@ func take_damage(amount: int):
 		return
 
 	can_take_damage = false
-
 	await get_tree().create_timer(0.25).timeout
-
 	can_take_damage = true
 
 	if state == State.DEAD:
@@ -705,7 +711,7 @@ func take_damage(amount: int):
 	if spawn_protection:
 		return
 
-	# BLOCK REDUCTION
+	# ---------------- BLOCK REDUCTION ----------------
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
@@ -722,25 +728,19 @@ func take_damage(amount: int):
 
 	# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
-
 		trigger_finish_state()
 		return
 
 	# ---------------- FINAL HIT ----------------
 	if health <= 0:
-
 		finish_label.visible = false
 		die()
-		await get_tree().create_timer(0.5).timeout
-
-		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 		return
 
 	# ---------------- NORMAL HURT ----------------
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
-
 	state = State.IDLE
 
 	play_anim("hurt")
@@ -749,12 +749,6 @@ func take_damage(amount: int):
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
-# ---------------- NORMAL HURT ----------------
-	is_hurting = true
-	hurt_locked = true
-	action_locked = true
-	state = State.IDLE
-	play_anim("hurt")
 	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
@@ -960,12 +954,9 @@ func die():
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
 
-	if current_anim == anim_name:
-		return
-
-	current_anim = anim_name
-
-	sprite.play(anim_name)
+	if sprite.animation != anim_name:
+		sprite.play(anim_name)
+		current_anim = anim_name
 
 # ---------------- HURT BOX ----------------
 func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
@@ -979,7 +970,7 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 	if not can_take_damage:
 		return
 
-		$Hurt.play()
+	$Hurt.play()
 
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
