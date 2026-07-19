@@ -81,7 +81,7 @@ const GRAVITY = 5000
 # ---------------- EXPORTS ----------------
 @export var SPEED = 300.0
 @export var CLIMB_SPEED = 250.0
-@export var jump_velocity = -1800.0
+@export var jump_velocity = -2500.0
 @export var max_health: int = 10
 @export var shoot_cooldown_time := 0.01
 @export var combo_reset_time := 0.6
@@ -383,7 +383,7 @@ func _physics_process(delta):
 	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
-	$Raidenshoot.position = Vector2(63 * facing, -155)
+	$Raidenshoot.position = Vector2(63 * facing, -225)
 
 	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
@@ -881,8 +881,10 @@ func die():
 	state = State.DEAD
 
 	var death = BLOOD_DEATH.instantiate()
-	get_tree().current_scene.add_child(death)
-	death.global_position = global_position
+
+	if get_parent():
+		get_parent().add_child(death)
+		death.global_position = global_position
 
 	# stop everything
 	velocity = Vector2.ZERO
