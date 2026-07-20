@@ -82,7 +82,7 @@ var shoot_cooldown: float = 0.0
 @export var SPEED = 300.0
 @export var CLIMB_SPEED = 250.0
 @export var max_health: int = 10
-@export var jump_velocity = -2200.0
+@export var jump_velocity = -2400.0
 @export var combo_reset_time := 0.6
 
 # ---------------- PRELOADS ----------------
@@ -252,7 +252,7 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	if action_locked:
+	if action_locked and !cannonkick_active:
 		return
 
 	var input_dir = Input.get_axis("left", "right")
@@ -265,7 +265,7 @@ func _physics_process(delta):
 	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
-	$JohnnyCageShoot.position = Vector2(63 * facing, -155)
+	$JohnnyCageShoot.position = Vector2(63 * facing, -225)
 
 	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
@@ -606,43 +606,49 @@ func cannonkick(dir := 0):
 	if state == State.DEAD:
 		return
 
-	# default direction
 	if dir == 0:
 		dir = facing
 
 	facing = dir
 	sprite.flip_h = facing > 0
 
-	# lock movement/state
 	cannonkick_active = true
+	spawn_protection = true
 	action_locked = true
 	is_attacking = true
 
-	# 🔥 turn green instantly
 	sprite.modulate = Color(0, 1, 0)
-	await get_tree().process_frame  # forces visual update immediately
 
-	# animation + state
 	state = State.RUN
 	play_anim("cannonkick")
 
-	# movement burst
 	velocity.x = facing * 1400
 	velocity.y = 0
 
-	# duration of move
-	await get_tree().create_timer(0.4).timeout
+	# Stop after 0.4 seconds
+	get_tree().create_timer(0.4).timeout.connect(func():
+		cannonkick_active = false
+	)
 
-	# 🔥 RESET COLOR (THIS FIXES “stays green”)
+	# Damage while moving
+	while cannonkick_active:
+		velocity.x = facing * 1400
+		move_and_slide()
+		spawn_attack("cannonkick")
+		await get_tree().process_frame
+
+	# Restore everything
+	velocity.x = 0
 	sprite.modulate = Color(1, 1, 1)
 
-	# unlock
+	spawn_protection = false
 	cannonkick_active = false
 	is_attacking = false
 	action_locked = false
 
 	if state != State.DEAD:
 		state = State.IDLE
+		play_anim("idle")
 
 # ---------------- SHOOT ----------------
 func shoot_player():
