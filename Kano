@@ -81,7 +81,7 @@ var shoot_cooldown: float = 0.0
 @export var SPEED = 300.0
 @export var CLIMB_SPEED = 250.0
 @export var max_health: int = 10
-@export var jump_velocity = -2200.0
+@export var jump_velocity = -2800.0
 @export var combo_reset_time := 0.6
 
 # ---------------- PRELOADS ----------------
@@ -304,7 +304,7 @@ func _physics_process(delta):
 	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
-	$KanoShoot.position = Vector2(63 * facing, -155)
+	$KanoShoot.position = Vector2(63 * facing, -225)
 
 	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
@@ -650,7 +650,6 @@ func start_cannonball(dir: float):
 	facing = dir
 	sprite.flip_h = facing > 0
 
-	# LOCK MOVE
 	cannonball_active = true
 	spawn_protection = true
 	is_attacking = true
@@ -658,23 +657,23 @@ func start_cannonball(dir: float):
 
 	play_anim("cannonball")
 
-	# LAUNCH SPEED
 	velocity = Vector2(facing * 2200, 0)
 
-	# KEEP MOVING
-	await get_tree().create_timer(1.0).timeout
+	# Stop after 1 second
+	get_tree().create_timer(1.0).timeout.connect(func():
+		cannonball_active = false
+	)
 
-	# END CANNONBALL
-	cannonball_active = false
-	spawn_protection = false
-
-	is_attacking = false
-	action_locked = false
+	while cannonball_active:
+		spawn_attack("cannonball")
+		await get_tree().create_timer(0.08).timeout
 
 	velocity.x = 0
-
-	if state != State.DEAD:
-		play_anim("idle")
+	state = State.IDLE
+	spawn_protection = false
+	is_attacking = false
+	action_locked = false
+	play_anim("idle")
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -707,7 +706,7 @@ func shoot_player():
 
 	get_tree().current_scene.add_child(bullet)
 
-	$KanoShoot.position = Vector2(-3.9 * facing, -14.6)
+	$KanoShoot.position = Vector2(-3.9 * facing, -20.6)
 
 	bullet.global_position = $KanoShoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
