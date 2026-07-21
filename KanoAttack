@@ -24,9 +24,17 @@ func _ready():
 	enable_hitbox()
 
 	await get_tree().create_timer(active_time).timeout
+
+	if !is_inside_tree():
+		return
+
 	disable_hitbox()
 
 	await get_tree().create_timer(lifetime).timeout
+
+	if !is_inside_tree():
+		return
+
 	queue_free()
 
 
