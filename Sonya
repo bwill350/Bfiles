@@ -26,6 +26,7 @@ Sonya (CharacterBody2D)
 signal health_changed(health)
 signal combo_used(combo_name: String)
 @onready var character = get_parent()
+
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 var is_spear_pulled := false
@@ -83,7 +84,7 @@ var shoot_cooldown := 0.0
 # ---------------- EXPORTS ----------------
 @export var SPEED = 300.0
 @export var CLIMB_SPEED = 250.0
-@export var jump_velocity = -1800.0
+@export var jump_velocity = -2400.0
 @export var max_health: int = 10
 @export var shoot_cooldown_time := 0.01
 @export var combo_reset_time := 0.6
@@ -263,7 +264,7 @@ func _physics_process(delta):
 	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
-	$SonyaShoot.position = Vector2(63 * facing, -155)
+	$SonyaShoot.position = Vector2(63 * facing, -225)
 
 	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
@@ -364,9 +365,6 @@ func cpu_logic(delta):
 		velocity.x = 0
 		return
 
-# GRAVITY
-	velocity.y += GRAVITY * delta
-
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
@@ -387,9 +385,6 @@ func cpu_logic(delta):
 	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
-
-# GRAVITY
-	velocity.y += GRAVITY * delta
 
 # ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
@@ -645,7 +640,7 @@ func take_damage(amount: int):
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
-	await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(0.10).timeout
 
 	is_hurting = false
 	hurt_locked = false
@@ -843,7 +838,7 @@ func combo_attack(attacks: Array):
 
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
-
+	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
 		return
 
@@ -893,5 +888,5 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 		knockback_x = -facing * 100
 		take_damage(1)
 
-		await get_tree().create_timer(0.15).timeout
+		await get_tree().create_timer(0.10).timeout
 		hurt_cooldown = false
