@@ -966,7 +966,7 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
-
+	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
 		return
 
@@ -1007,12 +1007,13 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 		or area.is_in_group("JohnnyCageBullet") \
 		or area.is_in_group("KanoBullet") \
 		or area.is_in_group("IceBullet") \
+		or area.is_in_group("Subzerobullet") \
+		or area.is_in_group("SubzeroAttack") \
 		or area.is_in_group("KanoAttack"):
 
 		hurt_cooldown = true
 
 		knockback_x = -facing * 100
 		take_damage(1)
-
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
