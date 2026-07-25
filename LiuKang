@@ -41,6 +41,7 @@ var last_tap_dir := 0
 var run_locked := false
 var jump_requested := false
 var dragon_invisible := false
+var uppercut_launched := false
 
 # ---------------- CPU ----------------
 var special_move_invincible := false
@@ -362,6 +363,15 @@ func _physics_process(delta):
 	# ---------------- GRAVITY (ONLY ONCE) ----------------
 	velocity.y += GRAVITY * delta
 
+	if uppercut_launched:
+
+		move_and_slide()
+
+		if is_on_floor():
+			uppercut_launched = false
+
+		return
+
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
@@ -529,7 +539,7 @@ func cpu_logic(delta):
 	facing = direction
 	sprite.flip_h = facing > 0
 
-# GRAVITY
+	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
 # ---------------- MOVEMENT ----------------
@@ -597,6 +607,18 @@ func cpu_logic(delta):
 					shoot_fireball()
 
 func do_action(anim_name: String):
+
+	if is_attacking:
+		return
+
+	if health <= 1:
+		return
+
+	if is_finish_state:
+		return
+
+	if state == State.DEAD:
+		return
 
 	if action_locked:
 		return
@@ -1015,7 +1037,6 @@ func stop_block():
 
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
-	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
 		return
 
@@ -1027,6 +1048,11 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 
 	if not can_take_damage:
 		return
+
+	if area.get("attack_name") and area.attack_name == "uppercut":
+		$Sprite.play("wasuppercut")
+	else:
+		$Sprite.play("hurt")
 
 	$Hurt.play()
 
