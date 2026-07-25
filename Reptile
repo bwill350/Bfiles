@@ -273,7 +273,7 @@ func _physics_process(delta):
 	sprite.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
-	$Reptileshoot.position = Vector2(63 * facing, -155)
+	$Reptileshoot.position = Vector2(63 * facing, -225)
 
 	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
@@ -340,6 +340,9 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("Reptilesacid"):
 		shoot_acid()
 
+	elif Input.is_action_pressed("knee"):
+		do_action("knee")
+
 	elif Input.is_action_just_pressed("shoot"):
 		if shoot_cooldown <= 0:
 			shoot_player()
@@ -350,11 +353,12 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("fatalitycombo"):
 		do_action("fatalitycombo")
 
-	elif Input.is_action_just_pressed("spear"):
+	elif Input.is_action_pressed("spear"):
 		start_spear()
 
 	elif Input.is_action_pressed("invisible"):
 		invisible()
+
 	elif Input.is_action_pressed("visible"):
 		sprite.visible = true
 
@@ -524,6 +528,7 @@ func pull_enemy(enemy: CharacterBody2D):
 	enemy.is_hurting = false
 	enemy.action_locked = false
 
+
 func start_spear():
 
 	if state == State.DEAD:
@@ -545,6 +550,11 @@ func start_spear():
 
 	is_attacking = false
 	action_locked = false
+	state = State.IDLE
+	velocity.x = 0
+
+	if is_on_floor():
+		play_anim("idle")
 
 func spawn_spear():
 
@@ -610,7 +620,7 @@ func shoot_player():
 
 	play_anim("shoot")
 
-	$Reptileshoot.position = Vector2(88.9 * facing, -14.6)
+	$Reptileshoot.position = Vector2(88.9 * facing, -225)
 
 	var bullet_scene: PackedScene = BULLET_SCENE
 	if special_bullet != null:
@@ -759,7 +769,8 @@ func start_punch_combo():
 		"kick",
 		"punch",
 		"roundhousekick",
-		"uppercut"
+		"uppercut",
+		"knee"
 	])
 
 func combo_attack(attacks: Array):
@@ -797,6 +808,7 @@ func do_action(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
+		"knee",
 		"fatalitycombo"
 	]:
 		spawn_attack(anim_name)
@@ -826,6 +838,7 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
+		"knee",
 		"fatalitycombo",
 		"FATALITY_COMBO"
 	]:
@@ -857,6 +870,8 @@ func spawn_attack(anim_name: String):
 		"FATALITY_COMBO":
 			dmg = 1
 		"fatalitycombo":
+			dmg = 1
+		"knee":
 			dmg = 1
 
 
@@ -894,6 +909,8 @@ func spawn_attack(anim_name: String):
 					do_action("roundhousekick")
 				elif choice < 80:
 					do_action("spear")
+				elif choice < 85:
+					do_action("knee")
 				else:
 					shoot_player()
 
@@ -911,6 +928,8 @@ func spawn_attack(anim_name: String):
 					do_action("uppercut")
 				elif choice < 85:
 					do_action("spear")
+				elif choice < 90:
+					do_action("knee")
 				else:
 					do_action("roundhousekick")
 
@@ -1122,7 +1141,7 @@ func spawn_attack_bullet(anim_name: String):
 	bullet.owner = self
 
 func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
-
+	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
 		return
 
