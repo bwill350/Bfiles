@@ -776,7 +776,7 @@ func take_damage(amount: int):
 
 	can_take_damage = false
 
-	await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(0.10).timeout
 
 	can_take_damage = true
 
@@ -1024,7 +1024,7 @@ func combo_attack(attacks: Array):
 	action_locked = false
 
 func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
-
+	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
 		return
 
