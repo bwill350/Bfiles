@@ -23,6 +23,7 @@ LiuKang (CharacterBody2D)
 signal health_changed(health)
 signal combo_used(combo_name: String)
 @export var speed := 300.0
+
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 var special_move := false
@@ -40,12 +41,14 @@ var last_tap_dir := 0
 var run_locked := false
 var jump_requested := false
 var dragon_invisible := false
+
 # ---------------- CPU ----------------
 var special_move_invincible := false
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
 var stunned := false
+
 # ---------------- FLAGS ----------------
 var is_blocking := false
 var is_hurting := false
@@ -77,7 +80,7 @@ const GRAVITY = 5000
 @export var SPEED := 300.0
 @export var CLIMB_SPEED := 250.0
 @export var max_health := 10
-@export var jump_velocity := -2200.0
+@export var jump_velocity := -2400.0
 @export var combo_reset_time := 0.6
 @export var shoot_cooldown_time: float = 0.01
 
@@ -376,6 +379,7 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+
 	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
 
@@ -384,7 +388,7 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing > 0
 	$AttackMarker.position = Vector2(63 * facing, -155)
-	$LiuKangShoot.position = Vector2(63 * facing, -155)
+	$LiuKangShoot.position = Vector2(63 * facing, -225)
 
 	# ---------------- MOVEMENT ----------------
 	if Input.is_action_pressed("run") and input_dir != 0:
@@ -437,6 +441,8 @@ func _physics_process(delta):
 		start_bicyclekick()
 	elif Input.is_action_pressed("invisible"):
 		invisible()
+	elif Input.is_action_pressed("knee"):
+		do_action("knee")
 	elif Input.is_action_pressed("visible"):
 		sprite.visible = true
 	elif Input.is_action_pressed("block"):
@@ -469,8 +475,10 @@ func _physics_process(delta):
 				velocity = Vector2.ZERO
 				return
 
-func invisible():
+func invisible() -> void:
 	sprite.visible = false
+	await get_tree().create_timer(2.1).timeout
+	sprite.visible = true
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
@@ -564,6 +572,8 @@ func cpu_logic(delta):
 					do_action("uppercut")
 				elif choice < 80:
 					do_action("roundhousekick")
+				elif choice < 85:
+					do_action("knee")
 				else:
 					shoot_fireball()
 
@@ -581,6 +591,8 @@ func cpu_logic(delta):
 					do_action("uppercut")
 				elif choice < 90:
 					do_action("roundhousekick")
+				elif choice < 95:
+					do_action("knee")
 				else:
 					shoot_fireball()
 
@@ -600,7 +612,8 @@ func do_action(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
-		"jumpkick"
+		"jumpkick",
+		"knee"
 	]:
 		spawn_attack(anim_name)
 
@@ -611,8 +624,9 @@ func do_action(anim_name: String):
 	elif anim_name == "bicyclekick":
 		start_bicyclekick()
 
-	await sprite.animation_finished
+	await get_tree().create_timer(0.15).timeout
 
+	hurt_cooldown = false
 	is_attacking = false
 	action_locked = false
 
@@ -681,9 +695,7 @@ func take_damage(amount: int):
 		return
 
 	can_take_damage = false
-
-	await get_tree().create_timer(0.03).timeout
-
+	await get_tree().create_timer(0.25).timeout
 	can_take_damage = true
 
 	if state == State.DEAD:
@@ -707,18 +719,16 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
-# ---------------- FINISH HIM ----------------
+	# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
 		trigger_finish_state()
 		return
 
 	# ---------------- FINAL HIT ----------------
 	if health <= 0:
-
 		finish_label.visible = false
 		die()
 		await get_tree().create_timer(0.5).timeout
-
 		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 		return
 
@@ -786,6 +796,8 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"uppercut",
 		"roundhousekick",
+		"flyingkick",
+		"knee"
 	]:
 		return
 
@@ -805,6 +817,10 @@ func spawn_attack(anim_name: String):
 		"uppercut":
 			dmg = 1
 		"roundhousekick":
+			dmg = 1
+		"flyingkick":
+			dmg = 1
+		"knee":
 			dmg = 1
 
 	if attack.has_method("set_damage"):
@@ -840,7 +856,7 @@ func die():
 
 
 	# optional delay before menu
-	await get_tree().create_timer(1.5).timeout
+	await get_tree().create_timer(3.5).timeout
 
 	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
@@ -962,7 +978,7 @@ func start_punch_combo():
 		"kick",
 		"punch",
 		"roundhousekick",
-		"uppercut"
+		"uppercut",
 	])
 
 func combo_attack(attacks: Array):
@@ -999,21 +1015,28 @@ func stop_block():
 
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
-
+	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
 		return
 
 	if area == null or !is_instance_valid(area):
 		return
 
+	if area.is_in_group("HurtBox"):
+		return
+
 	if not can_take_damage:
 		return
 
 	$Hurt.play()
+
+
 	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
+
 		hurt_cooldown = true
 		knockback_x = -facing * -600
+
 		health -= 1
 		health_changed.emit(health)
 
@@ -1021,29 +1044,40 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		is_hurting = true
 		action_locked = true
 
-		await get_tree().create_timer(0.8).timeout
+		await $Sprite.animation_finished
+
+		if state != State.DEAD and health > 0:
+			play_anim("idle")
 
 		is_spear_pulled = false
 		is_hurting = false
 		action_locked = false
+
+		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
 		return
 
+	# ---------------- NORMAL DAMAGE ----------------
 	if area.is_in_group("HitBox") \
-		or area.is_in_group("ReptileAcid") \
-		or area.is_in_group("RaidenElectricBullet") \
-		or area.is_in_group("FireBullet") \
-		or area.is_in_group("Fireball") \
-		or area.is_in_group("SonyaBullet") \
-		or area.is_in_group("JohnnyCageBullet") \
-		or area.is_in_group("KanoBullet") \
-		or area.is_in_group("IceBullet") \
-		or area.is_in_group("KanoAttack"):
+	or area.is_in_group("ReptileAcid") \
+	or area.is_in_group("RaidenElectricBullet") \
+	or area.is_in_group("FireBullet") \
+	or area.is_in_group("Fireball") \
+	or area.is_in_group("SonyaBullet") \
+	or area.is_in_group("JohnnyCageBullet") \
+	or area.is_in_group("KanoBullet") \
+	or area.is_in_group("IceBullet") \
+	or area.is_in_group("KanoAttack"):
 
 		hurt_cooldown = true
 
 		knockback_x = -facing * 100
+
 		take_damage(1)
+
+		if state != State.DEAD and health > 0:
+			await $Sprite.animation_finished
+			play_anim("idle")
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
