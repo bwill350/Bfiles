@@ -111,7 +111,7 @@ func _unhandled_input(event):
 
 
 func update_facing_offsets():
-	$AttackMarker.position = Vector2(63 * facing, -155)
+	$AttackMarker.position = Vector2(63 * facing, -211)
 
 
 # ---------------- READY ----------------
@@ -218,8 +218,6 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
 
 	if action_locked:
 		return
@@ -233,8 +231,8 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing > 0
 
-	$AttackMarker.position = Vector2(63 * facing, -155)
-	$SubzeroShoot.position = Vector2(63 * facing, -155)
+	$AttackMarker.position = Vector2(63 * facing, -211)
+	$Subzeroshoot.position = Vector2(63 * facing, -211)
 
 	# =========================================================
 	# 🟢 MOVEMENT (RUN ADDED HERE)
@@ -297,6 +295,9 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
+
+	elif Input.is_action_pressed("knee"):
+		do_action("knee")
 
 	elif Input.is_action_pressed("shoot"):
 		shoot_player()
@@ -427,7 +428,8 @@ func do_action(anim_name: String):
 		"punch",
 		"kick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"knee"
 	]:
 		spawn_attack(anim_name)
 
@@ -487,7 +489,8 @@ func start_punch_combo():
 		"kick",
 		"punch",
 		"roundhousekick",
-		"uppercut"
+		"uppercut",
+		"knee"
 	])
 
 func combo_attack(attacks: Array):
@@ -512,14 +515,17 @@ func spawn_attack(anim_name: String):
 		"punch",
 		"kick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"knee"
 	]:
 		return
+
 	var attack = SUBZERO_ATTACK.instantiate()
 	get_tree().current_scene.add_child(attack)
+
 	attack.add_to_group("HitBox")
 	attack.global_position = attack_marker.global_position
-	attack.scale.x = facing  # THIS replaces facing system
+	attack.scale.x = facing
 
 	var dmg := 1
 
@@ -532,13 +538,15 @@ func spawn_attack(anim_name: String):
 			dmg = 1
 		"roundhousekick":
 			dmg = 1
+		"knee":
+			dmg = 1
 
-	if attack.has_method("set_damage"):
-		attack.set_damage(dmg)
-	else:
-		attack.damage = dmg
+	attack.damage = dmg
 
-	attack.owner = self
+	# IMPORTANT
+	attack.attack_owner = self
+	attack.attack_name = anim_name
+	attack.attack_type = anim_name
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -559,7 +567,7 @@ func shoot_player():
 	var bullet = bullet_scene.instantiate()
 	get_tree().current_scene.add_child(bullet)
 
-	bullet.global_position = $SubzeroShoot.global_position
+	bullet.global_position = $Subzeroshoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
 	await get_tree().create_timer(0.25).timeout
@@ -728,7 +736,7 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
-
+	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
 		return
 
@@ -776,3 +784,4 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
 		await get_tree().create_timer(0.15).timeout
 		hurt_cooldown = false
+
