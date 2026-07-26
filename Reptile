@@ -98,6 +98,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
+@onready var finishhim_sound: AudioStreamPlayer2D = $FinishHim
 @onready var hit_box: Area2D = $ReptileHurtBox
 @onready var shoot_marker: Marker2D = $Reptileshoot
 @onready var attack_marker: Marker2D = $AttackMarker
@@ -353,7 +354,7 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("fatalitycombo"):
 		do_action("fatalitycombo")
 
-	elif Input.is_action_pressed("spear"):
+	elif Input.is_action_just_pressed("spear"):
 		start_spear()
 
 	elif Input.is_action_pressed("invisible"):
@@ -546,7 +547,7 @@ func start_spear():
 
 	spawn_spear()
 
-	await sprite.animation_finished
+	await get_tree().create_timer(0.5).timeout
 
 	is_attacking = false
 	action_locked = false
@@ -991,7 +992,7 @@ func take_damage(amount: int):
 	health -= amount
 	health = max(health, 0)
 
-	print("LiuKang HP:", health)
+	print("Reptile HP:", health)
 
 	health_changed.emit(health)
 	hit_sound.play()
@@ -1004,14 +1005,12 @@ func take_damage(amount: int):
 		trigger_finish_state()
 		return
 
-
 	# ==========================
 	# DEAD
 	# ==========================
 	if health <= 0:
 		die()
 		return
-
 
 	# ==========================
 	# NORMAL HIT
@@ -1028,12 +1027,10 @@ func take_damage(amount: int):
 
 	play_anim("hurt")
 
-
 	if has_node("BloodMarker"):
 		var blood = BLOOD_EFFECT.instantiate()
 		get_tree().current_scene.add_child(blood)
 		blood.global_position = $BloodMarker.global_position
-
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -1059,7 +1056,7 @@ func trigger_finish_state():
 	is_blocking = false
 
 	play_anim("idle")
-
+	$FinishHim.play()
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
@@ -1141,7 +1138,6 @@ func spawn_attack_bullet(anim_name: String):
 	bullet.owner = self
 
 func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
-	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
 		return
 
@@ -1150,6 +1146,11 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 
 	if not can_take_damage:
 		return
+
+	if area.get("attack_name") and area.attack_name == "uppercut":
+		$Sprite.play("wasuppercut")
+	else:
+		$Sprite.play("hurt")
 
 	$Hurt.play()
 
