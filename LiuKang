@@ -1107,21 +1107,6 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 
 		$Hurt.play()
 
-	if area.is_in_group("ReptileSpear"):
-		print("Spear hit!")
-
-		is_pulled = true
-		print("is_pulled =", is_pulled)
-
-		pull_timer = 0.35
-
-		var reptile = get_tree().get_first_node_in_group("Reptile")
-		print("Reptile =", reptile)
-
-		if reptile:
-			pull_target = reptile
-
-
 	if not can_take_damage:
 		return
 
