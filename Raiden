@@ -47,6 +47,9 @@ enum State { IDLE, WALK, RUN, JUMP, KICK, ROUNDHOUSEKICK, BLOCK, PUNCH, CLIMB, D
 
 var state: State = State.IDLE
 var speed
+var is_pulled := false
+var pull_timer := 0.0
+var pull_target: Node = null
 
 # ---------------- FLAGS ----------------
 var is_blocking := false
@@ -107,6 +110,10 @@ const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
+@onready var finishhim_sound: AudioStreamPlayer2D = $FinishHim
+@onready var electric_sound: AudioStreamPlayer2D = $Electric
+@onready var electricfly_sound: AudioStreamPlayer2D = $Electricfly
+@onready var electricsound2: AudioStreamPlayer2D = $ElectricSound2
 @onready var hit_box: Area2D = $RaidenHurtBox
 @onready var shoot_marker: Marker2D = $Raidenshoot
 @onready var attack_marker: Marker2D = $AttackMarker
@@ -317,6 +324,11 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
+	if is_pulled:
+		run_pull_logic(delta)
+		move_and_slide()
+		return
+
 	# ---------------- STUN ----------------
 	if stunned:
 		velocity = Vector2.ZERO
@@ -458,6 +470,7 @@ func _physics_process(delta):
 		do_action("roundhousekick")
 
 	elif Input.is_action_just_pressed("electricfly"):
+		$Hurt.play()
 		do_action("electricfly")
 		spawn_raiden_bullet()
 
@@ -481,6 +494,47 @@ func _physics_process(delta):
 		shoot_player()
 
 	move_and_slide()
+
+func spear_pulled_to_p1():
+	print("START PULL")
+
+	is_pulled = true
+	stunned = true
+	action_locked = true
+	is_hurting = true
+
+	pull_timer = 0.35
+
+	pull_target = get_tree().get_first_node_in_group("Reptile")
+
+func run_pull_logic(delta):
+	print("Running pull logic")
+	if pull_target == null or !is_instance_valid(pull_target):
+		is_pulled = false
+		stunned = false
+		action_locked = false
+		return
+
+	var dir = sign(pull_target.global_position.x - global_position.x)
+
+	velocity.x = dir * 900
+	velocity.y = -120
+
+	pull_timer -= delta
+
+	if pull_timer <= 0.0:
+
+		is_pulled = false
+
+		# SNAP to Reptile AttackMarker (THIS IS MK MOMENT)
+		global_position = pull_target.attack_marker.global_position + Vector2(40 * pull_target.facing, 0)
+
+		stunned = false
+		is_hurting = false
+		action_locked = false
+		is_attacking = true
+
+		pull_target = null
 
 func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
@@ -604,7 +658,8 @@ func shoot_player():
 	action_locked = true
 
 	play_anim("shoot")
-
+	if has_node("Hit"):
+		$Hit.play()
 	var bullet_scene: PackedScene
 
 	# 🔥 Combo override bullet
@@ -656,7 +711,7 @@ func spawn_force_field():
 	is_attacking = true
 
 	play_anim("doublepalmshocker")
-
+	$Hurt.play()
 	var field = ELECTRIC_FORCE_FIELD.instantiate()
 	get_tree().current_scene.add_child(field)
 
@@ -686,7 +741,7 @@ func do_action(anim_name: String):
 	lock_timer = 0.3
 
 	play_anim(anim_name)
-
+	$Electric.play()
 	# ---------------- NORMAL ATTACKS ----------------
 	if anim_name in [
 		"punch",
@@ -722,7 +777,7 @@ func do_action(anim_name: String):
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
-
+	$Hit.play()
 	if anim_name not in [
 		"punch",
 		"kick",
@@ -824,7 +879,7 @@ func take_damage(amount: int):
 	state = State.IDLE
 
 	play_anim("hurt")
-
+	$Electric.play()
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
@@ -1024,7 +1079,6 @@ func combo_attack(attacks: Array):
 	action_locked = false
 
 func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
-	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
 		return
 
@@ -1034,29 +1088,12 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("HurtBox"):
 		return
 
-		$Hurt.play()
+	if area.get("attack_name") and area.attack_name == "uppercut":
+		$Sprite.play("wasuppercut")
+	else:
+		$Sprite.play("Electric")
 
-	# ---------------- SPEAR PRIORITY ----------------
-	if area.is_in_group("ReptileSpear"):
-		hurt_cooldown = true
-		knockback_x = -facing * -600
-		health -= 1
-		health_changed.emit(health)
-
-		is_spear_pulled = true
-		is_hurting = true
-		action_locked = true
-
-		await get_tree().create_timer(0.8).timeout
-
-		is_spear_pulled = false
-		is_hurting = false
-		action_locked = false
-		hurt_cooldown = false
-		return
-
-	if not can_take_damage:
-		return
+		$Electric.play()
 
 # ---------------- ELECTRIC FLY DAMAGE ----------------
 	if electricfly_active:
@@ -1070,6 +1107,7 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 
 	if area.is_in_group("HitBox") \
 		or area.is_in_group("ReptileAcid") \
+		or area.is_in_group("ReptileBullet") \
 		or area.is_in_group("RaidenElectricBullet") \
 		or area.is_in_group("FireBullet") \
 		or area.is_in_group("Fireball") \
