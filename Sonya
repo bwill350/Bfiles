@@ -43,6 +43,9 @@ const COMBO_TIME := 0.6
 var attack_owner: Node = null
 var attack_type := ""
 var uppercut_launched := false
+var is_pulled := false
+var pull_timer := 0.0
+var pull_target: Node = null
 
 # ---------------- CPU ----------------
 var is_cpu := false
@@ -112,6 +115,7 @@ var combo_timer := 0.0
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
+@onready var finishher_sound: AudioStreamPlayer2D = $FinishHer
 @onready var hit_box: Area2D = $SonyaHurtBox
 @onready var shoot_marker: Marker2D = $SonyaShoot
 @onready var attack_marker: Marker2D = $AttackMarker
@@ -195,6 +199,11 @@ func _ready():
 func _physics_process(delta):
 
 	if state == State.DEAD:
+		return
+
+	if is_pulled:
+		run_pull_logic(delta)
+		move_and_slide()
 		return
 
 	# ---------------- STUN ----------------
@@ -340,6 +349,47 @@ func _physics_process(delta):
 		bullet.velocity = Vector2(facing, 0) * bullet.speed
 
 	move_and_slide()
+
+func spear_pulled_to_p1():
+	print("START PULL")
+
+	is_pulled = true
+	stunned = true
+	action_locked = true
+	is_hurting = true
+
+	pull_timer = 0.35
+
+	pull_target = get_tree().get_first_node_in_group("Reptile")
+
+func run_pull_logic(delta):
+	print("Running pull logic")
+	if pull_target == null or !is_instance_valid(pull_target):
+		is_pulled = false
+		stunned = false
+		action_locked = false
+		return
+
+	var dir = sign(pull_target.global_position.x - global_position.x)
+
+	velocity.x = dir * 900
+	velocity.y = -120
+
+	pull_timer -= delta
+
+	if pull_timer <= 0.0:
+
+		is_pulled = false
+
+		# SNAP to Reptile AttackMarker (THIS IS MK MOMENT)
+		global_position = pull_target.attack_marker.global_position + Vector2(40 * pull_target.facing, 0)
+
+		stunned = false
+		is_hurting = false
+		action_locked = false
+		is_attacking = true
+
+		pull_target = null
 
 func cpu_logic(delta):
 	# ---------------- HURT PRIORITY ----------------
@@ -664,7 +714,7 @@ func trigger_finish_state():
 	is_blocking = false
 
 	play_anim("idle")
-
+	$FinishHer.play()
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
@@ -838,7 +888,6 @@ func combo_attack(attacks: Array):
 
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
-	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
 		return
 
@@ -848,32 +897,19 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("HurtBox"):
 		return
 
+	if area.get("attack_name") and area.attack_name == "uppercut":
+		$Sprite.play("wasuppercut")
+	else:
+		$Sprite.play("hurt")
+
 		$Hurt.play()
-
-	# ---------------- SPEAR PRIORITY ----------------
-	if area.is_in_group("ReptileSpear"):
-		hurt_cooldown = true
-		knockback_x = -facing * -600
-		health -= 1
-		health_changed.emit(health)
-
-		is_spear_pulled = true
-		is_hurting = true
-		action_locked = true
-
-		await get_tree().create_timer(0.8).timeout
-
-		is_spear_pulled = false
-		is_hurting = false
-		action_locked = false
-		hurt_cooldown = false
-		return
 
 	if not can_take_damage:
 		return
 
 	if area.is_in_group("HitBox") \
 		or area.is_in_group("ReptileAcid") \
+		or area.is_in_group("ReptileBullet") \
 		or area.is_in_group("RaidenElectricBullet") \
 		or area.is_in_group("FireBullet") \
 		or area.is_in_group("Fireball") \
