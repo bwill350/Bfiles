@@ -352,7 +352,7 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("knee"):
 		do_action("knee")
 
-	elif Input.is_action_pressed("shoot"):
+	elif Input.is_action_just_pressed("shoot"):
 		shoot_player()
 
 	elif Input.is_action_pressed("block"):
