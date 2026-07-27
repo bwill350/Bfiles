@@ -42,6 +42,9 @@ var run_locked := false
 var jump_requested := false
 var dragon_invisible := false
 var uppercut_launched := false
+var is_pulled := false
+var pull_timer := 0.0
+var pull_target: Node = null
 
 # ---------------- CPU ----------------
 var special_move_invincible := false
@@ -93,10 +96,13 @@ const FIREBALL = preload("res://Projectiles/Fireball.tscn")
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
+@onready var bicyclekick_sound: AudioStreamPlayer2D = $Bicyclekick
+@onready var flyingkick_sound: AudioStreamPlayer2D = $Flyingkick
+@onready var finishhim_sound: AudioStreamPlayer2D = $FinishHim
 @onready var hit_box: Area2D = $LiuKangHurtBox
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 @onready var attack_marker: Marker2D = $AttackMarker
-@onready var shoot_marker: Marker2D = $LiuKangshoot
+@onready var shoot_marker: Marker2D = $LiuKangShoot
 @onready var character = get_parent()
 
 # ---------------- PRELOADS ----------------
@@ -194,7 +200,7 @@ func apply_stun(_duration := 4.0):
 
 func start_flyingkick():
 	play_anim("flyingkick")
-
+	$Flyingkick.play()
 	flyingkick_active = true
 	special_move = true
 	special_move_invincible = true
@@ -207,7 +213,7 @@ func start_flyingkick():
 
 func start_bicyclekick():
 	play_anim("bicyclekick")
-
+	$Bicyclekick.play()
 	bicyclekick_active = true
 	special_move = true
 	special_move_invincible = true
@@ -335,6 +341,11 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
+	if is_pulled:
+		run_pull_logic(delta)
+		move_and_slide()
+		return
+
 	# ---------------- GLOBAL LOCKS ----------------
 	if dragon_active or stunned:
 		velocity = Vector2.ZERO
@@ -445,9 +456,9 @@ func _physics_process(delta):
 		shoot_fireball()
 	elif Input.is_action_pressed("block"):
 		start_block()
-	elif Input.is_action_pressed("flyingkick"):
+	elif Input.is_action_just_pressed("flyingkick"):
 		start_flyingkick()
-	elif Input.is_action_pressed("bicyclekick"):
+	elif Input.is_action_just_pressed("bicyclekick"):
 		start_bicyclekick()
 	elif Input.is_action_pressed("invisible"):
 		invisible()
@@ -484,6 +495,47 @@ func _physics_process(delta):
 
 				velocity = Vector2.ZERO
 				return
+
+func spear_pulled_to_p1():
+	print("START PULL")
+
+	is_pulled = true
+	stunned = true
+	action_locked = true
+	is_hurting = true
+
+	pull_timer = 0.35
+
+	pull_target = get_tree().get_first_node_in_group("Reptile")
+
+func run_pull_logic(delta):
+	print("Running pull logic")
+	if pull_target == null or !is_instance_valid(pull_target):
+		is_pulled = false
+		stunned = false
+		action_locked = false
+		return
+
+	var dir = sign(pull_target.global_position.x - global_position.x)
+
+	velocity.x = dir * 900
+	velocity.y = -120
+
+	pull_timer -= delta
+
+	if pull_timer <= 0.0:
+
+		is_pulled = false
+
+		# SNAP to Reptile AttackMarker (THIS IS MK MOMENT)
+		global_position = pull_target.attack_marker.global_position + Vector2(40 * pull_target.facing, 0)
+
+		stunned = false
+		is_hurting = false
+		action_locked = false
+		is_attacking = true
+
+		pull_target = null
 
 func invisible() -> void:
 	sprite.visible = false
@@ -791,7 +843,7 @@ func trigger_finish_state():
 	is_blocking = false
 
 	play_anim("idle")
-
+	$FinishHim.play()
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
@@ -850,7 +902,9 @@ func spawn_attack(anim_name: String):
 	else:
 		attack.damage = dmg
 
-	attack.owner = self
+	attack.attack_owner = self
+	attack.attack_name = anim_name
+	attack.attack_type = anim_name
 
 # ---------------- DEATH ----------------
 func die():
@@ -1046,64 +1100,47 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 	if area.is_in_group("HurtBox"):
 		return
 
-	if not can_take_damage:
-		return
-
 	if area.get("attack_name") and area.attack_name == "uppercut":
 		$Sprite.play("wasuppercut")
 	else:
 		$Sprite.play("hurt")
 
-	$Hurt.play()
+		$Hurt.play()
 
-
-	# ---------------- SPEAR PRIORITY ----------------
 	if area.is_in_group("ReptileSpear"):
+		print("Spear hit!")
 
-		hurt_cooldown = true
-		knockback_x = -facing * -600
+		is_pulled = true
+		print("is_pulled =", is_pulled)
 
-		health -= 1
-		health_changed.emit(health)
+		pull_timer = 0.35
 
-		is_spear_pulled = true
-		is_hurting = true
-		action_locked = true
+		var reptile = get_tree().get_first_node_in_group("Reptile")
+		print("Reptile =", reptile)
 
-		await $Sprite.animation_finished
+		if reptile:
+			pull_target = reptile
 
-		if state != State.DEAD and health > 0:
-			play_anim("idle")
 
-		is_spear_pulled = false
-		is_hurting = false
-		action_locked = false
-
-		await get_tree().create_timer(0.15).timeout
-		hurt_cooldown = false
+	if not can_take_damage:
 		return
 
-	# ---------------- NORMAL DAMAGE ----------------
 	if area.is_in_group("HitBox") \
-	or area.is_in_group("ReptileAcid") \
-	or area.is_in_group("RaidenElectricBullet") \
-	or area.is_in_group("FireBullet") \
-	or area.is_in_group("Fireball") \
-	or area.is_in_group("SonyaBullet") \
-	or area.is_in_group("JohnnyCageBullet") \
-	or area.is_in_group("KanoBullet") \
-	or area.is_in_group("IceBullet") \
-	or area.is_in_group("KanoAttack"):
+		or area.is_in_group("ReptileAcid") \
+		or area.is_in_group("ReptileBullet") \
+		or area.is_in_group("RaidenElectricBullet") \
+		or area.is_in_group("FireBullet") \
+		or area.is_in_group("Fireball") \
+		or area.is_in_group("SonyaBullet") \
+		or area.is_in_group("JohnnyCageBullet") \
+		or area.is_in_group("KanoBullet") \
+		or area.is_in_group("IceBullet") \
+		or area.is_in_group("KanoAttack"):
 
 		hurt_cooldown = true
 
 		knockback_x = -facing * 100
-
 		take_damage(1)
 
-		if state != State.DEAD and health > 0:
-			await $Sprite.animation_finished
-			play_anim("idle")
-
-		await get_tree().create_timer(0.15).timeout
+		await get_tree().create_timer(0.10).timeout
 		hurt_cooldown = false
