@@ -1093,8 +1093,6 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 	else:
 		$Sprite.play("Electric")
 
-		$Electric.play()
-
 # ---------------- ELECTRIC FLY DAMAGE ----------------
 	if electricfly_active:
 		if area.has_method("take_damage"):
