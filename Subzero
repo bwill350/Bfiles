@@ -36,12 +36,17 @@ var tap_time := 0.25
 var last_tap_time := 0.0
 var last_tap_dir := 0
 var run_locked := false
+var uppercut_launched := false
+var stunned := false
 
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 var state: State = State.IDLE
 var is_finish_state := false
 var hurt_cooldown := false
+var is_pulled := false
+var pull_timer := 0.0
+var pull_target: Node = null
 
 # ---------------- CPU ----------------
 var is_cpu := false
@@ -92,6 +97,7 @@ const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
+@onready var finishhim_sound: AudioStreamPlayer2D = $FinishHim
 @onready var hit_box: Area2D = $SubzeroHurtBox
 @onready var shoot_marker: Marker2D = $SubzeroShoot
 @onready var attack_marker: Marker2D = $AttackMarker
@@ -171,10 +177,48 @@ func handle_double_tap_run(input_dir: float, delta: float) -> bool:
 
 	return false
 
+func apply_stun(_duration := 4.0):
+
+	if state == State.DEAD:
+		return
+
+	stunned = true
+
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
+	velocity = Vector2.ZERO
+	knockback_x = 0
+
+	play_anim("idle")
+
+	await get_tree().create_timer(4.0).timeout
+
+	stunned = false
+
+	is_hurting = false
+	hurt_locked = false
+	action_locked = false
+
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
 
 	if state == State.DEAD:
+		return
+
+	if is_pulled:
+		run_pull_logic(delta)
+		move_and_slide()
+		return
+
+	# ---------------- STUN ----------------
+	if stunned:
+		velocity = Vector2.ZERO
 		return
 
 	# ---------------- DEATH / FINISH ----------------
@@ -189,8 +233,17 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# ---------------- GRAVITY ----------------
+	# ---------------- GRAVITY (ONLY ONCE) ----------------
 	velocity.y += GRAVITY * delta
+
+	if uppercut_launched:
+
+		move_and_slide()
+
+		if is_on_floor():
+			uppercut_launched = false
+
+		return
 
 	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
@@ -309,6 +362,48 @@ func _physics_process(delta):
 		stop_block()
 
 	move_and_slide()
+
+func spear_pulled_to_p1():
+	print("START PULL")
+
+	is_pulled = true
+	stunned = true
+	action_locked = true
+	is_hurting = true
+
+	pull_timer = 0.35
+
+	pull_target = get_tree().get_first_node_in_group("Reptile")
+
+func run_pull_logic(delta):
+	print("Running pull logic")
+	if pull_target == null or !is_instance_valid(pull_target):
+		is_pulled = false
+		stunned = false
+		action_locked = false
+		return
+
+	var dir = sign(pull_target.global_position.x - global_position.x)
+
+	velocity.x = dir * 900
+	velocity.y = -120
+
+	pull_timer -= delta
+
+	if pull_timer <= 0.0:
+
+		is_pulled = false
+
+		# SNAP to Reptile AttackMarker (THIS IS MK MOMENT)
+		global_position = pull_target.attack_marker.global_position + Vector2(40 * pull_target.facing, 0)
+
+		stunned = false
+		is_hurting = false
+		action_locked = false
+		is_attacking = true
+
+		pull_target = null
+
 # ---------------- BLOCK ----------------
 func start_block():
 
@@ -736,7 +831,8 @@ func play_anim(anim_name: String):
 	sprite.play(anim_name)
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
-	$Sprite.play("wasuppercut")
+	print("Subzero hit by:", area.name)
+	print(area.get_groups())
 	if hurt_cooldown:
 		return
 
@@ -746,25 +842,13 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	if not can_take_damage:
 		return
 
+	if area.get("attack_name") and area.attack_name == "uppercut":
+		$Sprite.play("wasuppercut")
+	else:
+		$Sprite.play("hurt")
+
 	$Hurt.play()
-	# ---------------- SPEAR PRIORITY ----------------
-	if area.is_in_group("ReptileSpear"):
-		hurt_cooldown = true
-		knockback_x = -facing * -600
-		health -= 1
-		health_changed.emit(health)
 
-		is_spear_pulled = true
-		is_hurting = true
-		action_locked = true
-
-		await get_tree().create_timer(0.8).timeout
-
-		is_spear_pulled = false
-		is_hurting = false
-		action_locked = false
-		hurt_cooldown = false
-		return
 
 	if area.is_in_group("HitBox") \
 		or area.is_in_group("ReptileAcid") \
