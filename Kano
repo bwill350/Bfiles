@@ -48,11 +48,16 @@ enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
 var spawn_locked := true
+var is_pulled := false
+var pull_timer := 0.0
+var pull_target: Node = null
+
 # ---------------- CPU ----------------
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
 var stunned := false
+
 # ---------------- FLAGS ----------------
 var is_blocking := false
 var is_hurting := false
@@ -66,6 +71,7 @@ var lock_timer := 0.0
 var cannonball_active := false
 var cannonball_timer := 0.0
 var hurt_cooldown := false
+
 # ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
@@ -73,6 +79,7 @@ var health: int
 var knockback_x := 0.0
 const GRAVITY = 5000
 var cannonball_ready := false
+
 # ---------------- COOLDOWNS ----------------
 var shoot_cooldown: float = 0.0
 
@@ -109,6 +116,8 @@ const SMOKE_EFFECT = preload("res://Projectiles/SmokeEffect.tscn")
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
+@onready var finishhim_sound: AudioStreamPlayer2D = $FinishHim
+@onready var kanoyell_sound: AudioStreamPlayer2D = $Kanoyell
 @onready var hit_box: Area2D = $KanoHurtBox
 @onready var shoot_marker: Marker2D = $KanoShoot
 
@@ -220,6 +229,11 @@ func _physics_process(delta):
 	velocity.y += GRAVITY * delta
 
 	if state == State.DEAD:
+		return
+
+	if is_pulled:
+		run_pull_logic(delta)
+		move_and_slide()
 		return
 
 	# ---------------- STUN ----------------
@@ -389,6 +403,47 @@ func _physics_process(delta):
 		stop_block()
 
 	move_and_slide()
+
+func spear_pulled_to_p1():
+	print("START PULL")
+
+	is_pulled = true
+	stunned = true
+	action_locked = true
+	is_hurting = true
+
+	pull_timer = 0.35
+
+	pull_target = get_tree().get_first_node_in_group("Reptile")
+
+func run_pull_logic(delta):
+	print("Running pull logic")
+	if pull_target == null or !is_instance_valid(pull_target):
+		is_pulled = false
+		stunned = false
+		action_locked = false
+		return
+
+	var dir = sign(pull_target.global_position.x - global_position.x)
+
+	velocity.x = dir * 900
+	velocity.y = -120
+
+	pull_timer -= delta
+
+	if pull_timer <= 0.0:
+
+		is_pulled = false
+
+		# SNAP to Reptile AttackMarker (THIS IS MK MOMENT)
+		global_position = pull_target.attack_marker.global_position + Vector2(40 * pull_target.facing, 0)
+
+		stunned = false
+		is_hurting = false
+		action_locked = false
+		is_attacking = true
+
+		pull_target = null
 
 # ---------------- BLOCK ----------------
 func start_block():
@@ -593,7 +648,7 @@ func do_action(anim_name: String):
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
-
+	$Kanoyell.play()
 	if anim_name not in [
 		"punch",
 		"kick",
@@ -666,6 +721,7 @@ func start_cannonball(dir: float):
 
 	while cannonball_active:
 		spawn_attack("cannonball")
+		$Kanoyell.play()
 		await get_tree().create_timer(0.08).timeout
 
 	velocity.x = 0
@@ -687,7 +743,7 @@ func shoot_player():
 	action_locked = true
 
 	play_anim("shoot")
-
+	$Kanoyell.play()
 	var bullet_scene: PackedScene
 
 	# ---------------- SPECIAL BULLET ----------------
@@ -807,7 +863,7 @@ func trigger_finish_state():
 	is_blocking = false
 
 	play_anim("idle")
-
+	$FinishHim.play()
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
@@ -924,7 +980,7 @@ func start_punch_combo():
 
 	if action_locked:
 		return
-
+	$Kanoyell.play()
 	await combo_attack([
 		"punch",
 		"kick",
@@ -988,9 +1044,8 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
-	$Sprite.play("wasuppercut")
 	if hurt_cooldown:
-		return
+		return 
 
 	if area == null or !is_instance_valid(area):
 		return
@@ -998,28 +1053,16 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 	if not can_take_damage:
 		return
 
+	if area.get("attack_name") and area.attack_name == "uppercut":
+		$Sprite.play("wasuppercut")
+	else:
+		$Sprite.play("hurt")
+
 	$Hurt.play()
-	# ---------------- SPEAR PRIORITY ----------------
-	if area.is_in_group("ReptileSpear"):
-		hurt_cooldown = true
-		knockback_x = -facing * -600
-		health -= 1
-		health_changed.emit(health)
-
-		is_spear_pulled = true
-		is_hurting = true
-		action_locked = true
-
-		await get_tree().create_timer(0.8).timeout
-
-		is_spear_pulled = false
-		is_hurting = false
-		action_locked = false
-		hurt_cooldown = false
-		return
 
 	if area.is_in_group("HitBox") \
 		or area.is_in_group("ReptileAcid") \
+		or area.is_in_group("ReptileBullet") \
 		or area.is_in_group("RaidenElectricBullet") \
 		or area.is_in_group("FireBullet") \
 		or area.is_in_group("Fireball") \
