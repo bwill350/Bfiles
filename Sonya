@@ -826,7 +826,7 @@ func _check_fire_combo():
 	if input_buffer.size() < 2:
 		return
 
-	var last2 = input_buffer.slice(input_buffer.size() - 3, input_buffer.size())
+	var last2 = input_buffer.slice(input_buffer.size() - 2, input_buffer.size())
 
 	if last2 == ["down", "up"]:
 		input_buffer.clear() # IMPORTANT anti-spam fix
