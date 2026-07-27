@@ -110,9 +110,9 @@ var combo_timer := 0.0
 
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
-const ACID_COMBO = ["down", "down", "down", "right"]
 const FIRE_COMBO = ["down", "up"]
 const ICE_COMBO = ["up", "down"]
+const KICK_COMBO = ["right", "down", "down"]
 const ELECTRIC_COMBO = ["up", "down", "right"]
 const PUNCH_COMBO = ["right", "down", "right"]
 const FATALITY_COMBO = ["down", "right","up"]
@@ -329,11 +329,23 @@ func _physics_process(delta):
 	if Input.is_action_just_pressed("punch"):
 		do_action("punch")
 
+	if Input.is_action_just_pressed("highpunch"):
+		do_action("highpunch")
+
+	if Input.is_action_just_pressed("lowpunch"):
+		do_action("punch")
+
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
 
 	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
+
+	elif Input.is_action_just_pressed("highkick"):
+		do_action("highkick")
+
+	elif Input.is_action_just_pressed("lowkick"):
+		do_action("lowkick")
 
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
@@ -352,6 +364,9 @@ func _physics_process(delta):
 		start_block()
 
 	elif Input.is_action_pressed("fatalitycombo"):
+		do_action("fatalitycombo")
+
+	elif Input.is_action_pressed("FATALITY_COMBO"):
 		do_action("fatalitycombo")
 
 	elif Input.is_action_just_pressed("spear"):
@@ -468,27 +483,63 @@ func cpu_logic(delta):
 		state = State.WALK
 		play_anim("walk")
 
-	# ---------------- AI ACTIONS ----------------
+# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
 
-		ai_timer = randf_range(0.4, 0.8)
+		match Game.difficulty:
 
-		match randi() % 5:
+			"Hard":
 
-			0:
-				do_action("punch")
+				# Very fast reactions
+				ai_timer = randf_range(0.05, 0.15)
 
-			1:
-				do_action("kick")
+				var choice = randi() % 100
 
-			2:
-				do_action("uppercut")
+				if choice < 20:
+					do_action("punch")
+				elif choice < 20:
+					do_action("highpunch")
+				elif choice < 20:
+					do_action("lowpunch")
+				elif choice < 20:
+					do_action("kick")
+				elif choice < 20:
+					do_action("highkick")
+				elif choice < 20:
+					do_action("lowkick")
+				elif choice < 65:
+					do_action("uppercut")
+				elif choice < 80:
+					do_action("roundhousekick")
+				elif choice < 80:
+					do_action("spear")
+				else:
+					shoot_player()
 
-			3:
-				do_action("roundhousekick")
+			"Easy":
 
-			4:
-				shoot_player()
+				ai_timer = randf_range(0.5, 0.9)
+
+				var choice = randi() % 100
+
+				if choice < 40:
+					do_action("punch")
+				elif choice < 40:
+					do_action("highpunch")
+				elif choice < 40:
+					do_action("lowpunch")
+				elif choice < 70:
+					do_action("kick")
+				elif choice < 70:
+					do_action("highkick")
+				elif choice < 70:
+					do_action("lowkick")
+				elif choice < 85:
+					do_action("spear")
+				elif choice < 85:
+					do_action("uppercut")
+				else:
+					do_action("roundhousekick")
 
 func pull_enemy(enemy: CharacterBody2D):
 
@@ -676,18 +727,8 @@ func spawn_fx(scene: PackedScene):
 
 func check_combos():
 
-	# ---------------- ACID ----------------
-	if combo == ACID_COMBO:
-
-		combo_used.emit("acid")
-
-		special_bullet = ACID_BULLET
-
-		combo.clear()
-		return
-
 	# ---------------- FIRE ----------------
-	elif combo == FIRE_COMBO: 
+	if combo == FIRE_COMBO: 
 
 		combo_used.emit("fire")
 
@@ -725,6 +766,16 @@ func check_combos():
 		special_bullet = ELECTRIC_BULLET
 
 		combo.clear()
+		return
+
+	# ---------------- PUNCH ----------------
+	elif combo == KICK_COMBO:
+
+		combo_used.emit("kick_combo")
+
+		combo.clear()
+
+		start_kick_combo()
 		return
 
 	# ---------------- PUNCH ----------------
@@ -767,11 +818,26 @@ func start_punch_combo():
 
 	await combo_attack([
 		"punch",
-		"kick",
+		"lowpunch",
 		"punch",
-		"roundhousekick",
 		"uppercut",
-		"knee"
+		"highpunch",
+		"uppercut"
+	])
+
+func start_kick_combo():
+
+	if action_locked:
+		return
+
+	await combo_attack([
+		"kick",
+		"knee",
+		"highkick",
+		"roundhousekick",
+		"lowkick",
+		"roundhousekick",
+		"highkick"
 	])
 
 func combo_attack(attacks: Array):
@@ -806,7 +872,11 @@ func do_action(anim_name: String):
 	# ---------------- NORMAL ATTACKS ----------------
 	if anim_name in [
 		"punch",
+		"highpunch",
+		"lowpunch",
 		"kick",
+		"highkick",
+		"lowkick",
 		"uppercut",
 		"roundhousekick",
 		"knee",
@@ -836,7 +906,11 @@ func spawn_attack(anim_name: String):
 
 	if anim_name not in [
 		"punch",
+		"highpunch",
+		"lowpunch",
 		"kick",
+		"highkick",
+		"lowkick",
 		"uppercut",
 		"roundhousekick",
 		"knee",
@@ -862,17 +936,25 @@ func spawn_attack(anim_name: String):
 	match anim_name:
 		"punch":
 			dmg = 1
+		"highpunch":
+			dmg = 1
+		"lowpunch":
+			dmg = 1
 		"kick":
+			dmg = 1
+		"highkick":
+			dmg = 1
+		"lowkick":
 			dmg = 1
 		"uppercut":
 			dmg = 1
 		"roundhousekick":
 			dmg = 1
-		"FATALITY_COMBO":
+		"knee":
 			dmg = 1
 		"fatalitycombo":
 			dmg = 1
-		"knee":
+		"FATALITY_COMBO":
 			dmg = 1
 
 
