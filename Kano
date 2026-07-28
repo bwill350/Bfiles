@@ -132,12 +132,11 @@ var combo_timer := 0.0
 @onready var character = get_parent()
 const ACID_COMBO = ["down", "down", "down", "right"]
 const FIRE_COMBO = ["down", "up"]
-const ICE_COMBO = ["up", "down"]
-const ELECTRIC_COMBO = ["up", "down", "right"]
 const PUNCH_COMBO = ["right", "down", "right"]
+const KICK_COMBO = ["right", "down", "down"]
 
 # ---------------- INPUT ----------------
-func unhandled_input(event):
+func _unhandled_input(event):
 
 	var inputs = ["up", "down", "left", "right", "shoot"]
 
@@ -373,10 +372,20 @@ func _physics_process(delta):
 	if Input.is_action_just_pressed("punch"):
 		do_action("punch")
 
+	if Input.is_action_just_pressed("highpunch"):
+		do_action("highpunch")
+
+	if Input.is_action_just_pressed("lowpunch"):
+		do_action("lowpunch")
 
 	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
 
+	elif Input.is_action_just_pressed("highkick"):
+		do_action("highkick")
+
+	elif Input.is_action_just_pressed("lowkick"):
+		do_action("lowkick")
 
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
@@ -520,7 +529,7 @@ func cpu_logic(delta):
 		if not is_attacking:
 			play_anim("walk")
 
-	# ---------------- AI ACTIONS ----------------
+# ---------------- AI ACTIONS ----------------
 	if ai_timer <= 0:
 
 		match Game.difficulty:
@@ -531,13 +540,21 @@ func cpu_logic(delta):
 
 				var choice = randi() % 100
 
-				if choice < 25:
+				if choice < 20:
 					do_action("punch")
-				elif choice < 50:
+				elif choice < 20:
 					do_action("kick")
-				elif choice < 70:
+				elif choice < 20:
+					do_action("highpunch")
+				elif choice < 40:
+					do_action("lowpunch")
+				elif choice < 40:
+					do_action("highkick")
+				elif choice < 40:
+					do_action("lowkick")
+				elif choice < 65:
 					do_action("uppercut")
-				elif choice < 90:
+				elif choice < 80:
 					do_action("roundhousekick")
 				else:
 					shoot_player()
@@ -548,11 +565,19 @@ func cpu_logic(delta):
 
 				var choice = randi() % 100
 
-				if choice < 45:
+				if choice < 40:
 					do_action("punch")
-				elif choice < 75:
+				elif choice < 45:
 					do_action("kick")
-				elif choice < 90:
+				elif choice < 50:
+					do_action("highpunch")
+				elif choice < 62:
+					do_action("lowpunch")
+				elif choice < 70:
+					do_action("highkick")
+				elif choice < 84:
+					do_action("lowkick")
+				elif choice < 92:
 					do_action("uppercut")
 				else:
 					do_action("roundhousekick")
@@ -601,7 +626,7 @@ func shoot_acid():
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
-
+	$Kanoyell.play()
 	if is_finish_state:
 		return
 
@@ -623,6 +648,10 @@ func do_action(anim_name: String):
 	if anim_name in [
 		"punch",
 		"kick",
+		"highpunch",
+		"lowpunch",
+		"highkick",
+		"lowkick",
 		"uppercut",
 		"roundhousekick",
 		"cannonball"
@@ -648,10 +677,13 @@ func do_action(anim_name: String):
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
-	$Kanoyell.play()
 	if anim_name not in [
 		"punch",
+		"highpunch",
+		"lowpunch",
 		"kick",
+		"highkick",
+		"lowkick",
 		"uppercut",
 		"roundhousekick",
 		"cannonball"
@@ -673,7 +705,19 @@ func spawn_attack(anim_name: String):
 		"punch":
 			dmg = 1
 
+		"highpunch":
+			dmg = 1
+
+		"lowpunch":
+			dmg = 1
+
 		"kick":
+			dmg = 1
+
+		"highkick":
+			dmg = 1
+
+		"lowkick":
 			dmg = 1
 
 		"uppercut":
@@ -943,28 +987,15 @@ func check_combos():
 		combo.clear()
 		return
 
-	# ---------------- ICE ----------------
-	elif combo == ICE_COMBO:
 
-		combo_used.emit("ice")
+	# ---------------- kick ----------------
+	elif combo == KICK_COMBO:
 
-		spawn_fx(ICE_DEATH)
-
-		special_bullet = ICE_BULLET
+		combo_used.emit("kick_combo")
 
 		combo.clear()
-		return
 
-	# ---------------- ELECTRIC ----------------
-	elif combo == ELECTRIC_COMBO:
-
-		combo_used.emit("electric")
-
-		spawn_fx(ELECTRIC_DEATH)
-
-		special_bullet = ELECTRIC_BULLET
-
-		combo.clear()
+		start_kick_combo()
 		return
 
 	elif combo == PUNCH_COMBO:
@@ -980,13 +1011,27 @@ func start_punch_combo():
 
 	if action_locked:
 		return
-	$Kanoyell.play()
 	await combo_attack([
 		"punch",
 		"kick",
 		"punch",
 		"roundhousekick",
 		"uppercut"
+	])
+
+func start_kick_combo():
+
+	if action_locked:
+		return
+
+	await combo_attack([
+		"kick",
+		"knee",
+		"highkick",
+		"roundhousekick",
+		"lowkick",
+		"roundhousekick",
+		"highkick"
 	])
 
 func combo_attack(attacks: Array):
