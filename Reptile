@@ -768,7 +768,7 @@ func check_combos():
 		combo.clear()
 		return
 
-	# ---------------- PUNCH ----------------
+	# ---------------- kick ----------------
 	elif combo == KICK_COMBO:
 
 		combo_used.emit("kick_combo")
