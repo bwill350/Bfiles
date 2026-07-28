@@ -594,10 +594,14 @@ func do_action(anim_name: String):
 
 	if anim_name in [
 		"punch",
+		"highpunch",
+		"lowpunch",
 		"kick",
+		"highkick",
 		"lowkick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"knee"
 	]:
 		spawn_attack(anim_name)
 
@@ -614,10 +618,14 @@ func spawn_attack(anim_name: String):
 
 	if anim_name not in [
 		"punch",
+		"highpunch",
+		"lowpunch",
 		"kick",
+		"highkick",
 		"lowkick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"knee"
 	]:
 		return
 
