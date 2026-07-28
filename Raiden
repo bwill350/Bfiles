@@ -774,7 +774,7 @@ func do_action(anim_name: String):
 	if anim_name in [
 		"punch",
 		"highpunch",
-		"lowunch",
+		"lowpunch",
 		"kick",
 		"highkick",
 		"lowkick",
