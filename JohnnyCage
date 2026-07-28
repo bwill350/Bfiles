@@ -123,10 +123,8 @@ var is_running := false
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 @onready var character = get_parent()
 const PUNCH_COMBO = ["right", "down", "right"]
-const ACID_COMBO = ["down", "down", "down", "right"]
+const KICK_COMBO = ["right", "down", "down"]
 const FIRE_COMBO = ["down", "up"]
-const ICE_COMBO = ["up", "down"]
-const ELECTRIC_COMBO = ["up", "down", "right"]
 
 func apply_stun(_duration := 4.0):
 
@@ -330,8 +328,20 @@ func _physics_process(delta):
 	if Input.is_action_just_pressed("kick"):
 		do_action("kick")
 
+	if Input.is_action_just_pressed("highkick"):
+		do_action("highkick")
+
+	if Input.is_action_just_pressed("lowkick"):
+		do_action("lowkick")
+
 	elif Input.is_action_just_pressed("punch"):
 		do_action("punch")
+
+	elif Input.is_action_just_pressed("highpunch"):
+		do_action("highpunch")
+
+	elif Input.is_action_just_pressed("lowpunch"):
+		do_action("lowpunch")
 
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
@@ -531,8 +541,16 @@ func cpu_logic(delta):
 
 				if choice < 20:
 					do_action("punch")
+				elif choice < 20:
+					do_action("highpunch")
+				elif choice < 20:
+					do_action("lowpunch")
 				elif choice < 40:
 					do_action("kick")
+				elif choice < 40:
+					do_action("lowkick")
+				elif choice < 40:
+					do_action("highkick")
 				elif choice < 65:
 					do_action("uppercut")
 				elif choice < 80:
@@ -552,8 +570,16 @@ func cpu_logic(delta):
 
 				if choice < 40:
 					do_action("punch")
+				elif choice < 45:
+					do_action("highpunch")
+				elif choice < 50:
+					do_action("lowpunch")
 				elif choice < 70:
 					do_action("kick")
+				elif choice < 70:
+					do_action("highkick")
+				elif choice < 70:
+					do_action("lowkick")
 				elif choice < 85:
 					do_action("uppercut")
 				elif choice < 90:
@@ -589,7 +615,11 @@ func do_action(anim_name: String):
 
 	if anim_name in [
 		"punch",
+		"highpunch",
+		"lowpunch",
 		"kick",
+		"highkick",
+		"lowkick",
 		"uppercut",
 		"roundhousekick",
 		"nutcracker",
@@ -611,7 +641,11 @@ func spawn_attack(anim_name: String):
 
 	if anim_name not in [
 		"punch",
+		"highpunch",
+		"lowpunch",
 		"kick",
+		"highkick",
+		"lowkick",
 		"uppercut",
 		"roundhousekick",
 		"nutcracker",
@@ -631,7 +665,15 @@ func spawn_attack(anim_name: String):
 	match anim_name:
 		"punch":
 			dmg = 1
+		"highpunch":
+			dmg = 1
+		"lowpunch":
+			dmg = 1
 		"kick":
+			dmg = 1
+		"highkick":
+			dmg = 1
+		"lowkick":
 			dmg = 1
 		"uppercut":
 			dmg = 1
@@ -891,18 +933,8 @@ func spawn_fx(scene: PackedScene) -> void:
 
 func check_combos():
 
-	# ---------------- ACID ----------------
-	if combo == ACID_COMBO:
-
-		combo_used.emit("acid")
-
-		special_bullet = ACID_BULLET
-
-		combo.clear()
-		return
-
 	# ---------------- FIRE ----------------
-	elif combo == FIRE_COMBO:
+	if combo == FIRE_COMBO:
 
 		combo_used.emit("fire")
 
@@ -915,28 +947,14 @@ func check_combos():
 		shoot_player()
 		return
 
-	# ---------------- ICE ----------------
-	elif combo == ICE_COMBO:
+	# ---------------- kick ----------------
+	elif combo == KICK_COMBO:
 
-		combo_used.emit("ice")
-
-		spawn_fx(ICE_DEATH)
-
-		special_bullet = ICE_BULLET
+		combo_used.emit("kick_combo")
 
 		combo.clear()
-		return
 
-	# ---------------- ELECTRIC ----------------
-	elif combo == ELECTRIC_COMBO:
-
-		combo_used.emit("electric")
-
-		spawn_fx(ELECTRIC_DEATH)
-
-		special_bullet = ELECTRIC_BULLET
-
-		combo.clear()
+		start_kick_combo()
 		return
 
 	elif combo == PUNCH_COMBO:
@@ -955,11 +973,27 @@ func start_punch_combo():
 
 	await combo_attack([
 		"punch",
-		"kick",
+		"lowpunch",
 		"punch",
-		"roundhousekick",
 		"uppercut",
-		"nutcracker"
+		"nutcracker",
+		"highpunch",
+		"uppercut"
+	])
+
+func start_kick_combo():
+
+	if action_locked:
+		return
+
+	await combo_attack([
+		"kick",
+		"knee",
+		"highkick",
+		"roundhousekick",
+		"lowkick",
+		"roundhousekick",
+		"highkick"
 	])
 
 func combo_attack(attacks: Array):
