@@ -846,8 +846,6 @@ func take_damage(amount: int):
 	if health <= 0:
 		finish_label.visible = false
 		die()
-		await get_tree().create_timer(0.5).timeout
-		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 		return
 
 	# ---------------- NORMAL HURT ----------------
@@ -974,7 +972,6 @@ func die():
 	get_tree().current_scene.add_child(death)
 	death.global_position = global_position
 
-	# stop everything
 	velocity = Vector2.ZERO
 	is_attacking = false
 	is_shooting = false
@@ -982,13 +979,18 @@ func die():
 	hurt_locked = true
 	is_hurting = false
 
-	# 🔥 HARD SWAP SPRITES
-	$Sprite.visible = false          # AnimatedSprite2D OFF
-	$Crispy.visible = true         # static image ON
+	# hide Liu death body
+	$Sprite.visible = false
+	$Crispy.visible = true
 
+	await get_tree().create_timer(6.5).timeout
 
-	# optional delay before menu
-	await get_tree().create_timer(3.5).timeout
+	# show Liu Kang again before menu
+	$Crispy.visible = false
+	$Sprite.visible = true
+	sprite.play("idle")
+
+	await get_tree().create_timer(11.0).timeout
 
 	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
