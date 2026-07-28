@@ -173,7 +173,7 @@ func start_electricfly(dir: float):
 	action_locked = true
 	is_attacking = true
 
-	var bullet_spawned := false
+	bullet_spawned = false
 	play_anim("electricfly")
 
 	velocity = Vector2(facing * 3600, -150)
@@ -410,8 +410,6 @@ func _physics_process(delta):
 			state = State.JUMP
 		elif input_dir != 0:
 			state = State.WALK
-		elif input_dir != 0:
-			state = State.RUN
 		else:
 			state = State.IDLE
 
