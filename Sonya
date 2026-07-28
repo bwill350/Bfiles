@@ -148,7 +148,7 @@ func spawn_fire_bullet():
 	var bullet = FIRE_BULLET.instantiate()
 	get_tree().current_scene.add_child(bullet)
 
-	bullet.global_position = $Reptileshoot.global_position
+	bullet.global_position = $SonyaShoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
 
 func apply_stun(_duration := 4.0):
