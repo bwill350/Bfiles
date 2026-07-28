@@ -815,6 +815,7 @@ func spawn_attack(anim_name: String):
 		"highpunch",
 		"lowpunch",
 		"kick",
+		"knee",
 		"highkick",
 		"lowkick",
 		"uppercut",
