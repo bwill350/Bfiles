@@ -635,16 +635,6 @@ func check_combos():
 		start_kick_combo()
 		return
 
-	# ---------------- PUNCH ----------------
-	elif combo == PUNCH_COMBO:
-
-		combo_used.emit("punch_combo")
-
-		combo.clear()
-
-		start_punch_combo()
-		return
-
 func start_punch_combo():
 
 	if action_locked:
@@ -684,10 +674,11 @@ func combo_attack(attacks: Array):
 		play_anim(attack)
 		spawn_attack(attack)
 
-	await get_tree().create_timer(1.5).timeout
+		await sprite.animation_finished
 
 	is_attacking = false
 	action_locked = false
+	hurt_locked = false
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
