@@ -888,7 +888,7 @@ func trigger_finish_state():
 	state = State.IDLE
 	velocity = Vector2.ZERO
 
-	is_attacking = true
+	is_attacking = false
 	is_shooting = false
 	is_hurting = false
 	is_blocking = false
