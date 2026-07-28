@@ -463,7 +463,7 @@ func cpu_logic(delta):
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
-		move_and_slide()
+		combo.clear()
 		return
 
 	ai_timer -= delta
@@ -857,7 +857,10 @@ func combo_attack(attacks: Array):
 
 func do_action(anim_name: String):
 
-	if spawn_locked:
+	if health <= 1:
+		return
+
+	if is_finish_state:
 		return
 
 	if action_locked and not is_hurting:
@@ -1130,32 +1133,30 @@ func trigger_finish_state():
 	state = State.IDLE
 	velocity = Vector2.ZERO
 
+	# FULL LOCK
 	action_locked = true
-	hurt_locked = false
+	hurt_locked = true
 	is_attacking = false
 	is_shooting = false
 	is_hurting = false
 	is_blocking = false
 
+	# stop combos
+	combo.clear()
+	combo_timer = 0
+
 	play_anim("idle")
+
 	$FinishHim.play()
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
-		finish_label.start_flicker(2.0, 0.05)
-		die()
+		finish_label.start_flicker(2.0,0.05)
+
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
-
-	state = State.IDLE
-	velocity = Vector2.ZERO
-
-	is_attacking = false
-	is_shooting = false
-	is_hurting = false
-	is_blocking = false
 
 # ---------------- DEATH ----------------
 func die():
