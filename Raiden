@@ -776,6 +776,7 @@ func do_action(anim_name: String):
 		"highpunch",
 		"lowpunch",
 		"kick",
+		"knee",
 		"highkick",
 		"lowkick",
 		"jumpkick",
@@ -845,6 +846,8 @@ func spawn_attack(anim_name: String):
 		"lowpunch":
 			dmg = 1
 		"kick":
+			dmg = 1
+		"knee":
 			dmg = 1
 		"highkick":
 			dmg = 1
