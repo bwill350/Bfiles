@@ -2,12 +2,11 @@ extends Area2D
 class_name FireBullet
 
 @export var speed: float = 1600.0
-@export var turn_speed: float = 6.0
 @export var lifetime: float = 3.0
 @export var damage: int = 1
 
 var velocity: Vector2 = Vector2.ZERO
-var target: Node2D = null
+var owner_character = null
 var has_hit := false
 
 func _ready():
@@ -15,35 +14,23 @@ func _ready():
 
 	area_entered.connect(_on_area_entered)
 
-	# find target (optional homing)
-	var players = get_tree().get_nodes_in_group("Subzero")
-	if players.size() > 0:
-		target = players[0]
-
-	# auto delete after time
+	# Destroy after lifetime
 	await get_tree().create_timer(lifetime).timeout
-	queue_free()
+
+	if is_instance_valid(self):
+		queue_free()
 
 func _physics_process(delta):
-
-	# ---------------- STRAIGHT MOVEMENT ----------------
-	if target == null or !is_instance_valid(target):
-		global_position += velocity * delta
-		return
-
-	# ---------------- HOMING MOVEMENT ----------------
-	var dir = (target.global_position - global_position).normalized()
-
-	velocity = velocity.lerp(dir * speed, turn_speed * delta)
-
-	global_position += velocity * delta
-	rotation = velocity.angle()
-
-func _on_area_entered(area: Area2D) -> void:
-
 	if has_hit:
 		return
 
+	global_position += velocity * delta
+
+func _on_area_entered(area: Area2D):
+	if has_hit:
+		return
+
+	# Ignore itself
 	if area.is_in_group("FireBullet"):
 		return
 
@@ -52,7 +39,12 @@ func _on_area_entered(area: Area2D) -> void:
 	if fighter == null:
 		return
 
-	if not fighter.is_in_group("Fighter"):
+	# Don't hit owner
+	if fighter == owner_character:
+		return
+
+	# Only hit fighters
+	if !fighter.is_in_group("Fighter"):
 		return
 
 	has_hit = true
