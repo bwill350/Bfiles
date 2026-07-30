@@ -79,7 +79,6 @@ var shoot_cooldown: float = 0.0
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/ReptileBullet.tscn")
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
-const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
 const SPEAR_SCENE = preload("res://Projectiles/ReptileSpear.tscn")
@@ -91,7 +90,6 @@ const REPTILE_BULLET = preload("res://Projectiles/ReptileBullet.tscn")
 # ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
-const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 
 # ---------------- NODES ----------------
@@ -732,28 +730,12 @@ func check_combos():
 
 		combo_used.emit("fire")
 
-		spawn_fx(FIRE_DEATH)
-
-		spawn_fire_bullet()
-
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
 
-		return
+		shoot_player()
 
-	# ---------------- ICE ----------------
-	elif combo == ICE_COMBO:
-
-		combo_used.emit("ice")
-
-		spawn_fx(ICE_DEATH)
-
-		spawn_death_bullet()
-
-		special_bullet = ICE_BULLET
-
-		combo.clear()
 		return
 
 	# ---------------- ELECTRIC ----------------
@@ -1183,7 +1165,7 @@ func die():
 	$Crispy.visible = true         # static image ON
 
 	# optional delay before menu
-	await get_tree().create_timer(1.5).timeout
+	await get_tree().create_timer(4).timeout
 
 	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
