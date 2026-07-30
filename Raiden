@@ -96,13 +96,11 @@ const ELECTRIC_FORCE_FIELD = preload("res://Projectiles/ElectricForceField.tscn"
 const ELECTRIC_BURST = preload("res://Projectiles/ElectricBurst.tscn")
 const BLOOD_EFFECT = preload("res://Deaths/GreenBloodEffect.tscn")
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
-const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
 
 # ---------------- DEATH FX ----------------
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
-const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 
@@ -779,7 +777,8 @@ func do_action(anim_name: String):
 		"lowkick",
 		"jumpkick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"electricfly"
 	]:
 		spawn_attack(anim_name)
 
@@ -808,7 +807,7 @@ func do_action(anim_name: String):
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
-	$Hit.play()
+	$Electric.play()
 	if anim_name not in [
 		"punch",
 		"highpunch",
@@ -818,7 +817,8 @@ func spawn_attack(anim_name: String):
 		"highkick",
 		"lowkick",
 		"uppercut",
-		"roundhousekick"
+		"roundhousekick",
+		"electricfly"
 	]:
 		return
 
@@ -854,6 +854,8 @@ func spawn_attack(anim_name: String):
 		"uppercut":
 			dmg = 1
 		"roundhousekick":
+			dmg = 1
+		"electricfly":
 			dmg = 1
 
 
@@ -1001,7 +1003,7 @@ func die():
 
 
 	# optional delay before menu
-	await get_tree().create_timer(1.5).timeout
+	await get_tree().create_timer(4.5).timeout
 
 	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
@@ -1038,29 +1040,12 @@ func check_combos():
 
 		combo_used.emit("fire")
 
-		spawn_fx(FIRE_DEATH)
-
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
 
 		shoot_player()
 		return
-
-
-	elif combo == ICE_COMBO:
-
-		combo_used.emit("ice")
-
-		spawn_fx(ICE_DEATH)
-
-		special_bullet = ICE_BULLET
-
-		combo.clear()
-
-		shoot_player()
-		return
-
 
 	elif combo == ELECTRIC_COMBO:
 
@@ -1101,6 +1086,7 @@ func start_punch_combo():
 		return
 
 	await combo_attack([
+		"electricfly",
 		"punch",
 		"lowpunch",
 		"punch",
@@ -1152,7 +1138,7 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 	if area.get("attack_name") and area.attack_name == "uppercut":
 		$Sprite.play("wasuppercut")
 	else:
-		$Sprite.play("Electric")
+		$Sprite.play("hurt")
 
 # ---------------- ELECTRIC FLY DAMAGE ----------------
 	if electricfly_active:
