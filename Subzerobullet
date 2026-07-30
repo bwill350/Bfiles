@@ -8,7 +8,11 @@ class_name SubzeroBullet
 
 var velocity: Vector2 = Vector2.ZERO
 
-@onready var sprite: AnimatedSprite2D = $Sprite2D
+var hit_target := false
+
+const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
+
+@onready var sprite: Sprite2D = $Sprite2D
 
 func _ready():
 	add_to_group("SubzeroBullet")
@@ -28,18 +32,73 @@ func set_direction(dir: Vector2):
 	velocity = dir.normalized() * speed
 
 func _on_area_entered(area: Area2D) -> void:
-	# ignore self/projectiles
+
+	if hit_target:
+		return
+
+	if area == null or !is_instance_valid(area):
+		return
+
+	# Ignore other Subzero bullets
 	if area.is_in_group("SubzeroBullet"):
 		return
 
-	var target = area.get_parent()
-	if target == null:
+	# Ignore hitboxes
+	if area.is_in_group("HitBox"):
 		return
 
-	# ---------------- UNIVERSAL DAMAGE ----------------
+	# Find the fighter
+	var target = area
+
+	if not target.is_in_group("Fighter"):
+		target = area.get_parent()
+
+	if target == null or !is_instance_valid(target):
+		return
+
+	if not target.is_in_group("Fighter"):
+		return
+
+	# Don't hit yourself
+	if target == get_parent():
+		return
+
+	hit_target = true
+
+	# =================================================
+	# ICE FATALITY
+	# ONLY HAPPENS IF P2 HAS 1 HP OR LESS
+	# =================================================
+	if "health" in target and target.health <= 1:
+
+		var ice_death = ICE_DEATH.instantiate()
+
+		ice_death.owner_character = get_parent()
+
+		get_tree().current_scene.add_child(ice_death)
+
+		# Spawn directly on P2
+		ice_death.global_position = target.global_position
+
+		# Kill P2
+		target.health = 0
+
+		if target.has_method("health_changed"):
+			target.health_changed.emit(target.health)
+
+		if target.has_method("die"):
+			target.die()
+
+		queue_free()
+		return
+
+	# =================================================
+	# NORMAL BULLET HIT
+	# =================================================
 	if target.has_method("take_damage"):
 		target.take_damage(damage)
 
-		# optional stun hook (only if your characters support it)
-		if target.has_method("apply_stun"):
-			target.apply_stun(stun_time)
+	if target.has_method("apply_stun"):
+		target.apply_stun(stun_time)
+
+	queue_free()
