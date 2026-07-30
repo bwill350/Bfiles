@@ -819,7 +819,7 @@ func take_damage(amount: int):
 		return
 
 	can_take_damage = false
-	await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(0.2).timeout
 	can_take_damage = true
 
 	if state == State.DEAD:
@@ -867,7 +867,7 @@ func take_damage(amount: int):
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
-	await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(0.2).timeout
 
 	is_hurting = false
 	hurt_locked = false
@@ -999,7 +999,7 @@ func die():
 	$Sprite.visible = true
 	sprite.play("idle")
 
-	await get_tree().create_timer(11.0).timeout
+	await get_tree().create_timer(5.0).timeout
 
 	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
@@ -1103,6 +1103,9 @@ func check_combos():
 		play_anim("dragon")
 
 		combo.clear()
+
+		await get_tree().create_timer(0.4).timeout
+
 		return
 
 	# ---------------- FATALITY_COMBO ----------------
@@ -1214,5 +1217,5 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		knockback_x = -facing * 100
 		take_damage(1)
 
-		await get_tree().create_timer(0.10).timeout
+		await get_tree().create_timer(0.2).timeout
 		hurt_cooldown = false
