@@ -91,7 +91,6 @@ var shoot_cooldown: float = 0.0
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/JohnnyCageBullet.tscn")
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
-const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
 const JOHNNY_CAGE_BULLET = preload("res://Projectiles/JohnnyCageBullet.tscn")
@@ -103,7 +102,6 @@ const BLOOD_EFFECT = preload("res://Deaths/GreenBloodEffect.tscn")
 # ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
-const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 
 # ---------------- NODES ----------------
@@ -271,7 +269,7 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing > 0
 
-	$AttackMarker.position = Vector2(63 * facing, -155)
+	$AttackMarker.position = Vector2(63 * facing, -255)
 	$JohnnyCageShoot.position = Vector2(63 * facing, -225)
 
 	# =========================================================
@@ -938,8 +936,6 @@ func check_combos():
 
 		combo_used.emit("fire")
 
-		spawn_fx(FIRE_DEATH)
-
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
@@ -1037,7 +1033,7 @@ func die():
 
 
 	# optional delay before menu
-	await get_tree().create_timer(1.5).timeout
+	await get_tree().create_timer(4.5).timeout
 
 	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
@@ -1050,8 +1046,6 @@ func play_anim(anim_name: String):
 
 # ---------------- HURT BOX ----------------
 func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
-	print("Johnny hit by:", area.name)
-	print(area.get_groups())
 	if hurt_cooldown:
 		return
 
