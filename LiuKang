@@ -107,14 +107,12 @@ const FIREBALL = preload("res://Projectiles/Fireball.tscn")
 
 # ---------------- PRELOADS ----------------
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
-const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const BLOOD_EFFECT = preload("res://Projectiles/Bloodeffect.tscn")
 
 # ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
-const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 const DRAGON_DEATH = preload("res://Deaths/DragonDeath.tscn")
 const ACID_COMBO = ["down", "down", "down", "right"]
@@ -124,6 +122,7 @@ const ELECTRIC_COMBO = ["up", "down", "right"]
 const PUNCH_COMBO = ["right", "down", "right"]
 const KICK_COMBO = ["right", "down", "down"]
 const DRAGON_COMBO = ["left", "down", "left", "right"]
+const FATALITY_COMBO = ["down", "right","up"]
 var special_move_x := 0.0
 var special_move_y := 0.0
 
@@ -463,6 +462,12 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("highkick"):
 		do_action("highkick")
 
+	elif Input.is_action_pressed("fatalitydragon"):
+		do_action("fatalitydragon")
+
+	elif Input.is_action_pressed("FATALITY_COMBO"):
+		do_action("fatalitydragon")
+
 	elif Input.is_action_just_pressed("lowkick"):
 		do_action("lowkick")
 
@@ -731,6 +736,7 @@ func do_action(anim_name: String):
 		"uppercut",
 		"roundhousekick",
 		"jumpkick",
+		"fatalitycombo",
 		"knee"
 	]:
 		spawn_attack(anim_name)
@@ -861,7 +867,7 @@ func take_damage(amount: int):
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
-	await get_tree().create_timer(0.03).timeout
+	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
 	hurt_locked = false
@@ -917,7 +923,8 @@ func spawn_attack(anim_name: String):
 		"uppercut",
 		"roundhousekick",
 		"flyingkick",
-		"knee"
+		"fatalitydragon",
+		"knee",
 	]:
 		return
 
@@ -947,6 +954,8 @@ func spawn_attack(anim_name: String):
 		"roundhousekick":
 			dmg = 1
 		"flyingkick":
+			dmg = 1
+		"fatalitydragon":
 			dmg = 1
 		"knee":
 			dmg = 1
@@ -1041,25 +1050,11 @@ func check_combos():
 
 		combo_used.emit("fire")
 
-		spawn_fx(FIRE_DEATH)
-
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
 
 		shoot_fireball()
-		return
-
-	# ---------------- ICE ----------------
-	elif combo == ICE_COMBO:
-
-		combo_used.emit("ice")
-
-		spawn_fx(ICE_DEATH)
-
-		special_bullet = ICE_BULLET
-
-		combo.clear()
 		return
 
 	# ---------------- ELECTRIC ----------------
@@ -1108,6 +1103,16 @@ func check_combos():
 		play_anim("dragon")
 
 		combo.clear()
+		return
+
+	# ---------------- FATALITY_COMBO ----------------
+	elif combo == FATALITY_COMBO:
+
+		combo_used.emit("fatality_combo")
+
+		combo.clear()
+
+		do_action("fatalitydragon")
 		return
 
 func start_punch_combo():
