@@ -793,7 +793,7 @@ func take_damage(amount: int):
 		return
 
 	can_take_damage = false
-	await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(0.2).timeout
 	can_take_damage = true
 
 	if state == State.DEAD:
@@ -845,7 +845,7 @@ func take_damage(amount: int):
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
-	await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(0.2).timeout
 
 	is_hurting = false
 	hurt_locked = false
@@ -1081,5 +1081,5 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 
 		knockback_x = -facing * 100
 		take_damage(1)
-		await get_tree().create_timer(0.15).timeout
+		await get_tree().create_timer(0.2).timeout
 		hurt_cooldown = false
