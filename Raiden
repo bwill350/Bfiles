@@ -916,7 +916,6 @@ func take_damage(amount: int):
 		die()
 		await get_tree().create_timer(0.5).timeout
 
-		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 		return
 
 	# ---------------- NORMAL HURT ----------------
@@ -1167,5 +1166,5 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 		knockback_x = -facing * 100
 		take_damage(1)
 
-		await get_tree().create_timer(0.15).timeout
+		await get_tree().create_timer(0.2).timeout
 		hurt_cooldown = false
