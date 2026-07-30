@@ -104,7 +104,6 @@ const BLOOD_EFFECT = preload("res://Projectiles/Bloodeffect.tscn")
 # ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH_SCENE = preload("res://Deaths/FireDeath.tscn")
-const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 const FIRE_COMBO = ["down", "up"]
@@ -729,7 +728,7 @@ func take_damage(amount: int):
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
-	await get_tree().create_timer(0.10).timeout
+	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
 	hurt_locked = false
@@ -754,23 +753,16 @@ func trigger_finish_state():
 
 	play_anim("idle")
 	$FinishHer.play()
+
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
-		die()
+
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
-
-	state = State.IDLE
-	velocity = Vector2.ZERO
-
-	is_attacking = false
-	is_shooting = false
-	is_hurting = false
-	is_blocking = false
 
 # ---------------- DEATH ----------------
 func die():
@@ -796,7 +788,7 @@ func die():
 	$Sprite.visible = false
 	$Crispy.visible = true
 
-	await get_tree().create_timer(1.5).timeout
+	await get_tree().create_timer(4.5).timeout
 
 	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
@@ -899,7 +891,6 @@ func check_combo():
 
 			combo_used.emit("fire")
 
-			spawn_fx(FIRE_DEATH)
 			spawn_fire_bullet()
 			special_bullet = FIRE_BULLET
 			return
