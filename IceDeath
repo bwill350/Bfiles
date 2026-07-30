@@ -1,93 +1,58 @@
 extends Area2D
+class_name IceDeath
 
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var sound: AudioStreamPlayer2D = $IceCrackSound
-@onready var ring: Sprite2D = $ShockwaveRing
+@onready var cleanup: Timer = $CleanupTimer
 
-@onready var p1: CPUParticles2D = $CPUParticles2D
-@onready var p2: CPUParticles2D = $CPUParticles2D2
-@onready var p3: CPUParticles2D = $CPUParticles2D3
-@onready var p4: CPUParticles2D = $CPUParticles2D4
-
-var flicker_on := true
-var finished := false
 var owner_character = null
+
+var finished := false
 var damage_done := false
-const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
+var flicker_on := true
+
 
 # ---------------- READY ----------------
 func _ready():
-	$CleanupTimer.start()
+
 	add_to_group("IceDeath")
 	add_to_group("HurtBox")
-	$CleanupTimer.timeout.connect(_on_cleanup_timer_timeout)
-	area_entered.connect(_on_area_entered)
-	add_to_group("IceDeath")
-	self.scale = Vector2.ZERO
 
-	if sprite:
-		sprite.play("charge")
+	cleanup.start()
 
-	if not is_inside_tree():
-		return
+	scale = Vector2.ZERO
 
 	if sound:
 		sound.play()
 
+	sprite.play("ice")
+
 	start_flicker()
-	start_main_animation()
-	start_shockwave()
-	start_particle_burst()
+	start_ice_animation()
 
-	await get_tree().create_timer(2.5).timeout
+	await sprite.animation_finished
 
-	stop_fatality()
+	stop_effect()
 
-# ---------------- DAMAGE ----------------
-func _on_area_entered(area: Area2D):
-	if damage_done or area == null:
-		return
 
-	var enemy = area.get_parent()
-
-	# Ignore the fighter that created this effect
-	if owner_character and enemy == owner_character:
-		return
-
-	if not area.is_in_group("HurtBox"):
-		return
-
-	if enemy and enemy.has_method("take_damage"):
-		enemy.take_damage(1)
-		damage_done = true
-
-# ---------------- STOP ----------------
-func stop_fatality():
-
-	if finished:
-		return
-
-	finished = true
-
-	if sprite:
-		sprite.stop()
-		sprite.modulate = Color.WHITE
-
-	if sound:
-		sound.stop()
-
-	if ring:
-		ring.modulate.a = 0.0
-
-	for p in [p1, p2, p3, p4]:
-		if p:
-			p.emitting = false
+# ---------------- ICE TWEEN ----------------
+func start_ice_animation():
 
 	var t = create_tween()
-	t.tween_property(self, "scale", Vector2.ZERO, 0.35)
-	await t.finished
-	$CleanupTimer.start()
-	queue_free()
+
+	# grow in
+	t.tween_property(self, "scale", Vector2.ONE, 0.15)
+
+	# huge ice burst
+	t.tween_property(self, "scale", Vector2(5,5), 0.15)
+
+	# shrink back
+	t.tween_property(self, "scale", Vector2(1.5,1.5), 0.15)
+
+	# disappear
+	t.tween_property(self, "scale", Vector2.ZERO, 0.25)
+
+
 
 # ---------------- FLICKER ----------------
 func start_flicker():
@@ -96,78 +61,64 @@ func start_flicker():
 	flicker.set_loops(8)
 
 	flicker.tween_callback(func():
+
 		if finished:
 			return
 
 		flicker_on = !flicker_on
 
 		if flicker_on:
-			sprite.modulate = Color(0.8, 1.2, 2.0)
+			sprite.modulate = Color.WHITE
 		else:
-			sprite.modulate = Color(0.4, 0.8, 1.5)
-	).set_delay(0.05)
+			sprite.modulate = Color(0.4,0.8,1.5)
 
-# ---------------- MAIN ANIMATION ----------------
-func start_main_animation():
+	)
 
-	var t = create_tween()
+	flicker.tween_interval(0.05)
 
-	t.tween_property(self, "scale", Vector2.ONE, 0.15)
-	t.tween_property(self, "scale", Vector2(0.3, 3), 0.12)
-	t.tween_property(self, "scale", Vector2.ONE, 0.18)
-	t.tween_property(self, "scale", Vector2.ZERO, 0.2)
 
-# ---------------- SHOCKWAVE ----------------
-func start_shockwave():
 
-	if ring == null:
+# ---------------- DAMAGE ----------------
+func _on_area_entered(area: Area2D):
+
+	if damage_done:
 		return
 
-	ring.scale = Vector2.ZERO
-	ring.modulate.a = 1.0
+	if area.is_in_group("Fighter"):
+
+		if area.has_method("take_damage"):
+
+			damage_done = true
+
+			area.take_damage(1)
+
+
+
+# ---------------- CLEANUP ----------------
+func stop_effect():
+
+	if finished:
+		return
+
+	finished = true
+
+	sprite.stop()
+	sprite.modulate = Color.WHITE
+
+	if sound:
+		sound.stop()
 
 	var t = create_tween()
+	t.tween_property(self, "scale", Vector2.ZERO, 0.3)
 
-	t.tween_property(ring, "scale", Vector2(1, 1), 0.35)
-	t.parallel().tween_property(ring, "modulate:a", 0.0, 0.35)
+	await t.finished
 
-# ---------------- PARTICLES ----------------
-func start_particle_burst():
+	queue_free()
 
-	var parts = [p1, p2, p3, p4]
 
-	for i in range(parts.size()):
 
-		var p = parts[i]
-
-		if p == null:
-			continue
-
-		p.emitting = false
-		p.scale = Vector2.ZERO
-		p.modulate.a = 0.0
-
-		var delay = i * 0.06
-
-		var t_in = create_tween()
-		t_in.tween_interval(delay)
-
-		t_in.tween_callback(func():
-			if finished:
-				return
-			p.emitting = true
-		)
-
-		t_in.tween_property(p, "scale", Vector2.ONE, 0.15)
-		t_in.tween_property(p, "modulate:a", 1.0, 0.1)
-
-		var t_out = create_tween()
-		t_out.tween_interval(0.5 + delay)
-		t_out.tween_property(p, "scale", Vector2.ZERO, 0.2)
-
-		t_out.tween_callback(func():
-			p.emitting = false
-		)
-
+# ---------------- TIMER ----------------
 func _on_cleanup_timer_timeout():
-	get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
+
+	if not finished:
+		stop_effect()
