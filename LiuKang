@@ -465,9 +465,6 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("fatalitydragon"):
 		do_action("fatalitydragon")
 
-	elif Input.is_action_pressed("FATALITY_COMBO"):
-		do_action("fatalitydragon")
-
 	elif Input.is_action_just_pressed("lowkick"):
 		do_action("lowkick")
 
@@ -881,7 +878,10 @@ func trigger_finish_state():
 	is_finish_state = true
 
 	state = State.IDLE
-	velocity = Vector2.ZERO
+
+	# force them to fall back down
+	velocity.x = 0
+	velocity.y = 0
 
 	action_locked = true
 	hurt_locked = false
@@ -890,25 +890,30 @@ func trigger_finish_state():
 	is_hurting = false
 	is_blocking = false
 
+	# cancel any uppercut/fly state
+	set_meta("uppercut_launched", false)
+
 	play_anim("idle")
-	$FinishHim.play()
+
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
-		die()
+
+	# let gravity work
+	await get_tree().create_timer(0.1).timeout
+
+	while not is_on_floor():
+		velocity.y += 5000.0 * get_physics_process_delta_time()
+		move_and_slide()
+		await get_tree().physics_frame
+
+	velocity = Vector2.ZERO
+
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
-
-	state = State.IDLE
-	velocity = Vector2.ZERO
-
-	is_attacking = false
-	is_shooting = false
-	is_hurting = false
-	is_blocking = false
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
@@ -1046,9 +1051,11 @@ func spawn_fx(scene: PackedScene):
 func check_combos():
 
 	# ---------------- FIRE ----------------
-	if combo == FIRE_COMBO:
+	if combo == FIRE_COMBO: 
 
 		combo_used.emit("fire")
+
+		spawn_fx(FIRE_DEATH)
 
 		special_bullet = FIRE_BULLET
 
