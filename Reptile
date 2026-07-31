@@ -75,6 +75,7 @@ var shoot_cooldown: float = 0.0
 @export var max_health: int = 10
 @export var jump_velocity = -2200.0
 @export var combo_reset_time := 0.6
+@export var player_controlled := false
 
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/ReptileBullet.tscn")
@@ -188,6 +189,7 @@ func _ready():
 	play_anim("idle")
 
 	ai_timer = randf_range(0.2, 0.6)
+
 # ---------------- INPUT ----------------
 func _unhandled_input(event):
 
@@ -699,6 +701,10 @@ func shoot_player():
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 
+	# only human player can enter combos
+	if not is_in_group("player1"):
+		return
+
 	combo.append(input)
 
 	combo_timer = 0.0
@@ -729,8 +735,6 @@ func check_combos():
 	if combo == FIRE_COMBO: 
 
 		combo_used.emit("fire")
-
-		spawn_fx(FIRE_DEATH)
 
 		special_bullet = FIRE_BULLET
 
@@ -797,7 +801,7 @@ func start_fatality():
 
 func start_punch_combo():
 
-	if action_locked:
+	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	await combo_attack([
@@ -811,7 +815,7 @@ func start_punch_combo():
 
 func start_kick_combo():
 
-	if action_locked:
+	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	await combo_attack([
@@ -831,6 +835,10 @@ func combo_attack(attacks: Array):
 
 	for attack in attacks:
 
+		# STOP COMBO IF HIT
+		if is_hurting or state == State.DEAD:
+			break
+
 		play_anim(attack)
 		spawn_attack(attack)
 
@@ -838,6 +846,9 @@ func combo_attack(attacks: Array):
 
 	is_attacking = false
 	action_locked = false
+
+	if not is_hurting:
+		play_anim("idle")
 
 func do_action(anim_name: String):
 
@@ -1045,7 +1056,7 @@ func take_damage(amount: int):
 	can_take_damage = false
 
 	# hit cooldown
-	await get_tree().create_timer(0.2).timeout
+	await get_tree().create_timer(0.25).timeout
 
 	can_take_damage = true
 
@@ -1088,6 +1099,8 @@ func take_damage(amount: int):
 	hurt_locked = true
 	action_locked = true
 
+	combo.clear()
+
 	is_attacking = false
 	is_shooting = false
 	is_blocking = false
@@ -1101,7 +1114,7 @@ func take_damage(amount: int):
 		get_tree().current_scene.add_child(blood)
 		blood.global_position = $BloodMarker.global_position
 
-	await get_tree().create_timer(0.2).timeout
+	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
 	hurt_locked = false
