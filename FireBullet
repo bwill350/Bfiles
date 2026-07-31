@@ -1,55 +1,108 @@
 extends Area2D
-class_name FireBullet
+class_name FireBullets
 
-@export var speed: float = 1600.0
+@export var speed: float = 900.0
 @export var lifetime: float = 3.0
+@export var stun_time: float = 0.5
 @export var damage: int = 1
 
 var velocity: Vector2 = Vector2.ZERO
-var owner_character = null
-var has_hit := false
+
+var hit_target := false
+
+const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
+
+@onready var sprite: Sprite2D = $Sprite2D
 
 func _ready():
+	add_to_group("SubzeroBullet")
 	add_to_group("FireBullet")
 
-	area_entered.connect(_on_area_entered)
+	# default direction safety
+	if velocity == Vector2.ZERO:
+		velocity = Vector2.RIGHT * speed
 
-	# Destroy after lifetime
 	await get_tree().create_timer(lifetime).timeout
-
-	if is_instance_valid(self):
-		queue_free()
+	queue_free()
 
 func _physics_process(delta):
-	if has_hit:
-		return
-
 	global_position += velocity * delta
+	rotation = velocity.angle()
 
-func _on_area_entered(area: Area2D):
-	if has_hit:
+func set_direction(dir: Vector2):
+	velocity = dir.normalized() * speed
+
+func _on_area_entered(area: Area2D) -> void:
+
+	if hit_target:
 		return
 
-	# Ignore itself
+	if area == null or !is_instance_valid(area):
+		return
+
+	# Ignore other Subzero bullets
+	if area.is_in_group("SubzeroBullet"):
+		return
+
 	if area.is_in_group("FireBullet"):
 		return
 
-	var fighter = area.get_parent()
-
-	if fighter == null:
+	# Ignore hitboxes
+	if area.is_in_group("HitBox"):
 		return
 
-	# Don't hit owner
-	if fighter == owner_character:
+	# Find the fighter
+	var target = area
+
+	if not target.is_in_group("Fighter"):
+		target = area.get_parent()
+
+	if target == null or !is_instance_valid(target):
 		return
 
-	# Only hit fighters
-	if !fighter.is_in_group("Fighter"):
+	if not target.is_in_group("Fighter"):
 		return
 
-	has_hit = true
+	# Don't hit yourself
+	if target == get_parent():
+		return
 
-	if fighter.has_method("take_damage"):
-		fighter.take_damage(damage)
+	hit_target = true
+
+	# =================================================
+	# ICE FATALITY
+	# ONLY HAPPENS IF P2 HAS 1 HP OR LESS
+	# =================================================
+	if "health" in target and target.health <= 1:
+
+		var fire_death = FIRE_DEATH.instantiate()
+
+		fire_death.owner_character = get_parent()
+
+		get_tree().current_scene.add_child(fire_death)
+
+		# Spawn directly on P2
+		fire_death.global_position = target.global_position
+
+		# Kill P2
+		target.health = 0
+
+		if target.has_method("health_changed"):
+			target.health_changed.emit(target.health)
+
+		if target.has_method("die"):
+			target.die()
+
+		queue_free()
+		return
+
+	# =================================================
+	# NORMAL BULLET HIT
+	# =================================================
+	if target.has_method("take_damage"):
+		target.take_damage(damage)
+
+	if target.has_method("apply_stun"):
+		target.apply_stun(stun_time)
 
 	queue_free()
