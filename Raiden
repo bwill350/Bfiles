@@ -88,6 +88,7 @@ const GRAVITY = 5000
 @export var max_health: int = 10
 @export var shoot_cooldown_time := 0.01
 @export var combo_reset_time := 0.6
+@export var player_controlled := false
 
 # ---------------- PROJECTILES ----------------
 const RAIDEN_ELECTRIC_BULLET = preload("res://Projectiles/RaidenElectricBullet.tscn")
@@ -156,7 +157,7 @@ func apply_stun(_duration := 4.0):
 	action_locked = false
 
 func start_electricfly(dir: float):
-	
+
 	if state == State.DEAD:
 		return
 
@@ -168,23 +169,31 @@ func start_electricfly(dir: float):
 
 	electricfly_active = true
 	spawn_protection = true
-	action_locked = true
 	is_attacking = true
+	action_locked = true
 
-	bullet_spawned = false
 	play_anim("electricfly")
 
-	velocity = Vector2(facing * 3600, -150)
+	# Fly straight across the screen
+	velocity = Vector2(facing * 2200, 0)
 
-	await get_tree().create_timer(0.30).timeout
+	# Stop after 1 second
+	get_tree().create_timer(1.0).timeout.connect(func():
+		electricfly_active = false
+	)
 
-	electricfly_active = false
+	while electricfly_active:
+		spawn_attack("electricfly")
+		await get_tree().create_timer(0.08).timeout
+
+	velocity.x = 0
+	velocity.y = 0
+
+	state = State.IDLE
 	spawn_protection = false
-	action_locked = false
 	is_attacking = false
-
-	if state != State.DEAD:
-		play_anim("idle")
+	action_locked = false
+	play_anim("idle")
 
 func spawn_raiden_bullet():
 	var bullet = RAIDEN_ELECTRIC_BULLET.instantiate()
@@ -283,8 +292,15 @@ func _unhandled_input(event):
 
 # ---------------- REGISTER INPUT ----------------
 func register_input(input: String):
+
+	# only human player can enter combos
+	if not is_in_group("player1"):
+		return
+
 	combo.append(input)
+
 	combo_timer = 0.0
+
 	check_combos()
 
 func handle_double_tap_run(input_dir: float, delta: float) -> bool:
@@ -879,7 +895,7 @@ func take_damage(amount: int):
 
 	can_take_damage = false
 
-	await get_tree().create_timer(0.10).timeout
+	await get_tree().create_timer(0.25).timeout
 
 	can_take_damage = true
 
@@ -922,6 +938,8 @@ func take_damage(amount: int):
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
+
+	combo.clear()
 
 	state = State.IDLE
 
@@ -1089,11 +1107,10 @@ func check_combos():
 
 func start_punch_combo():
 
-	if action_locked:
+	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	await combo_attack([
-		"electricfly",
 		"punch",
 		"lowpunch",
 		"punch",
@@ -1104,7 +1121,7 @@ func start_punch_combo():
 
 func start_kick_combo():
 
-	if action_locked:
+	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	await combo_attack([
@@ -1124,6 +1141,10 @@ func combo_attack(attacks: Array):
 
 	for attack in attacks:
 
+		# STOP COMBO IF HIT
+		if is_hurting or state == State.DEAD:
+			break
+
 		play_anim(attack)
 		spawn_attack(attack)
 
@@ -1131,6 +1152,9 @@ func combo_attack(attacks: Array):
 
 	is_attacking = false
 	action_locked = false
+
+	if not is_hurting:
+		play_anim("idle")
 
 func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 	if hurt_cooldown:
