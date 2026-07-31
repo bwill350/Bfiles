@@ -69,6 +69,7 @@ var lock_timer := 0.0
 var health: int
 var can_take_damage := true
 var is_blocking := false
+var shoot_cooldown := 0.0
 const ICE_COMBO = ["up", "down"]
 const PUNCH_COMBO = ["right", "down", "right"]
 const KICK_COMBO = ["right", "down", "down"]
@@ -84,7 +85,7 @@ const GRAVITY = 5000
 @export var damage := 1
 @export var shoot_cooldown_time: float = 0.25
 @export var combo_reset_time := 1.0
-var shoot_cooldown := 0.0
+@export var player_controlled := false
 
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/Subzerobullet.tscn")
@@ -591,6 +592,10 @@ func do_action(anim_name: String):
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 
+	# only human player can enter combos
+	if not is_in_group("player1"):
+		return
+
 	combo.append(input)
 
 	combo_timer = 0.0
@@ -635,7 +640,7 @@ func check_combos():
 
 func start_punch_combo():
 
-	if action_locked:
+	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	await combo_attack([
@@ -649,7 +654,7 @@ func start_punch_combo():
 
 func start_kick_combo():
 
-	if action_locked:
+	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	await combo_attack([
@@ -669,6 +674,10 @@ func combo_attack(attacks: Array):
 
 	for attack in attacks:
 
+		# STOP COMBO IF HIT
+		if is_hurting or state == State.DEAD:
+			break
+
 		play_anim(attack)
 		spawn_attack(attack)
 
@@ -676,7 +685,9 @@ func combo_attack(attacks: Array):
 
 	is_attacking = false
 	action_locked = false
-	hurt_locked = false
+
+	if not is_hurting:
+		play_anim("idle")
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
@@ -809,6 +820,8 @@ func take_damage(amount: int):
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
+
+	combo.clear()
 
 	state = State.IDLE
 
