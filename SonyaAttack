@@ -93,7 +93,7 @@ func _on_area_entered(area):
 			if attack_owner != null:
 				dir = attack_owner.facing
 
-			target.velocity.x = dir * 100
+			target.velocity.x = dir * 400
 			target.velocity.y = -600
 			if "uppercut_launched" in target:
 				target.uppercut_launched = true
