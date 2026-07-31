@@ -91,6 +91,7 @@ var shoot_cooldown := 0.0
 @export var max_health: int = 10
 @export var shoot_cooldown_time := 0.01
 @export var combo_reset_time := 0.6
+@export var player_controlled := false
 
 # ---------------- PRELOADS ----------------
 const PINK_DEATH_SCENE = preload("res://Deaths/PinkDeath.tscn")
@@ -138,7 +139,6 @@ func _unhandled_input(event):
 
 	_check_punch_combo()
 	_check_pink_combo()
-	_check_fire_combo()
 
 func spawn_fire_bullet():
 
@@ -719,6 +719,8 @@ func take_damage(amount: int):
 	hurt_locked = true
 	action_locked = true
 
+	combo.clear()
+
 	state = State.IDLE
 
 	play_anim("hurt")
@@ -818,13 +820,17 @@ func play_anim(anim_name: String):
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 
-	if combo_timer <= 0:
-		input_buffer.clear()
+	if not is_in_group("player1"):
+		return
 
+	combo.append(input)
 	input_buffer.append(input)
-	combo_timer = COMBO_TIME
+
+	combo_timer = 0.0
 
 	check_combo()
+	_check_pink_combo()
+	_check_punch_combo()
 
 func spawn_fx(scene: PackedScene):
 	if scene == null:
@@ -838,13 +844,22 @@ func spawn_fx(scene: PackedScene):
 	fx.global_position = global_position + Vector2(80 * facing, 0)
 
 func trigger_pink_death():
-	if target == null or !is_instance_valid(target):
+
+	var victim = null
+
+	for fighter in get_tree().get_nodes_in_group("Fighter"):
+		if fighter != self:
+			victim = fighter
+			break
+
+	if victim == null:
 		return
 
-	var pink = preload("res://Deaths/PinkDeath.tscn").instantiate()
+	var pink = PINK_DEATH_SCENE.instantiate()
+
 	get_tree().current_scene.add_child(pink)
 
-	pink.global_position = target.global_position
+	pink.global_position = victim.global_position
 	pink.owner_character = self
 
 func trigger_fire_death():
@@ -866,16 +881,6 @@ func _check_pink_combo():
 	if last3 == ["left", "down", "right"]:
 		input_buffer.clear() # IMPORTANT anti-spam fix
 		trigger_pink_death()
-
-func _check_fire_combo():
-	if input_buffer.size() < 2:
-		return
-
-	var last2 = input_buffer.slice(input_buffer.size() - 2, input_buffer.size())
-
-	if last2 == ["down", "up"]:
-		input_buffer.clear() # IMPORTANT anti-spam fix
-		trigger_fire_death()
 
 func _check_punch_combo():
 
@@ -899,8 +904,6 @@ func check_combo():
 	if combo == FIRE_COMBO: 
 
 		combo_used.emit("fire")
-
-		spawn_fx(FIRE_DEATH)
 
 		special_bullet = FIRE_BULLET
 
@@ -938,20 +941,21 @@ func check_combo():
 
 func start_punch_combo():
 
-	if action_locked:
+	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	await combo_attack([
 		"punch",
-		"kick",
+		"lowpunch",
 		"punch",
-		"roundhousekick",
+		"uppercut",
+		"highpunch",
 		"uppercut"
 	])
 
 func start_kick_combo():
 
-	if action_locked:
+	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	await combo_attack([
@@ -971,6 +975,10 @@ func combo_attack(attacks: Array):
 
 	for attack in attacks:
 
+		# STOP COMBO IF HIT
+		if is_hurting or state == State.DEAD:
+			break
+
 		play_anim(attack)
 		spawn_attack(attack)
 
@@ -978,6 +986,9 @@ func combo_attack(attacks: Array):
 
 	is_attacking = false
 	action_locked = false
+
+	if not is_hurting:
+		play_anim("idle")
 
 # ---------------- HURT BOX ----------------
 func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
