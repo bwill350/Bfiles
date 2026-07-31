@@ -23,9 +23,6 @@ JohnnyCage (CharacterBody2D)
 │       └── Sprite2D
 └── JohnnyCageAttack.tscn
 
-extends CharacterBody2D
-class_name JohnnyCage
-
 var spawn_locked := true
 var spawn_protection := false
 signal health_changed(health)
@@ -90,6 +87,7 @@ var shoot_cooldown: float = 0.0
 @export var max_health: int = 10
 @export var jump_velocity = -2400.0
 @export var combo_reset_time := 0.6
+@export var player_controlled := false
 
 # ---------------- PRELOADS ----------------
 const BULLET_SCENE = preload("res://Projectiles/JohnnyCageBullet.tscn")
@@ -692,7 +690,9 @@ func spawn_attack(anim_name: String):
 	else:
 		attack.damage = dmg
 
-	attack.owner = self
+	attack.attack_owner = self
+	attack.attack_name = anim_name
+	attack.attack_type = anim_name
 
 func cannonkick(dir := 0):
 
@@ -796,7 +796,7 @@ func take_damage(amount: int):
 		return
 
 	can_take_damage = false
-	await get_tree().create_timer(0.2).timeout
+	await get_tree().create_timer(0.25).timeout
 	can_take_damage = true
 
 	if state == State.DEAD:
@@ -842,13 +842,15 @@ func take_damage(amount: int):
 	action_locked = true
 	state = State.IDLE
 
+	combo.clear()
+
 	play_anim("hurt")
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
-	await get_tree().create_timer(0.2).timeout
+	await get_tree().create_timer(0.25).timeout
 
 	is_hurting = false
 	hurt_locked = false
@@ -905,6 +907,10 @@ func trigger_finish_state():
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 
+	# only human player can enter combos
+	if not is_in_group("player1"):
+		return
+
 	combo.append(input)
 
 	combo_timer = 0.0
@@ -947,8 +953,6 @@ func check_combos():
 
 		combo_used.emit("fire")
 
-		spawn_fx(FIRE_DEATH)
-
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
@@ -977,7 +981,7 @@ func check_combos():
 
 func start_punch_combo():
 
-	if action_locked:
+	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	await combo_attack([
@@ -985,14 +989,13 @@ func start_punch_combo():
 		"lowpunch",
 		"punch",
 		"uppercut",
-		"nutcracker",
 		"highpunch",
 		"uppercut"
 	])
 
 func start_kick_combo():
 
-	if action_locked:
+	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	await combo_attack([
@@ -1012,6 +1015,10 @@ func combo_attack(attacks: Array):
 
 	for attack in attacks:
 
+		# STOP COMBO IF HIT
+		if is_hurting or state == State.DEAD:
+			break
+
 		play_anim(attack)
 		spawn_attack(attack)
 
@@ -1019,6 +1026,9 @@ func combo_attack(attacks: Array):
 
 	is_attacking = false
 	action_locked = false
+
+	if not is_hurting:
+		play_anim("idle")
 
 # ---------------- DEATH ----------------
 func die():
