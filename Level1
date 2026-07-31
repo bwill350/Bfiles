@@ -1,15 +1,15 @@
 extends Node2D
 
 const P1_SPAWN := Vector2(603, 496)
-const P2_SPAWN := Vector2(840, 496)
+const P2_SPAWN := Vector2(1890, 496)
 
-const LIU_KANG = preload("res://LiuKang.tscn")
+const LIU_KANG = preload("res://Scenes/Boss/LiuKang.tscn")
 const REPTILE = preload("res://Scenes/Boss/Reptile.tscn")
-const SUBZERO = preload("res://Scenes/Boss/Subzero.tscn")
+const SUBZERO = preload("res://Projectiles/Subzero.tscn")
 const RAIDEN = preload("res://Scenes/Boss/Raiden.tscn")
 const SONYA = preload("res://Scenes/Boss/Sonya.tscn")
 const KANO = preload("res://Scenes/Boss/Kano.tscn")
-const JOHNNYCAGE = preload("res://JohnnyCage.tscn")
+const JOHNNYCAGE = preload("res://Scenes/Boss/JohnnyCage.tscn")
 
 var p1
 var p2
@@ -29,6 +29,7 @@ func spawn_players():
 	spawn_p2()
 
 func _on_p1_health_changed(health):
+	print("P1 signal received:", health)
 
 	$HUD/DukeLabel.text = "%s: %d" % [Game.p1_character, health]
 	$HUD/DukeHealthBar.value = health
@@ -49,7 +50,6 @@ func update_p1_segments(health, max_hp):
 	$HUD/Seg6.visible = percent > 0.01
 	$HUD/Seg7.visible = percent > 0.02
 	$HUD/Seg8.visible = percent > 0.03
-
 
 func update_p2_segments(health, max_hp):
 	var percent = float(health) / float(max_hp)
@@ -85,6 +85,7 @@ func spawn_p1():
 		add_child(p1)
 
 		p1.health_changed.connect(_on_p1_health_changed)
+		print("Connected:", p1.health_changed.is_connected(_on_p1_health_changed))
 
 func spawn_p2():
 
@@ -115,11 +116,13 @@ func spawn_p2():
 
 # ---------------- SETUP ----------------
 func setup():
+
 	if p1:
-		p1.add_to_group("player")
+		p1.add_to_group("player1")
 
 	if p2:
-		p2.add_to_group("player")
+		p2.add_to_group("cpu")
+
 
 # ---------------- TARGETS ----------------
 func assign_targets():
@@ -148,3 +151,4 @@ func enable_spawn_protection():
 
 	if p2:
 		p2.spawn_protection = false
+
