@@ -1,22 +1,27 @@
 extends CharacterBody2D
 class_name Raiden
 
-#Raiden (CharacterBody2D)
-#├── Sprite (AnimatedSprite2D)
-#├── CollisionShape2D
-#├── RaidenHurtBox (Area2D)
-#│   └── CollisionShape2D
-#├── AttackMarker (Marker2D)
-#├── Raidenshoot (Marker2D)
-#├── BloodMarker (Marker2D)
-#├── ShootTimer (Timer)
-#├── PhaseTimer (Timer)
-#├── HitFlashTimer (Timer)
-#├── Hit (AudioStreamPlayer2D)
-#├── Agent (NavigationAgent2D)
-#├── HUD (CanvasLayer)
-#│   └── FinishLabel (Label)
-#└── Sprite2D
+Raiden (CharacterBody2D)
+├── Sprite (AnimatedSprite2D)
+├── CollisionShape2D
+├── RaidenHurtBox (Area2D)
+│   └── CollisionShape2D
+├── Hit (AudioStreamPlayer2D)
+├── Raidenshoot (Marker2D)
+├── AttackMarker (Marker2D)
+   └── RaidenAttack.tscn
+├── FIRE (Marker2D)
+├── BloodMarker (Marker2D)
+├── SmokeMarker (Marker2D)
+├── ShootTimer (Timer)
+├── PhaseTimer (Timer)
+├── HitFlashTimer (Timer)
+├── Agent (NavigationAgent2D)
+├── Camera2D (optional)
+├── AnimationPlayer (optional)
+├── HUD (CanvasLayer)
+│   └── FinishLabel
+│       └── Sprite2D
 
 var spawn_locked := true
 var special_move := false
