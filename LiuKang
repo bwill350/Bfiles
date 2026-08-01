@@ -2,22 +2,26 @@ extends CharacterBody2D
 class_name LiuKang
 
 LiuKang (CharacterBody2D)
+├── Sprite (AnimatedSprite2D)
 ├── CollisionShape2D
 ├── LiuKangHurtBox (Area2D)
 │   └── CollisionShape2D
-├── Sprite (AnimatedSprite2D)
-├── AttackMarker (Marker2D)
-├── BloodMarker (Marker2D)
-├── LiuKangShoot (Marker2D)
 ├── Hit (AudioStreamPlayer2D)
-├── Agent (NavigationAgent2D)
-├── HUD (CanvasLayer)
-│   └── FinishLabel (Label)
-│       └── Sprite2D
-├── PhaseTimer (Timer)
+├── LiuKangShoot (Marker2D)
+├── AttackMarker (Marker2D)
+   └── LiuKangAttack.tscn
+├── FIRE (Marker2D)
+├── BloodMarker (Marker2D)
+├── SmokeMarker (Marker2D)
 ├── ShootTimer (Timer)
+├── PhaseTimer (Timer)
 ├── HitFlashTimer (Timer)
-└── LiuKangAttack (Area2D)
+├── Agent (NavigationAgent2D)
+├── Camera2D (optional)
+├── AnimationPlayer (optional)
+├── HUD (CanvasLayer)
+│   └── FinishLabel
+│       └── Sprite2D
 
 # ---------------- SIGNALS ----------------
 signal health_changed(health)
