@@ -73,8 +73,11 @@ var shoot_cooldown := 0.0
 const ICE_COMBO = ["up", "down"]
 const PUNCH_COMBO = ["right", "down", "right"]
 const KICK_COMBO = ["right", "down", "down"]
+const ICE_DEATH_TWO_COMBO = ["down", "up", "down", "up", "right"]
+const SPLAT_COMBO = ["left", "right", "left", "right", "right"]
 const BLOOD_EFFECT = preload("res://Projectiles/Bloodeffect.tscn")
 const SMOKE_EFFECT = preload("res://Projectiles/SmokeEffect.tscn")
+
 const GRAVITY = 5000
 
 # ---------------- EXPORTS ----------------
@@ -91,6 +94,8 @@ const GRAVITY = 5000
 const BULLET_SCENE = preload("res://Projectiles/Subzerobullet.tscn")
 const SUBZERO_ATTACK = preload("res://Projectiles/SubzeroAttack.tscn")
 const ICE_DEATH = preload("res://Deaths/IceDeath.tscn")
+const ICE_DEATHTWO = preload("res://Icedeathtwo.tscn")
+const SPLAT = preload("res://Splat.tscn")
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const SMOKE_DEATH = preload("res://Deaths/SmokeDeath.tscn")
 const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
@@ -120,6 +125,7 @@ func _unhandled_input(event):
 
 func update_facing_offsets():
 	$AttackMarker.position = Vector2(63 * facing, -211)
+
 
 
 # ---------------- READY ----------------
@@ -354,6 +360,9 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
 
+	elif Input.is_action_just_pressed("kick"):
+		do_action("kick")
+
 	elif Input.is_action_just_pressed("highkick"):
 		do_action("highkick")
 
@@ -374,6 +383,7 @@ func _physics_process(delta):
 
 	else:
 		stop_block()
+
 
 	move_and_slide()
 
@@ -523,6 +533,7 @@ func cpu_logic(delta):
 					do_action("roundhousekick")
 				else:
 					shoot_player()
+					do_action("uppercut")
 
 			"Easy":
 
@@ -545,7 +556,7 @@ func cpu_logic(delta):
 				elif choice < 85:
 					do_action("uppercut")
 				else:
-					do_action("roundhousekick")
+					shoot_player()
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -592,10 +603,6 @@ func do_action(anim_name: String):
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 
-	# only human player can enter combos
-	if not is_in_group("player1"):
-		return
-
 	combo.append(input)
 
 	combo_timer = 0.0
@@ -615,7 +622,43 @@ func ice_combo():
 
 func check_combos():
 
-	if combo == ICE_COMBO:
+	if combo == ICE_DEATH_TWO_COMBO:
+		combo_used.emit("ice_death_two")
+		action_locked = true
+		is_attacking = true
+		spawn_fx(ICE_DEATHTWO)
+		$Sprite.play("uppercut")
+		await $Sprite.animation_finished
+
+		action_locked = false
+		play_anim("idle")
+		combo.clear()
+		return
+
+	if combo == SPLAT_COMBO:
+
+		combo_used.emit("splat")
+
+		action_locked = true
+		is_attacking = true
+
+		# Subzero character animation
+		$Sprite.play("splat")
+
+		# Spawn ice puddle
+		spawn_fx(SPLAT)
+
+		await $Sprite.animation_finished
+
+		is_attacking = false
+		action_locked = false
+
+		play_anim("idle")
+
+		combo.clear()
+		return
+
+	elif combo == ICE_COMBO:
 		ice_combo()
 		return
 
@@ -628,6 +671,7 @@ func check_combos():
 		start_punch_combo()
 		return
 
+
 	# ---------------- kick ----------------
 	if combo == KICK_COMBO:
 
@@ -638,10 +682,14 @@ func check_combos():
 		start_kick_combo()
 		return
 
-func start_punch_combo():
+func start_splat_combo():
 
-	if action_locked or is_hurting or state == State.DEAD:
-		return
+	await combo_attack([
+		"punch",
+		"punch"
+	])
+
+func start_punch_combo():
 
 	await combo_attack([
 		"punch",
@@ -653,9 +701,6 @@ func start_punch_combo():
 	])
 
 func start_kick_combo():
-
-	if action_locked or is_hurting or state == State.DEAD:
-		return
 
 	await combo_attack([
 		"kick",
@@ -772,6 +817,9 @@ func shoot_player():
 # ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 
+	if state == State.DEAD:
+		return
+
 	if not can_take_damage:
 		return
 
@@ -802,18 +850,24 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
-# ---------------- FINISH HIM ----------------
+	# ---------------- FINISH HIM ----------------
 	if health == 1 and not is_finish_state:
 		trigger_finish_state()
 		return
 
 	# ---------------- FINAL HIT ----------------
 	if health <= 0:
+		var death = ICE_DEATHTWO.instantiate()
+		state = State.DEAD
 
 		finish_label.visible = false
-		die()
+
+		get_tree().current_scene.add_child(death)
+		death.global_position = global_position
+
 		await get_tree().create_timer(0.2).timeout
 
+		die()
 		return
 
 	# ---------------- NORMAL HURT ----------------
@@ -829,7 +883,7 @@ func take_damage(amount: int):
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
-	blood.global_position = $BloodMarker.global_position
+	blood.global_position = blood_marker.global_position
 
 	await get_tree().create_timer(0.2).timeout
 
