@@ -9,6 +9,7 @@ JohnnyCage (CharacterBody2D)
 ├── Hit (AudioStreamPlayer2D)
 ├── JohnnyShoot (Marker2D)
 ├── AttackMarker (Marker2D)
+   └── JohnnyCageAttack.tscn
 ├── FIRE (Marker2D)
 ├── BloodMarker (Marker2D)
 ├── SmokeMarker (Marker2D)
@@ -21,7 +22,7 @@ JohnnyCage (CharacterBody2D)
 ├── HUD (CanvasLayer)
 │   └── FinishLabel
 │       └── Sprite2D
-└── JohnnyCageAttack.tscn
+
 
 var spawn_locked := true
 var spawn_protection := false
