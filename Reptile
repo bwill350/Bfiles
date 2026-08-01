@@ -9,12 +9,19 @@ Reptile (CharacterBody2D)
 ├── Hit (AudioStreamPlayer2D)
 ├── Reptileshoot (Marker2D)
 ├── AttackMarker (Marker2D)
+   └── ReptileAttack.tscn
+├── FIRE (Marker2D)
 ├── BloodMarker (Marker2D)
+├── SmokeMarker (Marker2D)
 ├── ShootTimer (Timer)
 ├── PhaseTimer (Timer)
 ├── HitFlashTimer (Timer)
 ├── Agent (NavigationAgent2D)
 ├── Camera2D (optional)
+├── AnimationPlayer (optional)
+├── HUD (CanvasLayer)
+│   └── FinishLabel
+│       └── Sprite2D
 
 signal health_changed(health)
 signal combo_used(combo_name: String)
