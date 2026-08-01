@@ -9,6 +9,7 @@ Kano (CharacterBody2D)
 ├── Hit (AudioStreamPlayer2D)
 ├── KanoShoot (Marker2D)
 ├── AttackMarker (Marker2D)
+   └── KanoAttack.tscn
 ├── FIRE (Marker2D)
 ├── BloodMarker (Marker2D)
 ├── SmokeMarker (Marker2D)
@@ -21,7 +22,7 @@ Kano (CharacterBody2D)
 ├── HUD (CanvasLayer)
 │   └── FinishLabel
 │       └── Sprite2D
-└── KanoAttack.tscn
+
 
 var spawn_protection := false
 signal health_changed(health)
