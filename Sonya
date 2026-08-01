@@ -9,6 +9,7 @@ Sonya (CharacterBody2D)
 ├── Hit (AudioStreamPlayer2D)
 ├── SonyaShoot (Marker2D)
 ├── AttackMarker (Marker2D)
+   └── SonyaAttack.tscn
 ├── FIRE (Marker2D)
 ├── BloodMarker (Marker2D)
 ├── SmokeMarker (Marker2D)
@@ -21,7 +22,7 @@ Sonya (CharacterBody2D)
 ├── HUD (CanvasLayer)
 │   └── FinishLabel
 │       └── Sprite2D
-└── SonyaAttack.tscn
+
 
 signal health_changed(health)
 signal combo_used(combo_name: String)
