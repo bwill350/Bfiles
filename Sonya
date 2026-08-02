@@ -28,7 +28,7 @@ signal combo_used(combo_name: String)
 @onready var character = get_parent()
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
 var is_spear_pulled := false
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
@@ -311,11 +311,6 @@ func _physics_process(delta):
 
 	# ---------------- ANIMS ----------------
 	match state:
-
-		State.CLIMB:
-			velocity.y = -CLIMB_SPEED
-			if not is_attacking:
-				play_anim("idle")
 
 		State.JUMP:
 			if not is_attacking:
