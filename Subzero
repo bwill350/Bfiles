@@ -40,7 +40,7 @@ var uppercut_launched := false
 var stunned := false
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, CLIMB, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
 var state: State = State.IDLE
 var is_finish_state := false
 var hurt_cooldown := false
@@ -317,11 +317,6 @@ func _physics_process(delta):
 
 	# ---------------- ANIMS ----------------
 	match state:
-
-		State.CLIMB:
-			velocity.y = -CLIMB_SPEED
-			if not is_attacking:
-				play_anim("idle")
 
 		State.JUMP:
 			if not is_attacking:
