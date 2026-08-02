@@ -162,6 +162,7 @@ func _ready():
 	ai_timer = randf_range(0.2, 0.6)
 	facing = 1
 	sprite.flip_h = -facing < 0
+	$Crispy.flip_h = -facing < 0
 
 
 func _unhandled_input(event):
@@ -413,6 +414,7 @@ func _physics_process(delta):
 		facing = input_dir
 
 	sprite.flip_h = facing > 0
+	$Crispy.flip_h = facing > 0
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$LiuKangShoot.position = Vector2(63 * facing, -225)
 
@@ -621,6 +623,7 @@ func cpu_logic(delta):
 	velocity.y += GRAVITY * delta
 	facing = direction
 	sprite.flip_h = facing > 0
+	$Crispy.flip_h = facing > 0
 
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
