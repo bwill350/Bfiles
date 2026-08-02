@@ -184,6 +184,7 @@ func _ready():
 	$Crispy.visible = false
 	facing = 1
 	sprite.flip_h = -facing < 0
+	$Crispy.flip_h = -facing < 0
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Reptile")
@@ -279,6 +280,7 @@ func _physics_process(delta):
 		facing = sign(input_dir)
 
 	sprite.flip_h = facing > 0
+	$Crispy.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$Reptileshoot.position = Vector2(63 * facing, -225)
@@ -476,6 +478,7 @@ func cpu_logic(delta):
 	ai_timer -= delta
 	facing = direction
 	sprite.flip_h = facing > 0
+	$Crispy.flip_h = facing > 0
 
 # ---------------- MOVEMENT ----------------
 	if not is_attacking:
