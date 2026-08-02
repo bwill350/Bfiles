@@ -853,19 +853,9 @@ func take_damage(amount: int):
 		trigger_finish_state()
 		return
 
-	# ---------------- FINAL HIT ----------------
-	if health <= 0:
-		var death = ICE_DEATHTWO.instantiate()
-
-		finish_label.visible = false
-
-		get_tree().current_scene.add_child(death)
-		death.global_position = global_position
-
-		await get_tree().create_timer(0.2).timeout
-
+	# ---------------- NORMAL HURT ----------------
+	if health == 0:
 		die()
-		return
 
 	# ---------------- NORMAL HURT ----------------
 	is_hurting = true
