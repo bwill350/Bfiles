@@ -23,7 +23,6 @@ Subzero (CharacterBody2D)
 │   └── FinishLabel
 │       └── Sprite2D
 
-
 signal health_changed(health)
 signal combo_used(combo_name: String)
 @onready var character = get_parent()
@@ -153,6 +152,7 @@ func _ready():
 
 	facing = 1
 	sprite.flip_h = -facing < 0
+	$Crispy.flip_h = -facing < 0
 
 
 func emit_health():
@@ -292,6 +292,7 @@ func _physics_process(delta):
 		facing = input_dir
 
 	sprite.flip_h = facing > 0
+	$Crispy.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -211)
 	$Subzeroshoot.position = Vector2(63 * facing, -211)
@@ -489,6 +490,7 @@ func cpu_logic(delta):
 	ai_timer -= delta
 	facing = direction
 	sprite.flip_h = facing > 0
+	$Crispy.flip_h = facing > 0
 
 # ---------------- MOVEMENT ----------------
 	if not is_attacking:
@@ -859,7 +861,6 @@ func take_damage(amount: int):
 	# ---------------- FINAL HIT ----------------
 	if health <= 0:
 		var death = ICE_DEATHTWO.instantiate()
-		state = State.DEAD
 
 		finish_label.visible = false
 
