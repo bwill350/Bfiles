@@ -23,7 +23,6 @@ Kano (CharacterBody2D)
 │   └── FinishLabel
 │       └── Sprite2D
 
-
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -166,6 +165,7 @@ func _ready():
 	ai_timer = randf_range(0.2, 0.6)
 	facing = 1
 	sprite.flip_h = -facing < 0
+	$Crispy.flip_h = -facing < 0
 
 func apply_stun(_duration := 4.0):
 
@@ -315,6 +315,7 @@ func _physics_process(delta):
 		facing = sign(input_dir)
 
 	sprite.flip_h = facing > 0
+	$Crispy.flip_h = facing > 0
 
 	$AttackMarker.position = Vector2(63 * facing, -155)
 	$KanoShoot.position = Vector2(63 * facing, -225)
@@ -516,6 +517,7 @@ func cpu_logic(delta):
 
 	facing = direction
 	sprite.flip_h = facing > 0
+	$Crispy.flip_h = facing > 0
 
 	# ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
