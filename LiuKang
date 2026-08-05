@@ -27,7 +27,12 @@ LiuKang (CharacterBody2D)
 signal health_changed(health)
 signal combo_used(combo_name: String)
 @export var speed := 300.0
+const GRAB_ATTACK = preload("res://GrabAttack.tscn")
+var grabbed_enemy: CharacterBody2D = null
+var is_grabbing := false
+var grab_timer := 0.0
 
+const GRAB_TIME := 1.0
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
 var special_move := false
@@ -170,7 +175,7 @@ func _unhandled_input(event):
 	if event.is_action_pressed("jump"):
 		jump_requested = true
 
-	var inputs = ["up", "down", "left", "right", "shoot"]
+	var inputs = ["up", "down", "left", "right", "shoot", "grab"]
 
 	for i in inputs:
 		if event.is_action_pressed(i):
@@ -434,7 +439,24 @@ func _physics_process(delta):
 	# ---------------- ANIMATIONS ----------------
 	match state:
 		State.JUMP:
-			if not is_attacking:
+			if is_grabbing:
+				state = State.JUMP
+			if not is_on_floor():
+				play_anim("jump")
+			if grabbed_enemy and is_instance_valid(grabbed_enemy):
+
+				var grab_offset := Vector2(80 * facing, 0)
+
+				# put enemy on opposite side of Liu Kang
+				grabbed_enemy.global_position = global_position + grab_offset
+
+				# face enemy away from Liu
+				grabbed_enemy.facing = -facing
+				grabbed_enemy.sprite.flip_h = grabbed_enemy.facing > 0
+
+				# stop enemy movement
+				grabbed_enemy.velocity = Vector2.ZERO
+			elif not is_attacking:
 				play_anim("jump")
 		State.WALK:
 			if not is_attacking:
@@ -449,6 +471,18 @@ func _physics_process(delta):
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
+
+	if Input.is_action_just_pressed("grab") and is_on_floor():
+		is_grabbing = true
+		is_attacking = true
+
+		velocity.y = jump_velocity
+
+		play_anim("jump")
+
+		start_grab()
+
+		return
 
 	# ---------------- ATTACK INPUT ----------------
 	if Input.is_action_just_pressed("punch"):
@@ -501,6 +535,8 @@ func _physics_process(delta):
 
 	elif Input.is_action_pressed("block"):
 		start_block()
+	elif Input.is_action_pressed("grab"):
+		velocity.y = jump_velocity
 	else:
 		stop_block()
 
@@ -528,6 +564,43 @@ func _physics_process(delta):
 
 				velocity = Vector2.ZERO
 				return
+
+func start_grab():
+
+	if state == State.DEAD:
+		return
+
+	var grab = GRAB_ATTACK.instantiate()
+	get_tree().current_scene.add_child(grab)
+
+	grab.global_position = $GrabMarker.global_position
+	grab.owner_character = self
+
+func end_grab():
+
+	if grabbed_enemy and is_instance_valid(grabbed_enemy):
+
+		grabbed_enemy.action_locked = false
+		grabbed_enemy.is_hurting = false
+		grabbed_enemy.is_attacking = false
+
+		grabbed_enemy.velocity = Vector2(
+			facing * 600,
+			-800
+		)
+
+		await get_tree().create_timer(0.2).timeout
+
+		grabbed_enemy.velocity.x = 0
+
+
+	grabbed_enemy = null
+
+	is_grabbing = false
+	is_attacking = false
+	action_locked = false
+
+	play_anim("idle")
 
 func spear_pulled_to_p1():
 	print("START PULL")
@@ -708,6 +781,20 @@ func cpu_logic(delta):
 				else:
 					shoot_fireball()
 
+	if is_grabbing and grabbed_enemy:
+		grabbed_enemy.global_position = $GrabMarker.global_position
+		grabbed_enemy.velocity = velocity
+
+	if is_on_floor():
+		grabbed_enemy.take_damage(3)
+		grabbed_enemy.action_locked = false
+		grabbed_enemy.is_hurting = false
+		grabbed_enemy = null
+		is_grabbing = false
+		action_locked = false
+		is_attacking = false
+		play_anim("idle")
+
 func do_action(anim_name: String):
 
 	if is_attacking:
@@ -818,6 +905,27 @@ func shoot_fireball():
 	is_attacking = false
 	action_locked = false
 
+func grab_success():
+
+	is_grabbing = true
+	is_attacking = true
+	action_locked = true
+
+	state = State.JUMP
+
+	play_anim("jump")
+
+	velocity.y = jump_velocity
+
+func spawn_grab():
+	if Input.is_action_pressed("grab"):
+		velocity.y = jump_velocity
+	var grab = GRAB_ATTACK.instantiate()
+	get_tree().current_scene.add_child(grab)
+	grab.owner_character = self
+	grab.global_position = $AttackMarker.global_position
+	await get_tree().create_timer(0.25).timeout
+
 func take_damage(amount: int):
 
 	if not can_take_damage:
@@ -855,6 +963,7 @@ func take_damage(amount: int):
 
 	# ---------------- FINAL HIT ----------------
 	if health <= 0:
+		is_attacking = false
 		finish_label.visible = false
 		die()
 		return
