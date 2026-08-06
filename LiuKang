@@ -650,150 +650,210 @@ func invisible() -> void:
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
+
 	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
 		if is_spear_pulled:
-				velocity.x = -facing * -400
+			velocity.x = -facing * -400
 		else:
 			velocity.x = -facing * 100
 
-	# gradually reduce knockback
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
 
 		if abs(knockback_x) < 10:
 			knockback_x = 0
 			is_hurting = false
 
-			velocity.y += GRAVITY * delta
-			move_and_slide()
-			return
-
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
+		velocity.y += GRAVITY * delta
+		move_and_slide()
 		return
 
-# GRAVITY
-	velocity.y += GRAVITY * delta
+
+	# ---------------- TARGET CHECK ----------------
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		velocity.y += GRAVITY * delta
+		move_and_slide()
+		return
+
 
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
 
-	# HARD LOCK (Liu Kang style behavior)
-	if action_locked:
-		return
 
-# STOP ALL ACTIONS AT 1HP
+	# ---------------- FINISH STATE ----------------
 	if is_finish_state:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
+		velocity.y += GRAVITY * delta
 		move_and_slide()
 		return
 
-	ai_timer -= delta
 
-	velocity.y += GRAVITY * delta
+	# ---------------- HARD LOCK ----------------
+	if action_locked:
+		velocity.y += GRAVITY * delta
+		move_and_slide()
+		return
+
+
+	# ---------------- FACING ----------------
 	facing = direction
 	sprite.flip_h = facing > 0
-	$Crispy.flip_h = facing > 0
+
+	if $Crispy:
+		$Crispy.flip_h = facing > 0
+
 
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
-# ---------------- MOVEMENT ----------------
+
+	# ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
 
 		velocity.x = direction * SPEED * 0.8
-
-	if state != State.RUN:
 		state = State.RUN
 
-	if not is_attacking:
-		play_anim("walk")
+		if not is_attacking:
+			play_anim("walk")
 
-	if abs(dist) > 220:
-		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
-		play_anim("walk")
 	else:
-		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
-		play_anim("walk")
 
-# ---------------- AI ACTIONS ----------------
+		velocity.x = 0
+
+		if not is_attacking:
+			play_anim("idle")
+
+
+	# ---------------- AI TIMER ----------------
+	ai_timer -= delta
+
+
 	if ai_timer <= 0:
+
 
 		match Game.difficulty:
 
+
 			"Hard":
 
-				# Very fast reactions
-				ai_timer = randf_range(0.05, 0.15)
+				ai_timer = randf_range(0.05,0.15)
 
 				var choice = randi() % 100
 
-				if choice < 20:
+
+				if choice < 10:
 					do_action("punch")
+
 				elif choice < 20:
 					do_action("highpunch")
-				elif choice < 20:
+
+				elif choice < 30:
 					do_action("lowpunch")
-				elif choice < 40:
+
+				elif choice < 45:
 					do_action("kick")
-				elif choice < 40:
+
+				elif choice < 55:
 					do_action("highkick")
-				elif choice < 40:
-					do_action("lowkick")
+
 				elif choice < 65:
-					do_action("uppercut")
+					do_action("lowkick")
+
 				elif choice < 80:
-					do_action("roundhousekick")
+					do_action("uppercut")
+
 				elif choice < 90:
+					do_action("roundhousekick")
+
+				elif choice < 95:
 					do_action("knee")
+
 				else:
 					shoot_fireball()
+
+
 
 			"Easy":
 
-				ai_timer = randf_range(0.5, 0.9)
+				ai_timer = randf_range(0.5,0.9)
 
 				var choice = randi() % 100
 
-				if choice < 40:
+
+				if choice < 35:
 					do_action("punch")
+
 				elif choice < 45:
 					do_action("highpunch")
-				elif choice < 50:
+
+				elif choice < 55:
 					do_action("lowpunch")
+
 				elif choice < 70:
 					do_action("kick")
-				elif choice < 70:
+
+				elif choice < 78:
 					do_action("highkick")
-				elif choice < 70:
+
+				elif choice < 86:
 					do_action("lowkick")
-				elif choice < 85:
+
+				elif choice < 92:
 					do_action("uppercut")
-				elif choice < 90:
+
+				elif choice < 96:
 					do_action("roundhousekick")
-				elif choice < 95:
-					do_action("knee")
+
 				else:
 					shoot_fireball()
 
-	if is_grabbing and grabbed_enemy:
-		grabbed_enemy.global_position = $GrabMarker.global_position
-		grabbed_enemy.velocity = velocity
 
-	if is_on_floor():
-		grabbed_enemy.take_damage(3)
-		grabbed_enemy.action_locked = false
-		grabbed_enemy.is_hurting = false
-		grabbed_enemy = null
-		is_grabbing = false
-		action_locked = false
-		is_attacking = false
-		play_anim("idle")
+
+	# ---------------- GRAB CAMERA SHAKE ----------------
+	if is_grabbing and grabbed_enemy and is_instance_valid(grabbed_enemy):
+
+		var cam := get_viewport().get_camera_2d()
+
+		if cam:
+			cam.shake(18,0.20)
+
+
+		var grab_offset := Vector2(80 * facing,0)
+
+		grabbed_enemy.global_position = global_position + grab_offset
+
+		grabbed_enemy.facing = -facing
+
+		grabbed_enemy.sprite.flip_h = grabbed_enemy.facing > 0
+
+		grabbed_enemy.velocity = Vector2.ZERO
+
+
+
+	# ---------------- GRAB SLAM ----------------
+	if is_grabbing and grabbed_enemy and is_instance_valid(grabbed_enemy):
+
+		if is_on_floor():
+
+			grabbed_enemy.take_damage(3)
+
+			grabbed_enemy.action_locked = false
+			grabbed_enemy.is_hurting = false
+
+			grabbed_enemy = null
+
+			is_grabbing = false
+			action_locked = false
+			is_attacking = false
+
+			play_anim("idle")
+
+
+	move_and_slide()
 
 func do_action(anim_name: String):
 
@@ -932,7 +992,7 @@ func take_damage(amount: int):
 		return
 
 	can_take_damage = false
-	await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(0.05).timeout
 	can_take_damage = true
 
 	if state == State.DEAD:
@@ -988,6 +1048,9 @@ func take_damage(amount: int):
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
+
+	if sprite.animation == "hurt":
+		play_anim("idle")
 
 func trigger_finish_state():
 
@@ -1333,6 +1396,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 		$Sprite.play("wasuppercut")
 	else:
 		$Sprite.play("hurt")
+		$Sprite.play("idle")
 
 		$Hurt.play()
 
