@@ -236,22 +236,17 @@ func start_bicyclekick():
 	velocity.y = 0
 
 func handle_flyingkick(delta):
-
 	# lock height exactly where it started
 	global_position.y = special_move_y
-
 	# keep moving forward
 	velocity.x = facing * 1300
 	velocity.y = 0
-
 	# STOP WHEN INPUT RELEASED
 	if not Input.is_action_pressed("flyingkick"):
 		flyingkick_active = false
 		special_move = false
 		special_move_invincible = false
 		return
-
-	move_and_slide()
 
 func handle_bicyclekick(delta):
 
@@ -404,11 +399,9 @@ func _physics_process(delta):
 	# ---------------- CPU ----------------
 	if is_cpu:
 		cpu_logic(delta)
-		move_and_slide()
 		return
 
 	if action_locked:
-		move_and_slide()
 		return
 
 
@@ -420,7 +413,7 @@ func _physics_process(delta):
 
 	sprite.flip_h = facing > 0
 	$Crispy.flip_h = facing > 0
-	$AttackMarker.position = Vector2(63 * facing, -155)
+	$AttackMarker.position = Vector2(0 * facing, 0)
 	$LiuKangShoot.position = Vector2(63 * facing, -225)
 
 	# ---------------- MOVEMENT ----------------
@@ -651,12 +644,13 @@ func invisible() -> void:
 # ---------------- CPU ----------------
 func cpu_logic(delta):
 
-	# ---------------- HURT PRIORITY ----------------
 	if is_hurting:
 
-		if is_spear_pulled:
-			velocity.x = -facing * -400
+		if is_pulled:
+			# opposite of normal knockback
+			velocity.x = -facing * -600
 		else:
+			# normal knockback
 			velocity.x = -facing * 100
 
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -664,11 +658,13 @@ func cpu_logic(delta):
 		if abs(knockback_x) < 10:
 			knockback_x = 0
 			is_hurting = false
+			is_pulled = false
 
-		velocity.y += GRAVITY * delta
-		move_and_slide()
 		return
 
+	if target == null or !is_instance_valid(target):
+		velocity.x = 0
+		return
 
 	# ---------------- TARGET CHECK ----------------
 	if target == null or !is_instance_valid(target):
@@ -677,10 +673,8 @@ func cpu_logic(delta):
 		move_and_slide()
 		return
 
-
 	var dist = target.global_position.x - global_position.x
 	var direction = sign(dist)
-
 
 	# ---------------- FINISH STATE ----------------
 	if is_finish_state:
@@ -691,13 +685,10 @@ func cpu_logic(delta):
 		move_and_slide()
 		return
 
-
 	# ---------------- HARD LOCK ----------------
 	if action_locked:
 		velocity.y += GRAVITY * delta
-		move_and_slide()
 		return
-
 
 	# ---------------- FACING ----------------
 	facing = direction
@@ -706,10 +697,8 @@ func cpu_logic(delta):
 	if $Crispy:
 		$Crispy.flip_h = facing > 0
 
-
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
-
 
 	# ---------------- MOVEMENT ----------------
 	if abs(dist) > 220:
@@ -722,28 +711,21 @@ func cpu_logic(delta):
 
 	else:
 
-		velocity.x = 0
-
 		if not is_attacking:
-			play_anim("idle")
-
+			play_anim("walk")
 
 	# ---------------- AI TIMER ----------------
 	ai_timer -= delta
 
-
 	if ai_timer <= 0:
 
-
 		match Game.difficulty:
-
 
 			"Hard":
 
 				ai_timer = randf_range(0.05,0.15)
 
 				var choice = randi() % 100
-
 
 				if choice < 10:
 					do_action("punch")
@@ -775,14 +757,11 @@ func cpu_logic(delta):
 				else:
 					shoot_fireball()
 
-
-
 			"Easy":
 
 				ai_timer = randf_range(0.5,0.9)
 
 				var choice = randi() % 100
-
 
 				if choice < 35:
 					do_action("punch")
@@ -811,8 +790,6 @@ func cpu_logic(delta):
 				else:
 					shoot_fireball()
 
-
-
 	# ---------------- GRAB CAMERA SHAKE ----------------
 	if is_grabbing and grabbed_enemy and is_instance_valid(grabbed_enemy):
 
@@ -820,7 +797,6 @@ func cpu_logic(delta):
 
 		if cam:
 			cam.shake(18,0.20)
-
 
 		var grab_offset := Vector2(80 * facing,0)
 
@@ -831,8 +807,6 @@ func cpu_logic(delta):
 		grabbed_enemy.sprite.flip_h = grabbed_enemy.facing > 0
 
 		grabbed_enemy.velocity = Vector2.ZERO
-
-
 
 	# ---------------- GRAB SLAM ----------------
 	if is_grabbing and grabbed_enemy and is_instance_valid(grabbed_enemy):
@@ -851,7 +825,6 @@ func cpu_logic(delta):
 			is_attacking = false
 
 			play_anim("idle")
-
 
 	move_and_slide()
 
@@ -872,12 +845,15 @@ func do_action(anim_name: String):
 	if action_locked:
 		return
 
+	# STOP ANY EXISTING WALK/RUN SLIDE
+	velocity.x = 0
+
 	action_locked = true
 	is_attacking = true
 
 	play_anim(anim_name)
 
-	# ---------------- MELEE ATTACKS ----------------
+# ---------------- MELEE ATTACKS ----------------
 	if anim_name in [
 		"punch",
 		"highpunch",
@@ -905,6 +881,9 @@ func do_action(anim_name: String):
 	hurt_cooldown = false
 	is_attacking = false
 	action_locked = false
+
+	# Make absolutely sure the attack doesn't leave movement behind
+	velocity.x = 0
 
 func air_launch(x_speed: float, y_speed: float):
 	state = State.JUMP
@@ -992,7 +971,9 @@ func take_damage(amount: int):
 		return
 
 	can_take_damage = false
+
 	await get_tree().create_timer(0.05).timeout
+
 	can_take_damage = true
 
 	if state == State.DEAD:
@@ -1001,7 +982,7 @@ func take_damage(amount: int):
 	if spawn_protection:
 		return
 
-	# BLOCK REDUCTION
+	# ---------------- BLOCK REDUCTION ----------------
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
@@ -1016,11 +997,6 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
-	# ---------------- FINISH HIM ----------------
-	if health == 1 and not is_finish_state:
-		trigger_finish_state()
-		return
-
 	# ---------------- FINAL HIT ----------------
 	if health <= 0:
 		is_attacking = false
@@ -1032,25 +1008,44 @@ func take_damage(amount: int):
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
+	# STOP ALL MOVEMENT
+	velocity.x = 0
+	knockback_x = 0
 
 	combo.clear()
 
 	state = State.IDLE
 
+	# Play hurt animation
 	play_anim("hurt")
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
+# Wait for hurt reaction
 	await get_tree().create_timer(0.25).timeout
 
+	if state == State.DEAD:
+		return
+
+	# ---------------- RETURN TO IDLE ----------------
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
+	is_attacking = false
+	is_shooting = false
+	velocity.x = 0
+	knockback_x = 0
 
-	if sprite.animation == "hurt":
-		play_anim("idle")
+	state = State.IDLE
+	play_anim("idle")
+	current_anim = "idle"
+
 
 func trigger_finish_state():
 
@@ -1418,7 +1413,7 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 
 		hurt_cooldown = true
 
-		knockback_x = -facing * 100
+		knockback_x = -facing * 20
 		take_damage(1)
 
 		await get_tree().create_timer(0.2).timeout
