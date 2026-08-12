@@ -644,13 +644,34 @@ func invisible() -> void:
 # ---------------- CPU ----------------
 func cpu_logic(delta):
 
+	# ---------------- FIND PLAYER 1 ----------------
+
+	if target == null or not is_instance_valid(target):
+		target = get_tree().get_first_node_in_group("player1")
+
+		if target == null:
+			velocity.x = 0
+			velocity.y += GRAVITY * delta
+			move_and_slide()
+			return
+
+	# ---------------- FINISH STATE ----------------
+
+	if is_finish_state:
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
+		velocity.y += GRAVITY * delta
+		move_and_slide()
+		return
+
+	# ---------------- HURT ----------------
+
 	if is_hurting:
 
 		if is_pulled:
-			# opposite of normal knockback
 			velocity.x = -facing * -600
 		else:
-			# normal knockback
 			velocity.x = -facing * 100
 
 		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
@@ -660,61 +681,62 @@ func cpu_logic(delta):
 			is_hurting = false
 			is_pulled = false
 
-		return
-
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		return
-
-	# ---------------- TARGET CHECK ----------------
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
-		velocity.y += GRAVITY * delta
-		move_and_slide()
-		return
-
-	var dist = target.global_position.x - global_position.x
-	var direction = sign(dist)
-
-	# ---------------- FINISH STATE ----------------
-	if is_finish_state:
-		is_attacking = false
-		action_locked = true
-		velocity.x = 0
 		velocity.y += GRAVITY * delta
 		move_and_slide()
 		return
 
 	# ---------------- HARD LOCK ----------------
+
 	if action_locked:
+		velocity.x = 0
 		velocity.y += GRAVITY * delta
+		move_and_slide()
 		return
 
-	# ---------------- FACING ----------------
-	facing = direction
+	# ---------------- TARGET ----------------
+
+	var dist = target.global_position.x - global_position.x
+	var direction = sign(dist)
+
+	# If almost exactly beside player
+	if direction != 0:
+		facing = direction
+
 	sprite.flip_h = facing > 0
 
 	if $Crispy:
 		$Crispy.flip_h = facing > 0
 
 	# ---------------- GRAVITY ----------------
+
 	velocity.y += GRAVITY * delta
 
-	# ---------------- MOVEMENT ----------------
-	if abs(dist) > 220:
+	# ---------------- MOVE TOWARD PLAYER 1 ----------------
 
-		velocity.x = direction * SPEED * 0.8
+	var stopping_distance := 90.0
+
+	if abs(dist) > stopping_distance:
+
+		# KEEP CHASING PLAYER 1
+		velocity.x = direction * SPEED * 1.5
+
 		state = State.RUN
 
 		if not is_attacking:
-			play_anim("walk")
+			play_anim("run")
 
 	else:
 
+		# STOP RIGHT NEXT TO PLAYER 1
+		velocity.x = 0
+
+		state = State.IDLE
+
 		if not is_attacking:
-			play_anim("walk")
+			play_anim("idle")
 
 	# ---------------- AI TIMER ----------------
+
 	ai_timer -= delta
 
 	if ai_timer <= 0:
@@ -723,7 +745,7 @@ func cpu_logic(delta):
 
 			"Hard":
 
-				ai_timer = randf_range(0.05,0.15)
+				ai_timer = randf_range(0.05, 0.15)
 
 				var choice = randi() % 100
 
@@ -759,7 +781,7 @@ func cpu_logic(delta):
 
 			"Easy":
 
-				ai_timer = randf_range(0.5,0.9)
+				ai_timer = randf_range(0.5, 0.9)
 
 				var choice = randi() % 100
 
@@ -790,25 +812,26 @@ func cpu_logic(delta):
 				else:
 					shoot_fireball()
 
-	# ---------------- GRAB CAMERA SHAKE ----------------
+	# ---------------- GRAB ----------------
+
 	if is_grabbing and grabbed_enemy and is_instance_valid(grabbed_enemy):
 
 		var cam := get_viewport().get_camera_2d()
 
 		if cam:
-			cam.shake(18,0.20)
+			cam.shake(18, 0.20)
 
-		var grab_offset := Vector2(80 * facing,0)
+		var grab_offset := Vector2(80 * facing, 0)
 
 		grabbed_enemy.global_position = global_position + grab_offset
 
 		grabbed_enemy.facing = -facing
-
 		grabbed_enemy.sprite.flip_h = grabbed_enemy.facing > 0
 
 		grabbed_enemy.velocity = Vector2.ZERO
 
 	# ---------------- GRAB SLAM ----------------
+
 	if is_grabbing and grabbed_enemy and is_instance_valid(grabbed_enemy):
 
 		if is_on_floor():
@@ -971,9 +994,7 @@ func take_damage(amount: int):
 		return
 
 	can_take_damage = false
-
 	await get_tree().create_timer(0.05).timeout
-
 	can_take_damage = true
 
 	if state == State.DEAD:
@@ -982,7 +1003,7 @@ func take_damage(amount: int):
 	if spawn_protection:
 		return
 
-	# ---------------- BLOCK REDUCTION ----------------
+	# BLOCK REDUCTION
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
@@ -997,6 +1018,11 @@ func take_damage(amount: int):
 	health_changed.emit(health)
 	hit_sound.play()
 
+	# ---------------- FINISH HIM ----------------
+	if health == 1 and not is_finish_state:
+		trigger_finish_state()
+		return
+
 	# ---------------- FINAL HIT ----------------
 	if health <= 0:
 		is_attacking = false
@@ -1008,44 +1034,25 @@ func take_damage(amount: int):
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
-	is_attacking = false
-	is_shooting = false
-	is_blocking = false
-
-	# STOP ALL MOVEMENT
-	velocity.x = 0
-	knockback_x = 0
 
 	combo.clear()
 
 	state = State.IDLE
 
-	# Play hurt animation
 	play_anim("hurt")
 
 	var blood = BLOOD_EFFECT.instantiate()
 	get_tree().current_scene.add_child(blood)
 	blood.global_position = $BloodMarker.global_position
 
-# Wait for hurt reaction
 	await get_tree().create_timer(0.25).timeout
 
-	if state == State.DEAD:
-		return
-
-	# ---------------- RETURN TO IDLE ----------------
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
-	is_attacking = false
-	is_shooting = false
-	velocity.x = 0
-	knockback_x = 0
 
-	state = State.IDLE
-	play_anim("idle")
-	current_anim = "idle"
-
+	if sprite.animation == "hurt":
+		play_anim("idle")
 
 func trigger_finish_state():
 
@@ -1056,9 +1063,8 @@ func trigger_finish_state():
 
 	state = State.IDLE
 
-	# force them to fall back down
-	velocity.x = 0
-	velocity.y = 0
+	# STOP ALL MOVEMENT
+	velocity = Vector2.ZERO
 
 	action_locked = true
 	hurt_locked = false
@@ -1067,30 +1073,44 @@ func trigger_finish_state():
 	is_hurting = false
 	is_blocking = false
 
-	# cancel any uppercut/fly state
-	set_meta("uppercut_launched", false)
+	# Cancel special states
+	special_move = false
+	flyingkick_active = false
+	bicyclekick_active = false
+	special_move_invincible = false
+	uppercut_launched = false
 
+	# Go back to idle
 	play_anim("idle")
 
-	finish_label.visible = true
+	# ---------------- FINISH HIM DISPLAY ----------------
 
+	# Make BOTH the parent and Sprite2D visible
+	if has_node("HUD/FinishLabel"):
+		$HUD/FinishLabel.visible = true
+
+	if has_node("HUD/FinishLabel/Sprite2D"):
+		finish_label.visible = true
+
+	# Play sound
+	if is_instance_valid(finishhim_sound):
+		finishhim_sound.play()
+
+	# Start flicker if the script exists
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
 
-	# let gravity work
-	await get_tree().create_timer(0.1).timeout
+	print("FINISH HIM TRIGGERED FOR LIU KANG")
 
-	while not is_on_floor():
-		velocity.y += 5000.0 * get_physics_process_delta_time()
-		move_and_slide()
-		await get_tree().physics_frame
-
-	velocity = Vector2.ZERO
-
+	# Wait before hiding it
 	await get_tree().create_timer(2.0).timeout
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
+
+	if has_node("HUD/FinishLabel"):
+		$HUD/FinishLabel.visible = false
+
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
