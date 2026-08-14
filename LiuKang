@@ -31,7 +31,7 @@ const GRAB_ATTACK = preload("res://GrabAttack.tscn")
 var grabbed_enemy: CharacterBody2D = null
 var is_grabbing := false
 var grab_timer := 0.0
-
+var was_uppercut := false
 const GRAB_TIME := 1.0
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
@@ -345,6 +345,7 @@ func run(input_dir: float):
 func _physics_process(delta):
 
 	if state == State.DEAD:
+		die()
 		return
 
 	if is_pulled:
@@ -355,6 +356,14 @@ func _physics_process(delta):
 	# ---------------- GLOBAL LOCKS ----------------
 	if dragon_active or stunned:
 		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
+
+# ---------------- UPPERCUT HIT ANIMATION ----------------
+	if was_uppercut:
+		velocity.y += GRAVITY * delta
+		velocity.x = 0
 		move_and_slide()
 		return
 
@@ -382,10 +391,16 @@ func _physics_process(delta):
 
 	if uppercut_launched:
 
+	# Gravity brings the fighter back down
+		velocity.y += GRAVITY * delta
+
 		move_and_slide()
 
 		if is_on_floor():
 			uppercut_launched = false
+
+	# Gravity brings the fighter back down
+		velocity.y += GRAVITY * delta
 
 		return
 
@@ -416,18 +431,45 @@ func _physics_process(delta):
 	$AttackMarker.position = Vector2(0 * facing, 0)
 	$LiuKangShoot.position = Vector2(63 * facing, -225)
 
-	# ---------------- MOVEMENT ----------------
+	# =========================================================
+	# 🟢 MOVEMENT (RUN ADDED HERE)
+	# =========================================================
 	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)
+		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
 	else:
 		velocity.x = input_dir * SPEED
 
+		# ---------------- STATE ----------------
 		if not is_on_floor():
 			state = State.JUMP
 		elif input_dir != 0:
 			state = State.WALK
+		elif input_dir != 0:
+			state = State.RUN
 		else:
 			state = State.IDLE
+
+	# ---------------- ANIMS ----------------
+	match state:
+
+		State.JUMP:
+			if not is_attacking:
+				play_anim("jump")
+
+		State.WALK:
+			if not is_attacking:
+				play_anim("walk")
+
+		State.RUN:
+			if not is_attacking:
+				play_anim("run")
+
+		State.IDLE:
+			if not is_attacking:
+				play_anim("idle")
+
+	if is_hurting and hurt_locked:
+		return
 
 	# ---------------- ANIMATIONS ----------------
 	match state:
@@ -642,10 +684,10 @@ func invisible() -> void:
 	sprite.visible = true
 
 # ---------------- CPU ----------------
+# ---------------- CPU ----------------
 func cpu_logic(delta):
 
 	# ---------------- FIND PLAYER 1 ----------------
-
 	if target == null or not is_instance_valid(target):
 		target = get_tree().get_first_node_in_group("player1")
 
@@ -655,165 +697,202 @@ func cpu_logic(delta):
 			move_and_slide()
 			return
 
-	# ---------------- FINISH STATE ----------------
+	# ---------------- DEAD ----------------
+	if state == State.DEAD:
+		return
 
+	# ---------------- FINISH STATE ----------------
 	if is_finish_state:
-		is_attacking = false
-		action_locked = true
+		state = State.IDLE
 		velocity.x = 0
+
+		if not is_hurting:
+			play_anim("idle")
+
 		velocity.y += GRAVITY * delta
 		move_and_slide()
 		return
 
-	# ---------------- HURT ----------------
+	# ---------------- GRAVITY ----------------
+	velocity.y += GRAVITY * delta
 
+	# ---------------- UPPERCUT LAUNCHED ----------------
+	if uppercut_launched:
+
+		move_and_slide()
+
+		if is_on_floor():
+			uppercut_launched = false
+
+		return
+
+	# =========================================================
+	# HURT
+	# =========================================================
+	# Getting hit does NOT permanently stop the CPU.
+	# Let the hurt animation/knockback happen, then immediately
+	# return to chasing/attacking.
 	if is_hurting:
 
-		if is_pulled:
-			velocity.x = -facing * -600
-		else:
-			velocity.x = -facing * 100
+		velocity.x = knockback_x
 
-		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
+		knockback_x = move_toward(
+			knockback_x,
+			0.0,
+			1500.0 * delta
+		)
 
-		if abs(knockback_x) < 10:
-			knockback_x = 0
+		# Keep gravity
+		velocity.y += GRAVITY * delta
+
+		move_and_slide()
+
+		# Once knockback is basically finished,
+		# allow the CPU to continue fighting.
+		if abs(knockback_x) < 10.0:
+			knockback_x = 0.0
 			is_hurting = false
-			is_pulled = false
+			hurt_locked = false
 
-		velocity.y += GRAVITY * delta
-		move_and_slide()
+			# IMPORTANT:
+			# CPU can immediately resume its AI.
+			action_locked = false
+			is_attacking = false
+
+			if state != State.DEAD:
+				current_anim = ""
+				play_anim("idle")
+
 		return
 
-	# ---------------- HARD LOCK ----------------
+# =========================================================
+# TARGET DISTANCE
+# =========================================================
+	var dist: float = target.global_position.x - global_position.x
+	var distance: float = abs(dist)
+	var direction: float = sign(dist)
 
-	if action_locked:
-		velocity.x = 0
-		velocity.y += GRAVITY * delta
-		move_and_slide()
-		return
-
-	# ---------------- TARGET ----------------
-
-	var dist = target.global_position.x - global_position.x
-	var direction = sign(dist)
-
-	# If almost exactly beside player
+# ---------------- FACE PLAYER 1 ----------------
 	if direction != 0:
 		facing = direction
 
-	sprite.flip_h = facing > 0
-
-	if $Crispy:
+		sprite.flip_h = facing > 0
 		$Crispy.flip_h = facing > 0
 
-	# ---------------- GRAVITY ----------------
+	# ---------------- RANGE ----------------
+	var attack_range: float = 110.0
+	var stopping_distance: float = 90.0
 
-	velocity.y += GRAVITY * delta
+# =========================================================
+# CHASE PLAYER 1
+# =========================================================
+	if distance > stopping_distance:
 
-	# ---------------- MOVE TOWARD PLAYER 1 ----------------
+		# Keep chasing even after previous attacks.
+		if not is_attacking and not is_hurting:
+			velocity.x = direction * SPEED * 1.5
+			state = State.RUN
+			play_anim("walk")
 
-	var stopping_distance := 90.0
-
-	if abs(dist) > stopping_distance:
-
-		# KEEP CHASING PLAYER 1
-		velocity.x = direction * SPEED * 1.5
-
-		state = State.RUN
-
-		if not is_attacking:
-			play_anim("run")
-
+# =========================================================
+# IN ATTACK RANGE
+# =========================================================
 	else:
 
-		# STOP RIGHT NEXT TO PLAYER 1
-		velocity.x = 0
-
+		# Stop moving when close enough.
+		velocity.x = 0.0
 		state = State.IDLE
 
-		if not is_attacking:
-			play_anim("idle")
+	# Don't let idle animation interrupt an attack.
+	if not is_attacking and not is_hurting:
+		play_anim("walk")
 
-	# ---------------- AI TIMER ----------------
-
+	# =========================================================
+	# AI ATTACK TIMER
+	# =========================================================
 	ai_timer -= delta
 
-	if ai_timer <= 0:
+	if ai_timer <= 0.0:
 
-		match Game.difficulty:
+		# -----------------------------------------------------
+		# ONLY ATTACK WHEN PLAYER 1 IS IN RANGE
+		# -----------------------------------------------------
+		if distance <= attack_range and not is_hurting and not is_finish_state:
 
-			"Hard":
+			match Game.difficulty:
 
-				ai_timer = randf_range(0.05, 0.15)
+				"Hard":
 
-				var choice = randi() % 100
+					ai_timer = randf_range(0.08, 0.18)
 
-				if choice < 10:
-					do_action("punch")
+					var choice := randi() % 100
 
-				elif choice < 20:
-					do_action("highpunch")
+					if choice < 15:
+						do_action("punch")
 
-				elif choice < 30:
-					do_action("lowpunch")
+					elif choice < 25:
+						do_action("highpunch")
 
-				elif choice < 45:
-					do_action("kick")
+					elif choice < 35:
+						do_action("lowpunch")
 
-				elif choice < 55:
-					do_action("highkick")
+					elif choice < 50:
+						do_action("kick")
 
-				elif choice < 65:
-					do_action("lowkick")
+					elif choice < 60:
+						do_action("highkick")
 
-				elif choice < 80:
-					do_action("uppercut")
+					elif choice < 70:
+						do_action("lowkick")
 
-				elif choice < 90:
-					do_action("roundhousekick")
+					elif choice < 82:
+						do_action("uppercut")
 
-				elif choice < 95:
-					do_action("knee")
+					elif choice < 92:
+						do_action("roundhousekick")
 
-				else:
-					shoot_fireball()
+					else:
+						do_action("knee")
 
-			"Easy":
 
-				ai_timer = randf_range(0.5, 0.9)
+				"Easy":
 
-				var choice = randi() % 100
+					ai_timer = randf_range(0.35, 0.65)
 
-				if choice < 35:
-					do_action("punch")
+					var choice := randi() % 100
 
-				elif choice < 45:
-					do_action("highpunch")
+					if choice < 35:
+						do_action("punch")
 
-				elif choice < 55:
-					do_action("lowpunch")
+					elif choice < 45:
+						do_action("highpunch")
 
-				elif choice < 70:
-					do_action("kick")
+					elif choice < 55:
+						do_action("lowpunch")
 
-				elif choice < 78:
-					do_action("highkick")
+					elif choice < 70:
+						do_action("kick")
 
-				elif choice < 86:
-					do_action("lowkick")
+					elif choice < 80:
+						do_action("highkick")
 
-				elif choice < 92:
-					do_action("uppercut")
+					elif choice < 88:
+						do_action("lowkick")
 
-				elif choice < 96:
-					do_action("roundhousekick")
+					elif choice < 94:
+						do_action("uppercut")
 
-				else:
-					shoot_fireball()
+					else:
+						do_action("roundhousekick")
 
-	# ---------------- GRAB ----------------
+		else:
+			# Player isn't close enough yet.
+			# Check again very soon instead of attacking.
+			ai_timer = 0.05
 
+	# =========================================================
+	# GRAB
+	# =========================================================
 	if is_grabbing and grabbed_enemy and is_instance_valid(grabbed_enemy):
 
 		var cam := get_viewport().get_camera_2d()
@@ -830,8 +909,9 @@ func cpu_logic(delta):
 
 		grabbed_enemy.velocity = Vector2.ZERO
 
-	# ---------------- GRAB SLAM ----------------
-
+	# =========================================================
+	# GRAB SLAM
+	# =========================================================
 	if is_grabbing and grabbed_enemy and is_instance_valid(grabbed_enemy):
 
 		if is_on_floor():
@@ -849,20 +929,18 @@ func cpu_logic(delta):
 
 			play_anim("idle")
 
+	# ---------------- MOVE ----------------
 	move_and_slide()
 
 func do_action(anim_name: String):
 
-	if is_attacking:
-		return
-
-	if health <= 1:
+	if state == State.DEAD:
 		return
 
 	if is_finish_state:
 		return
 
-	if state == State.DEAD:
+	if is_attacking:
 		return
 
 	if action_locked:
@@ -876,7 +954,7 @@ func do_action(anim_name: String):
 
 	play_anim(anim_name)
 
-# ---------------- MELEE ATTACKS ----------------
+	# ---------------- MELEE ATTACKS ----------------
 	if anim_name in [
 		"punch",
 		"highpunch",
@@ -900,6 +978,9 @@ func do_action(anim_name: String):
 		start_bicyclekick()
 
 	await get_tree().create_timer(0.15).timeout
+
+	if state == State.DEAD:
+		return
 
 	hurt_cooldown = false
 	is_attacking = false
@@ -990,69 +1071,171 @@ func spawn_grab():
 
 func take_damage(amount: int):
 
-	if not can_take_damage:
-		return
-
-	can_take_damage = false
-	await get_tree().create_timer(0.05).timeout
-	can_take_damage = true
-
+	# =========================================================
+	# ALREADY DEAD
+	# =========================================================
 	if state == State.DEAD:
 		return
 
+	# =========================================================
+	# SPAWN PROTECTION
+	# =========================================================
 	if spawn_protection:
 		return
 
-	# BLOCK REDUCTION
+	# =========================================================
+	# SPECIAL MOVE INVINCIBILITY
+	# =========================================================
+	if special_move_invincible:
+		return
+
+	# =========================================================
+	# DAMAGE LOCK
+	# =========================================================
+	if not can_take_damage:
+		return
+
+	# =========================================================
+	# BLOCK
+	# =========================================================
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
-	if amount <= 0:
-		return
+		if amount <= 0:
+			return
+
+	# =========================================================
+	# APPLY DAMAGE
+	# =========================================================
+	can_take_damage = false
 
 	health -= amount
 	health = max(health, 0)
 
-	print("LiuKang took damage: ", amount, " HP=", health)
+	print("Liu Kang HP: ", health)
 
 	health_changed.emit(health)
-	hit_sound.play()
 
-	# ---------------- FINISH HIM ----------------
-	if health == 1 and not is_finish_state:
-		trigger_finish_state()
-		return
+	if is_instance_valid(hit_sound):
+		hit_sound.play()
 
-	# ---------------- FINAL HIT ----------------
+	# =========================================================
+	# DEATH
+	# HEALTH = 0
+	# =========================================================
 	if health <= 0:
+
+		health = 0
+
+		print("LIU KANG HP = 0")
+		print("LIU KANG DIED")
+
+		# Stop everything
 		is_attacking = false
-		finish_label.visible = false
+		is_shooting = false
+		is_blocking = false
+
+		is_hurting = false
+		hurt_locked = true
+		action_locked = true
+
+		flyingkick_active = false
+		bicyclekick_active = false
+		special_move = false
+		special_move_invincible = false
+		uppercut_launched = false
+		was_uppercut = false
+
+		velocity = Vector2.ZERO
+		knockback_x = 0
+
+		# IMPORTANT:
+		# Do NOT set can_take_damage = true here.
+		can_take_damage = false
+
 		die()
 		return
 
-	# ---------------- NORMAL HURT ----------------
+	# =========================================================
+	# FINISH HIM
+	# HEALTH = 1
+	# =========================================================
+	if health == 1:
+
+		print("LIU KANG HP = 1")
+		print("FINISH HIM")
+
+		# Stop the normal hurt state
+		is_hurting = false
+		hurt_locked = false
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		action_locked = false
+
+		state = State.IDLE
+		velocity = Vector2.ZERO
+		knockback_x = 0
+
+		# Show FINISH HIM
+		trigger_finish_state()
+
+		# VERY IMPORTANT:
+		# Liu Kang is still alive and MUST be able
+		# to receive another hit at 1 HP.
+		can_take_damage = true
+
+		return
+
+	# =========================================================
+	# NORMAL DAMAGE
+	# HEALTH > 1
+	# =========================================================
+
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
 
 	combo.clear()
 
 	state = State.IDLE
 
+	knockback_x = -facing * 20
+
+	current_anim = ""
 	play_anim("hurt")
 
-	var blood = BLOOD_EFFECT.instantiate()
-	get_tree().current_scene.add_child(blood)
-	blood.global_position = $BloodMarker.global_position
+	if is_instance_valid(hurt_sound):
+		hurt_sound.play()
 
+	# =========================================================
+	# NORMAL HURT RECOVERY
+	# =========================================================
 	await get_tree().create_timer(0.25).timeout
+
+	if state == State.DEAD:
+		return
+
+	# If another hit killed/finished Liu during the wait,
+	# don't overwrite the state.
+	if health <= 1:
+		can_take_damage = true
+		return
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
 
-	if sprite.animation == "hurt":
-		play_anim("idle")
+	can_take_damage = true
+
+	current_anim = ""
+	play_anim("idle")
 
 func trigger_finish_state():
 
@@ -1110,7 +1293,6 @@ func trigger_finish_state():
 
 	if has_node("HUD/FinishLabel"):
 		$HUD/FinishLabel.visible = false
-
 
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
@@ -1398,26 +1580,69 @@ func stop_block():
 
 # ---------------- HURT BOX ----------------
 func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
+
 	if hurt_cooldown:
 		return
 
 	if area == null or !is_instance_valid(area):
 		return
 
+	# Don't react to another hurtbox
 	if area.is_in_group("HurtBox"):
 		return
 
-	if area.get("attack_name") and area.attack_name == "uppercut":
-		$Sprite.play("wasuppercut")
-	else:
-		$Sprite.play("hurt")
-		$Sprite.play("idle")
+	# Make sure this is actually a damaging attack
+	var attack_name := ""
 
-		$Hurt.play()
+	if "attack_name" in area:
+		attack_name = area.attack_name
 
-	if not can_take_damage:
+	# =========================
+	# UPPERCUT HIT
+	# =========================
+	if attack_name == "uppercut":
+
+		# Prevent other animations from taking over
+		was_uppercut = true
+		is_attacking = false
+		action_locked = true
+		is_hurting = false
+
+		# Play ONLY wasuppercut
+		current_anim = ""
+		sprite.play("wasuppercut")
+
+		# Apply the damage immediately
+		if can_take_damage:
+			hurt_cooldown = true
+			take_damage(1)
+
+		# Wait until wasuppercut animation finishes
+		await sprite.animation_finished
+
+		# Don't change anything if Liu died
+		if state == State.DEAD:
+			was_uppercut = false
+			return
+
+		# Return to normal
+		was_uppercut = false
+		action_locked = false
+		is_attacking = false
+		is_hurting = false
+
+		current_anim = ""
+		play_anim("idle")
+
+		await get_tree().create_timer(0.2).timeout
+		hurt_cooldown = false
+
 		return
 
+
+	# =========================
+	# NORMAL HIT
+	# =========================
 	if area.is_in_group("HitBox") \
 		or area.is_in_group("ReptileAcid") \
 		or area.is_in_group("FireDeath") \
@@ -1433,8 +1658,31 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 
 		hurt_cooldown = true
 
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
+		is_attacking = false
+
 		knockback_x = -facing * 20
+
+		# Normal hurt animation
+		play_anim("hurt")
+		hurt_sound.play()
+
+		# Damage
 		take_damage(1)
+
+		await get_tree().create_timer(0.25).timeout
+
+		if state == State.DEAD:
+			return
+
+		if not was_uppercut:
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+			current_anim = ""
+			play_anim("idle")
 
 		await get_tree().create_timer(0.2).timeout
 		hurt_cooldown = false
