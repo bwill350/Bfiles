@@ -77,9 +77,7 @@ func _on_area_entered(area):
 	if not target.has_method("take_damage"):
 		return
 
-
 	has_hit = true
-
 
 	# =========================
 	# UPPERCUT LAUNCH
@@ -95,46 +93,34 @@ func _on_area_entered(area):
 
 			target.velocity.x = dir * 400
 			target.velocity.y = -600
+
 			if "uppercut_launched" in target:
 				target.uppercut_launched = true
 
 	target.take_damage(damage)
-	if area == null:
-		return
-
-	var target = area.get_parent()
-
-	if attack_owner != null and target == attack_owner:
-		return
-
-	if target == null:
-		return
-
-	if not target.is_in_group("Fighter"):
-		return
-
-	if not target.has_method("take_damage"):
-		return
-
-
-	has_hit = true
 
 
 	# =========================
-	# UPPERCUT LAUNCH
+	# CAMERA SHAKE
 	# =========================
-	if attack_name == "uppercut":
+	var cam := get_viewport().get_camera_2d()
 
-		if "velocity" in target:
+	if cam:
+		match attack_name:
 
-			var dir = 1
+			"uppercut":
+				cam.shake(16, 0.18)
 
-			if attack_owner != null:
-				dir = attack_owner.facing
+			"roundhousekick":
+				cam.shake(12, 0.15)
 
-			target.velocity.x = dir * 100
-			target.velocity.y = -600
-			if "uppercut_launched" in target:
-				target.uppercut_launched = true
+			"kick", "highkick", "lowkick":
+				cam.shake(8, 0.10)
+
+			"punch", "highpunch", "lowpunch":
+				cam.shake(6, 0.08)
+
+			_:
+				cam.shake(10, 0.12)
 
 	target.take_damage(damage)
