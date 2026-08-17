@@ -1,6 +1,9 @@
 extends CanvasLayer
 
-# ---------------- UI ----------------
+# =========================================================
+# UI
+# =========================================================
+
 @onready var duke_label = $DukeLabel
 @onready var reptile_label = $ReptileLabel
 @onready var subzero_label = $SubzeroLabel
@@ -12,6 +15,11 @@ extends CanvasLayer
 
 @onready var points_label = $Points
 
+
+# =========================================================
+# HEALTH BARS
+# =========================================================
+
 @onready var duke_bar: TextureProgressBar = $DukeHealthBar
 @onready var reptile_bar: TextureProgressBar = $ReptileHealthBar
 @onready var subzero_bar: TextureProgressBar = $SubzeroHealthBar
@@ -21,7 +29,11 @@ extends CanvasLayer
 @onready var kano_bar: TextureProgressBar = $KanoHealthBar
 @onready var johnny_cage_bar: TextureProgressBar = $JohnnyCageHealthBar
 
-# ---------------- SEGMENTS ----------------
+
+# =========================================================
+# SEGMENTS
+# =========================================================
+
 @onready var seg1 = $Seg1
 @onready var seg2 = $Seg2
 @onready var seg3 = $Seg3
@@ -62,7 +74,24 @@ extends CanvasLayer
 @onready var seg31 = $Seg31
 @onready var seg32 = $Seg32
 
-# ---------------- REFERENCES ----------------
+
+# =========================================================
+# ROUND UI
+# =========================================================
+
+@onready var round1 = get_node_or_null("../Round1")
+@onready var round2 = get_node_or_null("../Round2")
+@onready var round3 = get_node_or_null("../Round3")
+@onready var fight = get_node_or_null("../Fight")
+
+@onready var you_win = get_node_or_null("../YouWin")
+@onready var you_lose = get_node_or_null("../YouLose")
+
+
+# =========================================================
+# FIGHTER REFERENCES
+# =========================================================
+
 var reptile
 var subzero
 var duke
@@ -72,11 +101,48 @@ var sonya
 var kano
 var johnny_cage
 
+
+# =========================================================
+# READY
+# =========================================================
+
 func _ready():
+
+	add_to_group("HUD")
+
+	hide_round_ui()
+	hide_win_lose()
+
 	if Game.has_signal("points_changed"):
-		Game.points_changed.connect(_on_points_changed)
+
+		if not Game.points_changed.is_connected(_on_points_changed):
+			Game.points_changed.connect(_on_points_changed)
 
 	_find_fighters()
+
+
+# =========================================================
+# HIDE ROUND UI
+# =========================================================
+
+func hide_round_ui():
+
+	if round1 != null:
+		round1.visible = false
+
+	if round2 != null:
+		round2.visible = false
+
+	if round3 != null:
+		round3.visible = false
+
+	if fight != null:
+		fight.visible = false
+
+
+# =========================================================
+# FIND FIGHTERS
+# =========================================================
 
 func _find_fighters():
 
@@ -89,13 +155,37 @@ func _find_fighters():
 	kano = get_tree().get_first_node_in_group("Kano")
 	johnny_cage = get_tree().get_first_node_in_group("JohnnyCage")
 
-	# HUD names from character select
-	duke_label.text = Game.p1_character
-	reptile_label.text = Game.p2_character
+	if duke_label != null:
+		duke_label.text = Game.p1_character
+
+	if reptile_label != null:
+		reptile_label.text = Game.p2_character
+
+	if subzero_label != null:
+		subzero_label.text = Game.p1_character
+
+	if raiden_label != null:
+		raiden_label.text = Game.p1_character
+
+	if liu_kang_label != null:
+		liu_kang_label.text = Game.p1_character
+
+	if sonya_label != null:
+		sonya_label.text = Game.p1_character
+
+	if kano_label != null:
+		kano_label.text = Game.p1_character
+
+	if johnnycage_label != null:
+		johnnycage_label.text = Game.p1_character
 
 
+# =========================================================
+# PROCESS
+# =========================================================
 
 func _process(_delta):
+
 	if reptile == null \
 	or subzero == null \
 	or duke == null \
@@ -104,9 +194,180 @@ func _process(_delta):
 	or sonya == null \
 	or kano == null \
 	or johnny_cage == null:
+
 		_find_fighters()
 
+
+# =========================================================
+# SHOW ROUND
+# =========================================================
+
+func show_round(round_number: int):
+
+	hide_round_ui()
+
+	# ---------------------------------------------------------
+	# ROUND 1
+	# ---------------------------------------------------------
+
+	if round_number == 1:
+
+		if round1 != null:
+			round1.visible = true
+
+	# ---------------------------------------------------------
+	# ROUND 2
+	# ---------------------------------------------------------
+
+	elif round_number == 2:
+
+		if round2 != null:
+			round2.visible = true
+
+	# ---------------------------------------------------------
+	# ROUND 3
+	# ---------------------------------------------------------
+
+	elif round_number == 3:
+
+		if round3 != null:
+			round3.visible = true
+
+	else:
+		return
+
+	# ---------------------------------------------------------
+	# KEEP ROUND IMAGE ON SCREEN
+	# ---------------------------------------------------------
+
+	await get_tree().create_timer(2.0).timeout
+
+	hide_round_ui()
+
+
+# =========================================================
+# SHOW FIGHT
+# =========================================================
+
+func show_fight():
+
+	hide_round_ui()
+
+	if fight != null:
+		fight.visible = true
+
+	await get_tree().create_timer(1.0).timeout
+
+	if fight != null:
+		fight.visible = false
+
+
+# =========================================================
+# RESET ALL HEALTH BARS
+# =========================================================
+
+func reset_all_health_bars():
+
+	if duke_bar != null:
+		duke_bar.value = duke_bar.max_value
+
+	if reptile_bar != null:
+		reptile_bar.value = reptile_bar.max_value
+
+	if subzero_bar != null:
+		subzero_bar.value = subzero_bar.max_value
+
+	if raiden_bar != null:
+		raiden_bar.value = raiden_bar.max_value
+
+	if liu_kang_bar != null:
+		liu_kang_bar.value = liu_kang_bar.max_value
+
+	if sonya_bar != null:
+		sonya_bar.value = sonya_bar.max_value
+
+	if kano_bar != null:
+		kano_bar.value = kano_bar.max_value
+
+	if johnny_cage_bar != null:
+		johnny_cage_bar.value = johnny_cage_bar.max_value
+
+	# ONLY THE REAL FIGHT SEGMENTS
+	update_p1_segments(603, 496)
+	update_p2_segments(1890, 496)
+
+
+# =========================================================
+# SHOW YOU WIN
+# =========================================================
+
+func show_you_win():
+
+	if you_lose != null:
+		you_lose.visible = false
+
+	if you_win != null:
+		you_win.visible = true
+
+
+# =========================================================
+# SHOW YOU LOSE
+# =========================================================
+
+func show_you_lose():
+
+	if you_win != null:
+		you_win.visible = false
+
+	if you_lose != null:
+		you_lose.visible = true
+
+
+# =========================================================
+# HIDE WIN / LOSE
+# =========================================================
+
+func hide_win_lose():
+
+	if you_win != null:
+		you_win.visible = false
+
+	if you_lose != null:
+		you_lose.visible = false
+
+
+# =========================================================
+# WINNER
+# =========================================================
+
+func show_winner(character_name: String):
+
+	if you_lose != null:
+		you_lose.visible = false
+
+	if you_win != null:
+		you_win.visible = true
+
+
+# =========================================================
+# HIDE WINNER
+# =========================================================
+
+func hide_winner():
+
+	if you_win != null:
+		you_win.visible = false
+
+
+# =========================================================
+# P1 SEGMENTS
+# =========================================================
+
 func update_p1_segments(health, max_hp):
+
+	if max_hp <= 0:
+		return
+
 	var percent = float(health) / float(max_hp)
 
 	seg5.visible = percent > 0.00
@@ -115,7 +376,15 @@ func update_p1_segments(health, max_hp):
 	seg8.visible = percent > 0.03
 
 
+# =========================================================
+# P2 SEGMENTS
+# =========================================================
+
 func update_p2_segments(health, max_hp):
+
+	if max_hp <= 0:
+		return
+
 	var percent = float(health) / float(max_hp)
 
 	seg1.visible = percent > 0.00
@@ -123,109 +392,124 @@ func update_p2_segments(health, max_hp):
 	seg3.visible = percent > 0.02
 	seg4.visible = percent > 0.03
 
-# ---------------- DUKE ----------------
+
+# =========================================================
+# DUKE
+# =========================================================
+
 func _on_duke_health_changed(health):
-	duke_label.text = "%s: %d" % [Game.p1_character, health]
-	duke_bar.value = health
 
-	var max_hp = duke_bar.max_value
-	if max_hp <= 0:
-		return
+	if duke_label != null:
+		duke_label.text = "%s: %d" % [Game.p1_character, health]
 
-	var percent = float(health) / float(max_hp)
+	if duke_bar != null:
+		duke_bar.value = health
+		update_p1_segments(health, duke_bar.max_value)
 
-# ---------------- REPTILE ----------------
+
+# =========================================================
+# REPTILE
+# =========================================================
+
 func _on_reptile_health_changed(health):
-	reptile_label.text = "%s: %d" % [Game.p2_character, health]
-	reptile_bar.value = health
-	
 
-	update_p2_segments(health, reptile_bar.max_value)
+	if reptile_label != null:
+		reptile_label.text = "%s: %d" % [Game.p2_character, health]
 
-	var max_hp = reptile_bar.max_value
-	if max_hp <= 0:
-		return
+	if reptile_bar != null:
+		reptile_bar.value = health
+		update_p2_segments(health, reptile_bar.max_value)
 
-	var percent = float(health) / float(max_hp)
 
-# ---------------- SUBZERO ----------------
+# =========================================================
+# SUBZERO
+# =========================================================
+
 func _on_subzero_health_changed(health):
-	subzero_label.text = "%s: %d" % [Game.p1_character, health]
-	subzero_bar.value = health
 
-	update_p1_segments(health, subzero_bar.max_value)
+	if subzero_label != null:
+		subzero_label.text = "%s: %d" % [Game.p1_character, health]
 
-	var max_hp = subzero_bar.max_value
-	if max_hp <= 0:
-		return
+	if subzero_bar != null:
+		subzero_bar.value = health
+		update_p1_segments(health, subzero_bar.max_value)
 
-	var percent = float(health) / float(max_hp)
 
-# ---------------- RAIDEN ----------------
+# =========================================================
+# RAIDEN
+# =========================================================
+
 func _on_raiden_health_changed(health):
-	raiden_label.text = "%s: %d" % [Game.p1_character, health]
-	raiden_bar.value = health
 
-	update_p1_segments(health, raiden_bar.max_value)
+	if raiden_label != null:
+		raiden_label.text = "%s: %d" % [Game.p1_character, health]
 
-	var max_hp = raiden_bar.max_value
-	if max_hp <= 0:
-		return
+	if raiden_bar != null:
+		raiden_bar.value = health
+		update_p1_segments(health, raiden_bar.max_value)
 
-	var percent = float(health) / float(max_hp)
 
-# ---------------- LIU KANG ----------------
+# =========================================================
+# LIU KANG
+# =========================================================
+
 func _on_liu_kang_health_changed(health):
-	liu_kang_label.text = "%s: %d" % [Game.p1_character, health]
-	liu_kang_bar.value = health
 
-	update_p1_segments(health, liu_kang_bar.max_value)
+	if liu_kang_label != null:
+		liu_kang_label.text = "%s: %d" % [Game.p1_character, health]
 
-	var max_hp = liu_kang_bar.max_value
-	if max_hp <= 0:
-		return
+	if liu_kang_bar != null:
+		liu_kang_bar.value = health
+		update_p1_segments(health, liu_kang_bar.max_value)
 
-	var percent = float(health) / float(max_hp)
 
-# ---------------- SONYA ----------------
+# =========================================================
+# SONYA
+# =========================================================
+
 func _on_sonya_health_changed(health):
-	sonya_label.text = "%s: %d" % [Game.p1_character, health]
-	sonya_bar.value = health
 
-	update_p1_segments(health, sonya_bar.max_value)
+	if sonya_label != null:
+		sonya_label.text = "%s: %d" % [Game.p1_character, health]
 
-	var max_hp = sonya_bar.max_value
-	if max_hp <= 0:
-		return
+	if sonya_bar != null:
+		sonya_bar.value = health
+		update_p1_segments(health, sonya_bar.max_value)
 
-	var percent = float(health) / float(max_hp)
 
-# ---------------- KANO ----------------
+# =========================================================
+# KANO
+# =========================================================
+
 func _on_kano_health_changed(health):
-	kano_label.text = "%s: %d" % [Game.p1_character, health]
-	kano_bar.value = health
 
-	update_p1_segments(health, kano_bar.max_value)
+	if kano_label != null:
+		kano_label.text = "%s: %d" % [Game.p1_character, health]
 
-	var max_hp = kano_bar.max_value
-	if max_hp <= 0:
-		return
+	if kano_bar != null:
+		kano_bar.value = health
+		update_p1_segments(health, kano_bar.max_value)
 
-	var percent = float(health) / float(max_hp)
 
-# ---------------- JOHNNY CAGE ----------------
+# =========================================================
+# JOHNNY CAGE
+# =========================================================
+
 func _on_johnny_cage_health_changed(health):
-	johnnycage_label.text = "%s: %d" % [Game.p1_character, health]
-	johnny_cage_bar.value = health
 
-	update_p1_segments(health, johnny_cage_bar.max_value)
+	if johnnycage_label != null:
+		johnnycage_label.text = "%s: %d" % [Game.p1_character, health]
 
-	var max_hp = johnny_cage_bar.max_value
-	if max_hp <= 0:
-		return
+	if johnny_cage_bar != null:
+		johnny_cage_bar.value = health
+		update_p1_segments(health, johnny_cage_bar.max_value)
 
-	var percent = float(health) / float(max_hp)
 
-# ---------------- POINTS ----------------
+# =========================================================
+# POINTS
+# =========================================================
+
 func _on_points_changed(points):
-	points_label.text = "Points: %d" % points
+
+	if points_label != null:
+		points_label.text = "Points: %d" % points
