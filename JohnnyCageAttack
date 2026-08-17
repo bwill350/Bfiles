@@ -14,9 +14,6 @@ var attack_name := ""
 var attack_type := ""
 
 func _ready():
-
-	add_to_group("JohnnyCageAttack")
-
 	await get_tree().process_frame
 
 	area_entered.connect(_on_area_entered)
@@ -24,17 +21,9 @@ func _ready():
 	enable_hitbox()
 
 	await get_tree().create_timer(active_time).timeout
-
-	if !is_inside_tree():
-		return
-
 	disable_hitbox()
 
 	await get_tree().create_timer(lifetime).timeout
-
-	if !is_inside_tree():
-		return
-
 	queue_free()
 
 
@@ -77,9 +66,7 @@ func _on_area_entered(area):
 	if not target.has_method("take_damage"):
 		return
 
-
 	has_hit = true
-
 
 	# =========================
 	# UPPERCUT LAUNCH
@@ -93,9 +80,36 @@ func _on_area_entered(area):
 			if attack_owner != null:
 				dir = attack_owner.facing
 
-			target.velocity.x = dir * 100
+			target.velocity.x = dir * 400
 			target.velocity.y = -600
+
 			if "uppercut_launched" in target:
 				target.uppercut_launched = true
+
+	target.take_damage(damage)
+
+
+	# =========================
+	# CAMERA SHAKE
+	# =========================
+	var cam := get_viewport().get_camera_2d()
+
+	if cam:
+		match attack_name:
+
+			"uppercut":
+				cam.shake(16, 0.18)
+
+			"roundhousekick":
+				cam.shake(12, 0.15)
+
+			"kick", "highkick", "lowkick":
+				cam.shake(8, 0.10)
+
+			"punch", "highpunch", "lowpunch":
+				cam.shake(6, 0.08)
+
+			_:
+				cam.shake(10, 0.12)
 
 	target.take_damage(damage)
