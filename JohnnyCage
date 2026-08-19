@@ -795,32 +795,62 @@ func shoot_player():
 	action_locked = false
 
 # ---------------- DAMAGE ----------------
+# ---------------- DAMAGE ----------------
 func take_damage(amount: int):
 
-	if not can_take_damage:
-		return
-
-	can_take_damage = false
-	await get_tree().create_timer(0.25).timeout
-	can_take_damage = true
+	# =================================================
+	# ALREADY DEAD / INVINCIBLE
+	# =================================================
 
 	if state == State.DEAD:
 		return
 
-	var frame := Engine.get_physics_frames()
-
-	if has_meta("last_damage_frame") and get_meta("last_damage_frame") == frame:
+	if not can_take_damage:
 		return
 
 	if spawn_protection:
 		return
 
-	# ---------------- BLOCK REDUCTION ----------------
+
+	# =================================================
+	# PREVENT MULTIPLE DAMAGE ON SAME PHYSICS FRAME
+	# =================================================
+
+	var frame := Engine.get_physics_frames()
+
+	if has_meta("last_damage_frame"):
+		if get_meta("last_damage_frame") == frame:
+			return
+
+	set_meta("last_damage_frame", frame)
+
+
+	# =================================================
+	# DAMAGE COOLDOWN
+	# =================================================
+
+	can_take_damage = false
+
+	get_tree().create_timer(0.25).timeout.connect(func():
+		if is_instance_valid(self) and state != State.DEAD:
+			can_take_damage = true
+	)
+
+
+	# =================================================
+	# BLOCK REDUCTION
+	# =================================================
+
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
 	if amount <= 0:
 		return
+
+
+	# =================================================
+	# APPLY DAMAGE
+	# =================================================
 
 	health -= amount
 	health = max(health, 0)
@@ -828,41 +858,136 @@ func take_damage(amount: int):
 	print("JohnnyCage took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
-	hit_sound.play()
 
-	# ---------------- FINISH HIM ----------------
-	if health == 1 and Game.current_round == 2 and not is_finish_state:
-		trigger_finish_state()
-		return
+	if is_instance_valid(hit_sound):
+		hit_sound.play()
 
-	# ---------------- FINAL HIT ----------------
+
+	# =================================================
+	# FINAL HIT
+	# =================================================
+
 	if health <= 0:
+
 		is_attacking = false
-		finish_label.visible = false
+		is_shooting = false
+		is_hurting = false
+		is_blocking = false
+
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
+
 		die()
+
 		return
 
-	# ---------------- NORMAL HURT ----------------
+
+	# =================================================
+	# FINISH HIM
+	# =================================================
+	#
+	# Only show FINISH HIM when the opponent already
+	# has 1 round win.
+	#
+	# That means killing this fighter will give the
+	# opponent their SECOND round win.
+	#
+	# We do NOT use Game.current_round here.
+	# =================================================
+
+	if health == 1 and not is_finish_state:
+
+		var opponent_will_win_match := false
+
+
+		# =================================================
+		# JOHNNY IS PLAYER 1
+		# =================================================
+
+		if is_in_group("player1"):
+
+			# CPU already has 1 round win.
+			# This death would give CPU its 2nd win.
+			if Game.p2_round_wins >= 1:
+				opponent_will_win_match = true
+
+
+		# =================================================
+		# JOHNNY IS CPU
+		# =================================================
+
+		else:
+
+			# Player 1 already has 1 round win.
+			# This death would give P1 its 2nd win.
+			if Game.p1_round_wins >= 1:
+				opponent_will_win_match = true
+
+
+		# =================================================
+		# SHOW FINISH HIM ONLY FOR MATCH-ENDING ROUND
+		# =================================================
+
+		if opponent_will_win_match:
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+
+			trigger_finish_state()
+
+			return
+
+
+	# =================================================
+	# NORMAL HURT
+	# =================================================
+
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
 	state = State.IDLE
 
 	combo.clear()
 
 	play_anim("hurt")
 
-	var blood = BLOOD_EFFECT.instantiate()
-	get_tree().current_scene.add_child(blood)
-	blood.global_position = $BloodMarker.global_position
+	if is_instance_valid(hurt_sound):
+		hurt_sound.play()
+
+
+	# =================================================
+	# BLOOD EFFECT
+	# =================================================
+
+	if has_node("BloodMarker"):
+
+		var blood = BLOOD_EFFECT.instantiate()
+
+		get_tree().current_scene.add_child(blood)
+
+		blood.global_position = $BloodMarker.global_position
+
+
+	# =================================================
+	# HURT DURATION
+	# =================================================
 
 	await get_tree().create_timer(0.25).timeout
+
+	if state == State.DEAD:
+		return
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
 
-	if state != State.DEAD:
+	if state != State.DEAD and not is_finish_state:
 		play_anim("idle")
 
 func trigger_finish_state():
@@ -1036,7 +1161,6 @@ func combo_attack(attacks: Array):
 	if not is_hurting:
 		play_anim("idle")
 
-# ---------------- DEATH ----------------
 # =====================================================
 # DEATH
 # =====================================================
@@ -1045,13 +1169,14 @@ func die():
 	if state == State.DEAD:
 		return
 
-	# =====================================================
+	# =================================================
 	# LOCK THIS FIGHTER AS DEAD
-	# =====================================================
+	# =================================================
 
 	state = State.DEAD
 
 	velocity = Vector2.ZERO
+
 	is_attacking = false
 	is_shooting = false
 	action_locked = true
@@ -1060,288 +1185,107 @@ func die():
 	is_blocking = false
 	can_take_damage = false
 
-	# =====================================================
+	# =================================================
 	# STOP JOHNNY-SPECIFIC ACTIONS
-	# =====================================================
+	# =================================================
 
-	if "cannonkick_active" in self:
-		cannonkick_active = false
+	cannonkick_active = false
+	run_locked = false
+	is_running = false
+	special_move = false
+	stunned = false
+	knockback_x = 0.0
+	uppercut_launched = false
 
-	if "run_locked" in self:
-		run_locked = false
+	is_pulled = false
+	pull_timer = 0.0
+	pull_target = null
 
-	if "is_running" in self:
-		is_running = false
-
-	if "special_move" in self:
-		special_move = false
-
-	if "stunned" in self:
-		stunned = false
-
-	if "knockback_x" in self:
-		knockback_x = 0.0
-
-	if "uppercut_launched" in self:
-		uppercut_launched = false
-
-	# =====================================================
+	# =================================================
 	# HIDE NORMAL SPRITE
-	# =====================================================
+	# =================================================
 
 	$Sprite.visible = false
 	$Crispy.visible = true
 
+	# =================================================
+	# DETERMINE WHO WON THIS ROUND
+	# =================================================
 
-	# =====================================================
-	# ROUND 1 DEATH
-	# START ROUND 2
-	# =====================================================
+	var winner := ""
 
-	if Game.current_round == 1:
+	if is_in_group("player1"):
+		winner = "cpu"
+	else:
+		winner = "player1"
+
+	print("================================")
+	print("JOHNNY CAGE DIED")
+	print("ROUND: ", Game.current_round)
+	print("CURRENT SCORE: ", Game.p1_round_wins, " - ", Game.p2_round_wins)
+	print("ROUND WINNER: ", winner)
+	print("================================")
+
+	# =================================================
+	# DETERMINE IF THIS ROUND WILL END THE MATCH
+	# =================================================
+	#
+	# Johnny dies:
+	#
+	# If Johnny = P1:
+	#     CPU gets the round.
+	#
+	# If Johnny = CPU:
+	#     P1 gets the round.
+	#
+	# The round is only a MATCH WIN if the winner
+	# already has 1 round win.
+	#
+	# Example:
+	#
+	# Score 1-0
+	# P1 dies
+	# CPU gets round -> 1-1
+	# NOT match over
+	#
+	# Score 1-0
+	# CPU dies
+	# P1 gets round -> 2-0
+	# MATCH OVER
+	#
+	# Score 1-1
+	# P1 dies
+	# CPU gets round -> 1-2
+	# MATCH OVER
+	# =================================================
+
+	var match_will_end := false
+
+	if winner == "player1":
+
+		if Game.p1_round_wins >= 1:
+			match_will_end = true
+
+	else:
+
+		if Game.p2_round_wins >= 1:
+			match_will_end = true
+
+	print("MATCH WILL END: ", match_will_end)
+
+	# =================================================
+	# FINAL MATCH DEATH
+	# =================================================
+
+	if match_will_end:
+
+		print("================================")
+		print("FINAL ROUND DEATH")
+		print("FATALITY ALLOWED")
+		print("================================")
 
 		# -------------------------------------------------
-		# TELL LEVEL1 WHO WON ROUND 1
-		# -------------------------------------------------
-
-		if is_in_group("player1"):
-			round_death.emit("cpu")
-		else:
-			round_death.emit("player1")
-
-
-		# -------------------------------------------------
-		# WAIT BEFORE ROUND 2
-		# -------------------------------------------------
-
-		await get_tree().create_timer(3.0).timeout
-
-
-		# -------------------------------------------------
-		# SET ROUND 2
-		# -------------------------------------------------
-
-		Game.current_round = 2
-
-
-		# -------------------------------------------------
-		# FIND BOTH FIGHTERS
-		# -------------------------------------------------
-
-		var p1 = get_tree().get_first_node_in_group("player1")
-		var p2 = get_tree().get_first_node_in_group("enemy")
-
-
-		# =================================================
-		# RESET P1
-		# =================================================
-
-		if p1 != null and is_instance_valid(p1):
-
-			p1.global_position = Vector2(603, 496)
-
-			p1.health = 10
-			p1.velocity = Vector2.ZERO
-
-			p1.state = p1.State.IDLE
-
-			p1.is_hurting = false
-			p1.is_attacking = false
-			p1.is_shooting = false
-			p1.action_locked = false
-			p1.hurt_locked = false
-			p1.can_take_damage = true
-
-			if "is_blocking" in p1:
-				p1.is_blocking = false
-
-			if "is_finish_state" in p1:
-				p1.is_finish_state = false
-
-			if "finish_triggered" in p1:
-				p1.finish_triggered = false
-
-			if "dead_locked" in p1:
-				p1.dead_locked = false
-
-			if "stunned" in p1:
-				p1.stunned = false
-
-			if "knockback_x" in p1:
-				p1.knockback_x = 0.0
-
-			if "uppercut_launched" in p1:
-				p1.uppercut_launched = false
-
-			if p1.has_node("Sprite"):
-				p1.get_node("Sprite").visible = true
-
-			if p1.has_node("Crispy"):
-				p1.get_node("Crispy").visible = false
-
-			if p1.has_signal("health_changed"):
-				p1.health_changed.emit(10)
-
-			if p1.has_method("play_anim"):
-				p1.play_anim("idle")
-
-
-		# =================================================
-		# RESET P2
-		# =================================================
-
-		if p2 != null and is_instance_valid(p2):
-
-			p2.global_position = Vector2(300, 496)
-
-			p2.health = 10
-			p2.velocity = Vector2.ZERO
-
-			p2.state = p2.State.IDLE
-
-			p2.is_hurting = false
-			p2.is_attacking = false
-			p2.is_shooting = false
-			p2.action_locked = false
-			p2.hurt_locked = false
-			p2.can_take_damage = true
-
-			if "is_blocking" in p2:
-				p2.is_blocking = false
-
-			if "is_finish_state" in p2:
-				p2.is_finish_state = false
-
-			if "finish_triggered" in p2:
-				p2.finish_triggered = false
-
-			if "dead_locked" in p2:
-				p2.dead_locked = false
-
-			if "stunned" in p2:
-				p2.stunned = false
-
-			if "knockback_x" in p2:
-				p2.knockback_x = 0.0
-
-			if "uppercut_launched" in p2:
-				p2.uppercut_launched = false
-
-			if p2.has_node("Sprite"):
-				p2.get_node("Sprite").visible = true
-
-			if p2.has_node("Crispy"):
-				p2.get_node("Crispy").visible = false
-
-			if p2.has_signal("health_changed"):
-				p2.health_changed.emit(10)
-
-			if p2.has_method("play_anim"):
-				p2.play_anim("idle")
-
-
-		# =================================================
-		# RESET THIS JOHNNY CAGE
-		# =================================================
-
-		health = 10
-		max_health = 10
-
-		global_position = Vector2(1890, 496)
-
-		velocity = Vector2.ZERO
-
-		state = State.IDLE
-
-		is_hurting = false
-		is_attacking = false
-		is_shooting = false
-		action_locked = false
-		hurt_locked = false
-		can_take_damage = true
-		is_blocking = false
-
-		is_finish_state = false
-
-		stunned = false
-
-		if "cannonkick_active" in self:
-			cannonkick_active = false
-
-		if "run_locked" in self:
-			run_locked = false
-
-		if "is_running" in self:
-			is_running = false
-
-		if "special_move" in self:
-			special_move = false
-
-		if "knockback_x" in self:
-			knockback_x = 0.0
-
-		if "uppercut_launched" in self:
-			uppercut_launched = false
-
-		# Reset combo/input data if present
-		if "combo" in self:
-			combo.clear()
-
-		if "combo_timer" in self:
-			combo_timer = 0.0
-
-		if "ai_timer" in self:
-			ai_timer = randf_range(0.2, 0.6)
-
-		# -------------------------------------------------
-		# SHOW NORMAL JOHNNY CAGE
-		# -------------------------------------------------
-
-		$Sprite.visible = true
-		$Crispy.visible = false
-
-		health_changed.emit(10)
-
-		play_anim("idle")
-
-
-		# =================================================
-		# RESET HUD
-		# =================================================
-
-		var hud = get_tree().get_first_node_in_group("HUD")
-
-		if hud != null and is_instance_valid(hud):
-
-			# Re-find fighters
-			if hud.has_method("_find_fighters"):
-				hud._find_fighters()
-
-			# Refill health bars
-			if hud.has_method("reset_all_health_bars"):
-				hud.reset_all_health_bars()
-
-			# Show Round 2
-			if hud.has_method("show_round"):
-				hud.show_round(2)
-
-
-		# -------------------------------------------------
-		# ROUND 2 RESET COMPLETE
-		# -------------------------------------------------
-
-		return
-
-
-	# =====================================================
-	# ROUND 2 DEATH
-	# FINAL FATALITY / BLOOD
-	# =====================================================
-
-	if Game.current_round == 2:
-
-		# -------------------------------------------------
-		# BLOOD ONLY ON ROUND 2 FINAL DEATH
+		# BLOOD DEATH EFFECT
 		# -------------------------------------------------
 
 		var blood = BLOOD_DEATH.instantiate()
@@ -1350,67 +1294,70 @@ func die():
 
 		blood.global_position = global_position
 
-
 		# -------------------------------------------------
-		# FINAL DEATH SPRITE
+		# MAKE SURE DEAD SPRITE IS SHOWN
 		# -------------------------------------------------
 
 		$Sprite.visible = false
 		$Crispy.visible = true
 
-
 		# -------------------------------------------------
-		# STOP JOHNNY ACTIONS
-		# -------------------------------------------------
-
-		velocity = Vector2.ZERO
-
-		is_attacking = false
-		is_shooting = false
-		action_locked = true
-		hurt_locked = true
-		is_hurting = false
-		is_blocking = false
-		can_take_damage = false
-
-		if "cannonkick_active" in self:
-			cannonkick_active = false
-
-		if "run_locked" in self:
-			run_locked = false
-
-		if "is_running" in self:
-			is_running = false
-
-		if "special_move" in self:
-			special_move = false
-
-
-		# -------------------------------------------------
-		# HIDE FINISH HIM IF PRESENT
+		# HIDE FINISH HIM
 		# -------------------------------------------------
 
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
 
-
 		# -------------------------------------------------
-		# LET BLOOD/FATALITY PLAY
+		# WAIT FOR FINAL DEATH / FATALITY
 		# -------------------------------------------------
 
 		await get_tree().create_timer(3.0).timeout
 
+		# -------------------------------------------------
+		# TELL LEVEL1 WHO WON
+		# -------------------------------------------------
 
-		# =================================================
-		# FINAL MATCH RESULT
-		# =================================================
-
-		if is_in_group("player1"):
-			round_death.emit("cpu")
-		else:
-			round_death.emit("player1")
+		round_death.emit(winner)
 
 		return
+
+	# =================================================
+	# NORMAL ROUND DEATH
+	# =================================================
+	#
+	# This happens when the round does NOT decide
+	# the match.
+	#
+	# Examples:
+	#
+	# 0-0 -> Round 1 ends
+	# 1-0 -> CPU wins Round 2 -> 1-1
+	# 0-1 -> P1 wins Round 2 -> 1-1
+	#
+	# NO FATALITY.
+	# =================================================
+
+	print("================================")
+	print("ROUND DEATH")
+	print("NO FATALITY")
+	print("NEXT ROUND WILL BE STARTED BY LEVEL1")
+	print("================================")
+
+	# -------------------------------------------------
+	# HIDE FINISH HIM
+	# -------------------------------------------------
+
+	if is_instance_valid(finish_label):
+		finish_label.visible = false
+
+	# -------------------------------------------------
+	# GIVE LEVEL1 CONTROL
+	# -------------------------------------------------
+
+	round_death.emit(winner)
+
+	return
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
