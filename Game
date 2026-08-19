@@ -16,13 +16,18 @@ var cool_stuff: bool = false
 
 # ---------------- MATCH FLOW ----------------
 var match_started: bool = false
+var match_over: bool = false
 
 # ---------------- ROUND SYSTEM ----------------
 var current_round: int = 1
 var p1_round_wins: int = 0
 var p2_round_wins: int = 0
 
-# ---------------- RESET FUNCTIONS ----------------
+
+# =========================================================
+# RESET MATCH
+# =========================================================
+
 func reset_match():
 
 	p1_character = ""
@@ -32,6 +37,8 @@ func reset_match():
 	p2_data = null
 
 	match_started = false
+	match_over = false
+
 	points = 0
 
 	current_round = 1
@@ -39,16 +46,76 @@ func reset_match():
 	p2_round_wins = 0
 
 
+# =========================================================
+# RESET ALL
+# =========================================================
+
 func reset_all():
+
 	reset_match()
 
+
+# =========================================================
+# RESET ROUNDS
+# =========================================================
 
 func reset_rounds():
 
 	current_round = 1
+
 	p1_round_wins = 0
 	p2_round_wins = 0
 
+	match_over = false
+
+
+# =========================================================
+# ADD P1 ROUND WIN
+# =========================================================
+
+func add_p1_round_win():
+
+	p1_round_wins += 1
+
+	print("================================")
+	print("PLAYER 1 WON THE ROUND")
+	print("P1 ROUND WINS: ", p1_round_wins)
+	print("P2 ROUND WINS: ", p2_round_wins)
+	print("================================")
+
+
+# =========================================================
+# ADD P2 ROUND WIN
+# =========================================================
+
+func add_p2_round_win():
+
+	p2_round_wins += 1
+
+	print("================================")
+	print("PLAYER 2 / CPU WON THE ROUND")
+	print("P1 ROUND WINS: ", p1_round_wins)
+	print("P2 ROUND WINS: ", p2_round_wins)
+	print("================================")
+
+
+# =========================================================
+# CHECK MATCH WINNER
+# =========================================================
+
+func has_p1_won_match() -> bool:
+
+	return p1_round_wins >= 2
+
+
+func has_p2_won_match() -> bool:
+
+	return p2_round_wins >= 2
+
+
+# =========================================================
+# PRINT STATE
+# =========================================================
 
 func print_state():
 
@@ -62,3 +129,5 @@ func print_state():
 	print("Current Round:", current_round)
 	print("P1 Round Wins:", p1_round_wins)
 	print("P2 Round Wins:", p2_round_wins)
+
+	print("MATCH OVER:", match_over)
