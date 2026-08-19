@@ -1006,29 +1006,37 @@ func shoot_player():
 	play_anim("idle")
 
 # ---------------- DAMAGE ----------------
+
 func take_damage(amount: int):
 
-	if not can_take_damage:
+	if state == State.DEAD:
 		return
 
-	can_take_damage = false
-
-	await get_tree().create_timer(0.25).timeout
-
-	can_take_damage = true
-
-	if state == State.DEAD:
+	if not can_take_damage:
 		return
 
 	if spawn_protection:
 		return
 
-	# BLOCK REDUCTION
+	var frame := Engine.get_physics_frames()
+
+	if has_meta("last_damage_frame"):
+		if get_meta("last_damage_frame") == frame:
+			return
+
+	set_meta("last_damage_frame", frame)
+
+	can_take_damage = false
+
+	get_tree().create_timer(0.25).timeout.connect(func():
+		if is_instance_valid(self) and state != State.DEAD:
+			can_take_damage = true
+	)
+
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
 	if amount <= 0:
-		is_attacking = false
 		return
 
 	health -= amount
@@ -1037,42 +1045,92 @@ func take_damage(amount: int):
 	print("Kano took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
-	hit_sound.play()
 
-# ---------------- FINISH HIM ----------------
-	if health == 1 and Game.current_round == 2 and not is_finish_state:
-		trigger_finish_state()
-		return
+	if is_instance_valid(hit_sound):
+		hit_sound.play()
 
-	# ---------------- FINAL HIT ----------------
+	# =================================================
+	# FINAL HIT
+	# =================================================
+
 	if health <= 0:
 
-		finish_label.visible = false
-		die()
-		await get_tree().create_timer(0.5).timeout
+		is_attacking = false
+		is_shooting = false
+		is_hurting = false
+		is_blocking = false
 
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
+
+		die()
 		return
 
-	# ---------------- NORMAL HURT ----------------
+	# =================================================
+	# FINISH HIM
+	# ONLY WHEN OPPONENT ALREADY HAS 1 ROUND WIN
+	# =================================================
+
+	if health == 1 and not is_finish_state:
+
+		var opponent_will_win_match := false
+
+		if is_in_group("player1"):
+			if Game.p2_round_wins >= 1:
+				opponent_will_win_match = true
+		else:
+			if Game.p1_round_wins >= 1:
+				opponent_will_win_match = true
+
+		if opponent_will_win_match:
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+
+			trigger_finish_state()
+			return
+
+	# =================================================
+	# NORMAL HURT
+	# =================================================
+
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
 
-	combo.clear()
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
 
 	state = State.IDLE
 
+	combo.clear()
+
 	play_anim("hurt")
 
-	var blood = BLOOD_EFFECT.instantiate()
-	get_tree().current_scene.add_child(blood)
-	blood.global_position = $BloodMarker.global_position
+	if is_instance_valid(hurt_sound):
+		hurt_sound.play()
+
+	if has_node("BloodMarker"):
+
+		var blood = BLOOD_EFFECT.instantiate()
+
+		get_tree().current_scene.add_child(blood)
+
+		blood.global_position = $BloodMarker.global_position
 
 	await get_tree().create_timer(0.25).timeout
+
+	if state == State.DEAD:
+		return
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
+
+	if state != State.DEAD and not is_finish_state:
+		play_anim("idle")
 
 func trigger_finish_state():
 
@@ -1246,8 +1304,13 @@ func combo_attack(attacks: Array):
 # ---------------- DEATH ----------------
 func die():
 
+	# =====================================================
+	# ALREADY DEAD
+	# =====================================================
+
 	if state == State.DEAD:
 		return
+
 
 	# =====================================================
 	# LOCK KANO AS DEAD
@@ -1256,19 +1319,28 @@ func die():
 	state = State.DEAD
 
 	velocity = Vector2.ZERO
+
 	is_attacking = false
 	is_shooting = false
-	action_locked = true
-	hurt_locked = true
 	is_hurting = false
 	is_blocking = false
+
+	action_locked = true
+	hurt_locked = true
 	can_take_damage = false
 
+
+	# =====================================================
+	# STOP ALL KANO ACTIONS
+	# =====================================================
+
 	stunned = false
+
 	is_pulled = false
 	is_spear_pulled = false
 	pull_target = null
 	pull_timer = 0.0
+
 	knockback_x = 0.0
 	uppercut_launched = false
 	hurt_cooldown = false
@@ -1277,17 +1349,22 @@ func die():
 	cannonball_timer = 0.0
 	cannonball_ready = false
 	cannonball_hit_lock = false
+
 	run_locked = false
 	bullet_spawned = false
+
 	special_move = false
 	special_move_timer = 0.0
 
+
 	# =====================================================
 	# HIDE NORMAL SPRITE
+	# SHOW DEAD / CRISPY SPRITE
 	# =====================================================
 
 	$Sprite.visible = false
 	$Crispy.visible = true
+
 
 	# =====================================================
 	# ROUND 1 DEATH
@@ -1305,11 +1382,13 @@ func die():
 		else:
 			round_death.emit("player1")
 
+
 		# -------------------------------------------------
 		# WAIT BEFORE ROUND 2
 		# -------------------------------------------------
 
 		await get_tree().create_timer(3.0).timeout
+
 
 		# -------------------------------------------------
 		# CHANGE TO ROUND 2
@@ -1317,17 +1396,20 @@ func die():
 
 		Game.current_round = 2
 
+
 		# =================================================
 		# FIND PLAYER 1
 		# =================================================
 
 		var p1 = get_tree().get_first_node_in_group("player1")
 
+
 		# =================================================
 		# FIND PLAYER 2 / CPU
 		# =================================================
 
 		var p2 = get_tree().get_first_node_in_group("enemy")
+
 
 		# =================================================
 		# RESET PLAYER 1
@@ -1394,6 +1476,7 @@ func die():
 			if p1.has_method("play_anim"):
 				p1.play_anim("idle")
 
+
 		# =================================================
 		# RESET PLAYER 2 / CPU
 		# =================================================
@@ -1459,6 +1542,7 @@ func die():
 			if p2.has_method("play_anim"):
 				p2.play_anim("idle")
 
+
 		# =================================================
 		# RESET THIS KANO
 		# =================================================
@@ -1475,12 +1559,14 @@ func die():
 		is_hurting = false
 		is_attacking = false
 		is_shooting = false
+		is_blocking = false
+
 		action_locked = false
 		hurt_locked = false
 		can_take_damage = true
-		is_blocking = false
 
 		stunned = false
+
 		is_pulled = false
 		is_spear_pulled = false
 		pull_target = null
@@ -1511,16 +1597,18 @@ func die():
 
 		ai_timer = randf_range(0.2, 0.6)
 
-		# -------------------------------------------------
+
+		# =================================================
 		# HIDE FINISH HIM
-		# -------------------------------------------------
+		# =================================================
 
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
 
-		# -------------------------------------------------
+
+		# =================================================
 		# SHOW NORMAL KANO
-		# -------------------------------------------------
+		# =================================================
 
 		$Sprite.visible = true
 		$Crispy.visible = false
@@ -1528,6 +1616,7 @@ func die():
 		health_changed.emit(10)
 
 		play_anim("idle")
+
 
 		# =================================================
 		# RESET HUD
@@ -1555,11 +1644,13 @@ func die():
 			if hud.has_method("show_round"):
 				hud.show_round(2)
 
+
 		# =================================================
 		# ROUND 2 STARTED
 		# =================================================
 
 		return
+
 
 	# =====================================================
 	# ROUND 2 DEATH
@@ -1578,6 +1669,7 @@ func die():
 
 		blood.global_position = global_position
 
+
 		# =================================================
 		# FINAL DEATH SPRITE
 		# =================================================
@@ -1585,22 +1677,38 @@ func die():
 		$Sprite.visible = false
 		$Crispy.visible = true
 
+
 		# =================================================
 		# STOP ALL KANO ACTIONS
 		# =================================================
 
 		velocity = Vector2.ZERO
+
 		is_attacking = false
 		is_shooting = false
-		action_locked = true
-		hurt_locked = true
 		is_hurting = false
 		is_blocking = false
+
+		action_locked = true
+		hurt_locked = true
 		can_take_damage = false
 
+		stunned = false
+
 		cannonball_active = false
+		cannonball_timer = 0.0
 		cannonball_ready = false
+		cannonball_hit_lock = false
+
 		special_move = false
+		special_move_timer = 0.0
+
+		run_locked = true
+		bullet_spawned = false
+
+		uppercut_launched = false
+		hurt_cooldown = false
+
 
 		# =================================================
 		# MAKE SURE FINISH HIM IS HIDDEN
@@ -1609,11 +1717,13 @@ func die():
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
 
+
 		# =================================================
 		# WAIT FOR FATALITY
 		# =================================================
 
 		await get_tree().create_timer(3.0).timeout
+
 
 		# =================================================
 		# FINAL MATCH RESULT
