@@ -16,6 +16,7 @@ var p2
 
 var round_starting := false
 var round_active := false
+var round_resolving := false
 
 
 # =========================================================
@@ -41,12 +42,22 @@ func _ready():
 		$HUD/Round3.visible = false
 
 	# ---------------------------------------------------------
-	# ALWAYS START AT ROUND 1
+	# START NEW MATCH
 	# ---------------------------------------------------------
 
 	Game.current_round = 1
 	Game.p1_round_wins = 0
 	Game.p2_round_wins = 0
+	Game.match_over = false
+
+	round_resolving = false
+
+	# ---------------------------------------------------------
+	# RESET ROUND WIN SPRITES
+	# ---------------------------------------------------------
+
+	if $HUD.has_method("hide_round_win_sprites"):
+		$HUD.hide_round_win_sprites()
 
 	# ---------------------------------------------------------
 	# START ROUND 1
@@ -64,6 +75,9 @@ func start_round(round_number: int):
 	if round_starting:
 		return
 
+	if Game.match_over:
+		return
+
 	round_starting = true
 	round_active = false
 
@@ -71,6 +85,8 @@ func start_round(round_number: int):
 
 	print("================================")
 	print("STARTING ROUND: ", Game.current_round)
+	print("P1 WINS: ", Game.p1_round_wins)
+	print("P2 WINS: ", Game.p2_round_wins)
 	print("================================")
 
 	# ---------------------------------------------------------
@@ -121,6 +137,13 @@ func start_round(round_number: int):
 	# ---------------------------------------------------------
 
 	reset_health_bars()
+
+	# ---------------------------------------------------------
+	# UPDATE ROUND WIN HUD
+	# ---------------------------------------------------------
+
+	if $HUD.has_method("update_round_wins"):
+		$HUD.update_round_wins()
 
 	# ---------------------------------------------------------
 	# SPAWN PROTECTION
@@ -216,28 +239,45 @@ func start_round(round_number: int):
 # =========================================================
 # ROUND DEATH SIGNAL
 # =========================================================
+#
 # Fighters call:
 #
 # round_death.emit("player1")
 # round_death.emit("cpu")
 #
-# This is what automatically starts Round 2.
+# This handles all 3 rounds.
 # =========================================================
 
 func _on_round_death(winner: String):
 
+	# ---------------------------------------------------------
+	# PREVENT DOUBLE ROUND WIN
+	# ---------------------------------------------------------
+
+	if round_resolving:
+		return
+
+	# ---------------------------------------------------------
+	# MATCH ALREADY OVER
+	# ---------------------------------------------------------
+
+	if Game.match_over:
+		return
+
+	# ---------------------------------------------------------
+	# ROUND IS CURRENTLY STARTING
+	# ---------------------------------------------------------
+
 	if round_starting:
 		return
 
-	if Game.current_round != 1:
-		return
+	round_resolving = true
+	round_active = false
 
 	print("================================")
-	print("ROUND 1 HAS ENDED")
+	print("ROUND ", Game.current_round, " HAS ENDED")
 	print("WINNER: ", winner)
 	print("================================")
-
-	round_active = false
 
 	# ---------------------------------------------------------
 	# GIVE ROUND WIN
@@ -245,129 +285,302 @@ func _on_round_death(winner: String):
 
 	if winner == "player1":
 
-		Game.p1_round_wins += 1
-
-		print("P1 ROUND WINS: ", Game.p1_round_wins)
+		Game.add_p1_round_win()
 
 	elif winner == "cpu":
 
-		Game.p2_round_wins += 1
+		Game.add_p2_round_win()
 
-		print("P2 ROUND WINS: ", Game.p2_round_wins)
+	else:
+
+		print("ERROR: UNKNOWN ROUND WINNER: ", winner)
+
+		round_resolving = false
+		return
 
 	# ---------------------------------------------------------
-	# WAIT BEFORE ROUND 2
+	# UPDATE ROUND WIN SPRITES
+	# ---------------------------------------------------------
+
+	if $HUD.has_method("update_round_wins"):
+		$HUD.update_round_wins()
+
+	print("P1 ROUND WINS: ", Game.p1_round_wins)
+	print("P2 ROUND WINS: ", Game.p2_round_wins)
+
+	# ---------------------------------------------------------
+	# CHECK P1 MATCH WIN
+	# ---------------------------------------------------------
+
+	if Game.has_p1_won_match():
+
+		Game.match_over = true
+
+		print("================================")
+		print("PLAYER 1 HAS WON THE MATCH")
+		print("FINAL SCORE: ",
+			Game.p1_round_wins,
+			" - ",
+			Game.p2_round_wins
+		)
+		print("================================")
+
+		if $HUD.has_method("show_you_win"):
+			$HUD.show_you_win()
+
+		round_resolving = false
+		return
+
+	# ---------------------------------------------------------
+	# CHECK P2 / CPU MATCH WIN
+	# ---------------------------------------------------------
+
+	if Game.has_p2_won_match():
+
+		Game.match_over = true
+
+		print("================================")
+		print("PLAYER 2 / CPU HAS WON THE MATCH")
+		print("FINAL SCORE: ",
+			Game.p1_round_wins,
+			" - ",
+			Game.p2_round_wins
+		)
+		print("================================")
+
+		if $HUD.has_method("show_you_lose"):
+			$HUD.show_you_lose()
+
+		round_resolving = false
+		return
+
+	# ---------------------------------------------------------
+	# NOBODY HAS 2 WINS
+	#
+	# THEREFORE ANOTHER ROUND MUST START.
 	# ---------------------------------------------------------
 
 	await get_tree().create_timer(3.0).timeout
 
 	# ---------------------------------------------------------
+	# ONE ROUND HAS BEEN PLAYED
+	#
 	# START ROUND 2
 	# ---------------------------------------------------------
 
-	if Game.current_round == 1:
+	if Game.p1_round_wins + Game.p2_round_wins == 1:
+
+		print("================================")
+		print("STARTING ROUND 2")
+		print("SCORE: ",
+			Game.p1_round_wins,
+			" - ",
+			Game.p2_round_wins
+		)
+		print("================================")
+
+		round_resolving = false
 
 		await start_round(2)
 
-
-# =========================================================
-# START ROUND 2
-# =========================================================
-
-func start_round_2():
-
-	if round_starting:
 		return
 
-	if Game.current_round != 1:
+	# ---------------------------------------------------------
+	# TWO ROUNDS HAVE BEEN PLAYED
+	#
+	# Since nobody has 2 wins, score MUST be 1-1.
+	#
+	# START ROUND 3.
+	# ---------------------------------------------------------
+
+	if Game.p1_round_wins + Game.p2_round_wins == 2:
+
+		print("================================")
+		print("1 - 1 TIE")
+		print("STARTING ROUND 3")
+		print("================================")
+
+		round_resolving = false
+
+		await start_round(3)
+
 		return
 
-	print("================================")
-	print("START ROUND 2")
-	print("================================")
-
-	Game.current_round = 2
-
-	await start_round(2)
-
-
-# =========================================================
-# START ROUND 3
-# =========================================================
-
-func start_round_3():
-
-	if round_starting:
-		return
-
-	if Game.current_round != 2:
-		return
-
-	print("================================")
-	print("START ROUND 3")
-	print("================================")
-
-	Game.current_round = 3
-
-	await start_round(3)
+	round_resolving = false
 
 
 # =========================================================
 # P1 WINS ROUND
 # =========================================================
+#
+# Backup function if another part of the game calls this
+# directly instead of using round_death.
+# =========================================================
 
 func player1_won_round():
+
+	if round_resolving:
+		return
+
+	if Game.match_over:
+		return
 
 	if round_starting:
 		return
 
-	if Game.current_round == 1:
+	round_resolving = true
+	round_active = false
 
-		Game.p1_round_wins += 1
+	Game.add_p1_round_win()
 
-		print("P1 WON ROUND 1")
+	if $HUD.has_method("update_round_wins"):
+		$HUD.update_round_wins()
 
-		Game.current_round = 2
+	print("================================")
+	print("P1 WON ROUND ", Game.current_round)
+	print("SCORE: ",
+		Game.p1_round_wins,
+		" - ",
+		Game.p2_round_wins
+	)
+	print("================================")
 
-		await start_round(2)
+	# ---------------------------------------------------------
+	# P1 HAS 2 WINS
+	# MATCH OVER
+	# ---------------------------------------------------------
 
-	elif Game.current_round == 2:
+	if Game.has_p1_won_match():
 
-		Game.p1_round_wins += 1
+		Game.match_over = true
 
-		print("P1 HAS WON THE MATCH")
+		print("PLAYER 1 HAS WON THE MATCH")
 
 		if $HUD.has_method("show_you_win"):
 			$HUD.show_you_win()
 
+		round_resolving = false
+		return
+
+	# ---------------------------------------------------------
+	# WAIT BEFORE NEXT ROUND
+	# ---------------------------------------------------------
+
+	await get_tree().create_timer(3.0).timeout
+
+	# ---------------------------------------------------------
+	# SCORE 1-1 = ROUND 3
+	# ---------------------------------------------------------
+
+	if Game.p1_round_wins + Game.p2_round_wins == 2:
+
+		print("================================")
+		print("1 - 1 TIE")
+		print("STARTING ROUND 3")
+		print("================================")
+
+		round_resolving = false
+
+		await start_round(3)
+
+		return
+
+	# ---------------------------------------------------------
+	# OTHERWISE START ROUND 2
+	# ---------------------------------------------------------
+
+	print("STARTING ROUND 2")
+
+	round_resolving = false
+
+	await start_round(2)
+
 
 # =========================================================
-# P2 WINS ROUND
+# P2 / CPU WINS ROUND
+# =========================================================
+#
+# Backup function if another part of the game calls this
+# directly instead of using round_death.
 # =========================================================
 
 func player2_won_round():
 
+	if round_resolving:
+		return
+
+	if Game.match_over:
+		return
+
 	if round_starting:
 		return
 
-	if Game.current_round == 1:
+	round_resolving = true
+	round_active = false
 
-		Game.p2_round_wins += 1
+	Game.add_p2_round_win()
 
-		print("P2 WON ROUND 1")
+	if $HUD.has_method("update_round_wins"):
+		$HUD.update_round_wins()
 
-		Game.current_round = 2
+	print("================================")
+	print("P2 / CPU WON ROUND ", Game.current_round)
+	print("SCORE: ",
+		Game.p1_round_wins,
+		" - ",
+		Game.p2_round_wins
+	)
+	print("================================")
 
-		await start_round(2)
+	# ---------------------------------------------------------
+	# CPU HAS 2 WINS
+	# MATCH OVER
+	# ---------------------------------------------------------
 
-	elif Game.current_round == 2:
+	if Game.has_p2_won_match():
 
-		Game.p2_round_wins += 1
+		Game.match_over = true
 
-		print("P2 HAS WON THE MATCH")
+		print("P2 / CPU HAS WON THE MATCH")
 
 		if $HUD.has_method("show_you_lose"):
 			$HUD.show_you_lose()
+
+		round_resolving = false
+		return
+
+	# ---------------------------------------------------------
+	# WAIT BEFORE NEXT ROUND
+	# ---------------------------------------------------------
+
+	await get_tree().create_timer(3.0).timeout
+
+	# ---------------------------------------------------------
+	# SCORE 1-1 = ROUND 3
+	# ---------------------------------------------------------
+
+	if Game.p1_round_wins + Game.p2_round_wins == 2:
+
+		print("================================")
+		print("1 - 1 TIE")
+		print("STARTING ROUND 3")
+		print("================================")
+
+		round_resolving = false
+
+		await start_round(3)
+
+		return
+
+	# ---------------------------------------------------------
+	# OTHERWISE START ROUND 2
+	# ---------------------------------------------------------
+
+	print("STARTING ROUND 2")
+
+	round_resolving = false
+
+	await start_round(2)
 
 
 # =========================================================
