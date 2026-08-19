@@ -1,0 +1,201 @@
+extends Area2D
+class_name IceDeathtwo
+
+@onready var sprite: AnimatedSprite2D = $Sprite
+@onready var sound: AudioStreamPlayer2D = $IceCrackSound
+@onready var cleanup: Timer = $CleanupTimer
+
+var owner_character = null
+
+var finished := false
+var damage_done := false
+var flicker_on := true
+
+
+# =========================================================
+# READY
+# =========================================================
+
+func _ready():
+
+	area_entered.connect(_on_area_entered)
+
+	add_to_group("IceDeath")
+	add_to_group("IceDeathtwo")
+	add_to_group("HitBox")
+
+	cleanup.start()
+
+	scale = Vector2.ZERO
+
+	if sound:
+		sound.play()
+
+	sprite.play("icetwo")
+
+	start_flicker()
+	start_ice_animation()
+
+
+# =========================================================
+# ICE TWEEN
+# =========================================================
+
+func start_ice_animation():
+
+	var t = create_tween()
+
+	# Grow in
+	t.tween_property(
+		self,
+		"scale",
+		Vector2.ONE,
+		0.15
+	)
+
+	# Huge ice burst
+	t.tween_property(
+		self,
+		"scale",
+		Vector2(5, 5),
+		0.15
+	)
+
+	# Shrink back
+	t.tween_property(
+		self,
+		"scale",
+		Vector2(1.5, 1.5),
+		0.15
+	)
+
+	# Disappear
+	t.tween_property(
+		self,
+		"scale",
+		Vector2.ZERO,
+		0.25
+	)
+
+
+# =========================================================
+# FLICKER
+# =========================================================
+
+func start_flicker():
+
+	var flicker = create_tween()
+
+	flicker.set_loops(8)
+
+	flicker.tween_callback(func():
+
+		if finished:
+			return
+
+		flicker_on = !flicker_on
+
+		if flicker_on:
+
+			sprite.modulate = Color.WHITE
+
+		else:
+
+			sprite.modulate = Color(
+				0.4,
+				0.8,
+				1.5
+			)
+	)
+
+	flicker.tween_interval(0.05)
+
+
+# =========================================================
+# DAMAGE
+# =========================================================
+
+func _on_area_entered(area: Area2D):
+
+	if damage_done:
+		return
+
+	if area == null:
+		return
+
+	if area.name != "HitBox":
+		return
+
+	var target_player = area.get_parent()
+
+	if target_player == null:
+		return
+
+	if not target_player.is_in_group("Fighter"):
+		return
+
+	if not target_player.has_method("take_damage"):
+		return
+
+	# Prevent multiple damage
+	damage_done = true
+
+	target_player.take_damage(1)
+
+	# Optional ice effect
+	if target_player.has_method("apply_slow"):
+
+		target_player.apply_slow(0.5)
+
+
+# =========================================================
+# CLEANUP / RETURN TO MAIN MENU
+# =========================================================
+
+func stop_effect():
+
+	if finished:
+		return
+
+	finished = true
+
+	# Stop visual/audio effect
+	sprite.stop()
+	sprite.modulate = Color.WHITE
+
+	if sound:
+		sound.stop()
+
+	# Shrink effect
+	var t = create_tween()
+
+	t.tween_property(
+		self,
+		"scale",
+		Vector2.ZERO,
+		0.3
+	)
+
+	await t.finished
+
+	# =====================================================
+	# GO TO MAIN MENU
+	# =====================================================
+
+	if is_inside_tree():
+
+		get_tree().change_scene_to_file(
+			"res://Scenes/MainMenu.tscn"
+		)
+
+
+# =========================================================
+# CLEANUP TIMER
+# =========================================================
+
+func _on_cleanup_timer_timeout():
+
+	if finished:
+		return
+
+	stop_effect()
