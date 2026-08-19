@@ -94,7 +94,7 @@ const GRAVITY = 5000
 @export var jump_velocity = -2200.0
 @export var damage := 1
 @export var shoot_cooldown_time: float = 0.25
-@export var combo_reset_time := 1.0
+@export var combo_reset_time := 1.5
 @export var player_controlled := false
 
 # ---------------- PRELOADS ----------------
@@ -748,64 +748,110 @@ func ice_combo():
 
 func check_combos():
 
+	# =========================================================
+	# ICE DEATH TWO
+	# DOWN -> UP -> DOWN -> UP -> RIGHT
+	# =========================================================
 	if combo == ICE_DEATH_TWO_COMBO:
+
 		combo_used.emit("ice_death_two")
-		action_locked = true
-		is_attacking = true
-		spawn_fx(ICE_DEATHTWO)
-		$Sprite.play("uppercut")
-		await $Sprite.animation_finished
 
-		action_locked = false
-		play_anim("idle")
+		# Clear immediately so the sequence cannot trigger twice
 		combo.clear()
-		return
-
-	if combo == SPLAT_COMBO:
-
-		combo_used.emit("splat")
+		combo_timer = 0.0
 
 		action_locked = true
 		is_attacking = true
 
-		# Subzero character animation
-		$Sprite.play("splat")
+		# Spawn IceDeathTwo
+		spawn_fx(ICE_DEATHTWO)
 
-		# Spawn ice puddle
-		spawn_fx(SPLAT)
+		# Play Sub-Zero animation
+		play_anim("uppercut")
 
-		await $Sprite.animation_finished
+		await sprite.animation_finished
 
 		is_attacking = false
 		action_locked = false
 
-		play_anim("idle")
+		if state != State.DEAD and not is_finish_state:
+			play_anim("idle")
+
+		return
+
+
+	# =========================================================
+	# SPLAT
+	# LEFT -> RIGHT -> LEFT -> RIGHT -> RIGHT
+	# =========================================================
+	if combo == SPLAT_COMBO:
+
+		combo_used.emit("splat")
 
 		combo.clear()
+		combo_timer = 0.0
+
+		action_locked = true
+		is_attacking = true
+
+		play_anim("splat")
+
+		spawn_fx(SPLAT)
+
+		await sprite.animation_finished
+
+		is_attacking = false
+		action_locked = false
+
+		if state != State.DEAD and not is_finish_state:
+			play_anim("idle")
+
 		return
 
-	elif combo == ICE_COMBO:
+
+	# =========================================================
+	# ICE
+	# UP -> DOWN
+	# =========================================================
+	if combo == ICE_COMBO:
+
+		combo.clear()
+		combo_timer = 0.0
+
 		ice_combo()
+
 		return
 
-	elif combo == PUNCH_COMBO:
+
+	# =========================================================
+	# PUNCH COMBO
+	# RIGHT -> DOWN -> RIGHT
+	# =========================================================
+	if combo == PUNCH_COMBO:
 
 		combo_used.emit("punch_combo")
 
 		combo.clear()
+		combo_timer = 0.0
 
 		start_punch_combo()
+
 		return
 
 
-	# ---------------- kick ----------------
+	# =========================================================
+	# KICK COMBO
+	# RIGHT -> DOWN -> DOWN
+	# =========================================================
 	if combo == KICK_COMBO:
 
 		combo_used.emit("kick_combo")
 
 		combo.clear()
+		combo_timer = 0.0
 
 		start_kick_combo()
+
 		return
 
 func start_splat_combo():
