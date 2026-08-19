@@ -1037,26 +1037,7 @@ func cpu_logic(delta):
 						do_action("uppercut")
 
 					else:
-						do_action("roundhousekick")
-
-
-				# =================================================
-				# DEFAULT
-				# =================================================
-				_:
-
-					ai_timer = randf_range(0.2, 0.4)
-
-					do_action("punch")
-
-
-		# =====================================================
-		# NOT IN RANGE
-		# =====================================================
-		else:
-
-			# Keep looking for Player 1 continuously.
-			ai_timer = 0.01
+						shoot_fireball()
 
 
 	# =========================================================
@@ -1212,22 +1193,44 @@ func spawn_grab():
 
 func take_damage(amount: int):
 
-	if not can_take_damage:
-		return
-
-	can_take_damage = false
-
-	await get_tree().create_timer(0.2).timeout
-
-	can_take_damage = true
+	# =====================================================
+	# ALREADY DEAD / LOCKED / INVINCIBLE
+	# =====================================================
 
 	if state == State.DEAD:
+		return
+
+	if is_hurting:
+		return
+
+	if not can_take_damage:
 		return
 
 	if spawn_protection:
 		return
 
+
+	# =====================================================
+	# DAMAGE COOLDOWN
+	# =====================================================
+
+	can_take_damage = false
+
+	await get_tree().create_timer(0.2).timeout
+
+	# IMPORTANT:
+	# Check again after the delay because Liu Kang could
+	# have died while this timer was running.
+	if state == State.DEAD:
+		return
+
+	can_take_damage = true
+
+
+	# =====================================================
 	# BLOCK REDUCTION
+	# =====================================================
+
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
@@ -1235,44 +1238,135 @@ func take_damage(amount: int):
 		is_attacking = false
 		return
 
+
+	# =====================================================
+	# APPLY DAMAGE
+	# =====================================================
+
 	health -= amount
 	health = max(health, 0)
 
-	print("Sonya took damage: ", amount, " HP=", health)
+	print("Liu Kang took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
-	hit_sound.play()
 
-# ---------------- FINISH HIM ----------------
-	if health == 1 and Game.current_round == 2 and not is_finish_state:
-		trigger_finish_state()
-		return
+	if hit_sound:
+		hit_sound.play()
 
-	# ---------------- FINAL HIT ----------------
+
+	# =====================================================
+	# DEAD
+	# =====================================================
+
 	if health <= 0:
 
-		finish_label.visible = false
-		die()
-		await get_tree().create_timer(0.2).timeout
+		is_attacking = false
+		is_shooting = false
+		is_hurting = false
+		is_blocking = false
 
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
+
+		die()
 		return
 
-	# ---------------- NORMAL HURT ----------------
+
+	# =====================================================
+	# FINISH HIM
+	#
+	# ONLY trigger if the opponent already has 1 round win.
+	#
+	# This means this death will give the opponent their
+	# SECOND round win and end the match.
+	#
+	# It does NOT depend on Game.current_round.
+	# =====================================================
+
+	if health == 1 and not is_finish_state:
+
+		var opponent_will_win_match := false
+
+
+		# =================================================
+		# LIU KANG IS PLAYER 1
+		# =================================================
+
+		if is_in_group("player1"):
+
+			# CPU already has 1 round win.
+			if Game.p2_round_wins >= 1:
+				opponent_will_win_match = true
+
+
+		# =================================================
+		# LIU KANG IS CPU
+		# =================================================
+
+		else:
+
+			# Player 1 already has 1 round win.
+			if Game.p1_round_wins >= 1:
+				opponent_will_win_match = true
+
+
+		# =================================================
+		# TRIGGER FINISH HIM
+		# =================================================
+
+		if opponent_will_win_match:
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+
+			trigger_finish_state()
+
+			return
+
+
+	# =====================================================
+	# NORMAL HURT
+	# =====================================================
+
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
 
 	combo.clear()
 
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
 	state = State.IDLE
 
 	play_anim("hurt")
 
-	var blood = BLOOD_EFFECT.instantiate()
-	get_tree().current_scene.add_child(blood)
-	blood.global_position = $BloodMarker.global_position
+
+	# =====================================================
+	# BLOOD EFFECT
+	# =====================================================
+
+	if has_node("BloodMarker"):
+
+		var blood = BLOOD_EFFECT.instantiate()
+
+		get_tree().current_scene.add_child(blood)
+
+		blood.global_position = $BloodMarker.global_position
+
+
+	# =====================================================
+	# HURT RECOVERY
+	# =====================================================
 
 	await get_tree().create_timer(0.2).timeout
+
+	# Do not unlock Liu Kang if he somehow died
+	# during the hurt timer.
+	if state == State.DEAD:
+		return
 
 	is_hurting = false
 	hurt_locked = false
@@ -1388,6 +1482,10 @@ func spawn_attack(anim_name: String):
 # =====================================================
 func die():
 
+	# =====================================================
+	# ALREADY DEAD
+	# =====================================================
+
 	if state == State.DEAD:
 		return
 
@@ -1414,6 +1512,7 @@ func die():
 
 	flyingkick_active = false
 	bicyclekick_active = false
+
 	special_move = false
 	special_move_invincible = false
 
@@ -1429,6 +1528,7 @@ func die():
 
 	stunned = false
 	run_locked = false
+
 	dragon_active = false
 	dragon_invisible = false
 
@@ -1440,6 +1540,7 @@ func die():
 	combo.clear()
 	combo_timer = 0.0
 
+
 	# =====================================================
 	# HIDE NORMAL SPRITE / SHOW DEATH SPRITE
 	# =====================================================
@@ -1450,6 +1551,7 @@ func die():
 
 	# =====================================================
 	# ROUND 1 DEATH
+	# START ROUND 2
 	# =====================================================
 
 	if Game.current_round == 1:
@@ -1472,15 +1574,15 @@ func die():
 
 
 		# -------------------------------------------------
-		# SET ROUND 2
+		# CHANGE TO ROUND 2
 		# -------------------------------------------------
 
 		Game.current_round = 2
 
 
-		# -------------------------------------------------
+		# =================================================
 		# FIND BOTH FIGHTERS
-		# -------------------------------------------------
+		# =================================================
 
 		var p1 = get_tree().get_first_node_in_group("player1")
 		var p2 = get_tree().get_first_node_in_group("enemy")
@@ -1496,7 +1598,6 @@ func die():
 
 			p1.health = 10
 			p1.velocity = Vector2.ZERO
-
 			p1.state = p1.State.IDLE
 
 			p1.is_hurting = false
@@ -1576,7 +1677,6 @@ func die():
 
 			p2.health = 10
 			p2.velocity = Vector2.ZERO
-
 			p2.state = p2.State.IDLE
 
 			p2.is_hurting = false
@@ -1654,6 +1754,7 @@ func die():
 		# =================================================
 
 		health = 10
+		max_health = 10
 
 		global_position = Vector2(1890, 496)
 
@@ -1675,6 +1776,7 @@ func die():
 
 		flyingkick_active = false
 		bicyclekick_active = false
+
 		special_move = false
 		special_move_invincible = false
 
@@ -1706,9 +1808,10 @@ func die():
 			target = get_tree().get_first_node_in_group("player1")
 			ai_timer = randf_range(0.2, 0.6)
 
-		# -------------------------------------------------
+
+		# =================================================
 		# SHOW NORMAL LIU KANG
-		# -------------------------------------------------
+		# =================================================
 
 		$Sprite.visible = true
 		$Crispy.visible = false
@@ -1718,22 +1821,45 @@ func die():
 		current_anim = ""
 		play_anim("idle")
 
-		# -------------------------------------------------
-		# ROUND 2 RESET COMPLETE
-		# -------------------------------------------------
+
+		# =================================================
+		# RESET HUD
+		# =================================================
+
+		var hud = get_tree().get_first_node_in_group("HUD")
+
+		if hud != null and is_instance_valid(hud):
+
+			if hud.has_method("_find_fighters"):
+				hud._find_fighters()
+
+			if hud.has_method("reset_all_health_bars"):
+				hud.reset_all_health_bars()
+
+			if hud.has_node("LiuKangHealthBar"):
+				hud.get_node("LiuKangHealthBar").value = 10
+
+			if hud.has_node("DukeHealthBar"):
+				hud.get_node("DukeHealthBar").value = 10
+
+			if hud.has_node("ReptileHealthBar"):
+				hud.get_node("ReptileHealthBar").value = 10
+
+			if hud.has_method("show_round"):
+				hud.show_round(2)
 
 		return
 
 
 	# =====================================================
 	# ROUND 2 DEATH
-	# FINAL DEATH / BLOOD
+	# FINAL DEATH / MATCH OVER
 	# =====================================================
 
 	if Game.current_round == 2:
 
 		# -------------------------------------------------
-		# BLOOD
+		# BLOOD EFFECT
 		# -------------------------------------------------
 
 		var blood = BLOOD_DEATH.instantiate()
@@ -1776,11 +1902,31 @@ func die():
 
 		flyingkick_active = false
 		bicyclekick_active = false
+
 		special_move = false
 		special_move_invincible = false
 
+		special_move_timer = 0.0
+		special_move_lock_time = 0.0
+
 		uppercut_launched = false
 		was_uppercut = false
+
+		is_pulled = false
+		pull_timer = 0.0
+		pull_target = null
+
+		stunned = false
+		run_locked = true
+
+		dragon_active = false
+		dragon_invisible = false
+
+		is_grabbing = false
+		grabbed_enemy = null
+
+		knockback_x = 0.0
+
 
 		# -------------------------------------------------
 		# WAIT FOR FINAL DEATH
