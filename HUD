@@ -1,5 +1,6 @@
 extends CanvasLayer
 
+
 # =========================================================
 # UI
 # =========================================================
@@ -89,7 +90,18 @@ extends CanvasLayer
 
 
 # =========================================================
-# FIGHTER REFERENCES
+# ROUND WIN INDICATORS
+# =========================================================
+
+@onready var p1_round1_sprite = get_node_or_null("../Sprite2D5")
+@onready var p1_round2_sprite = get_node_or_null("../Sprite2D6")
+
+@onready var p2_round1_sprite = get_node_or_null("../Sprite2D7")
+@onready var p2_round2_sprite = get_node_or_null("../Sprite2D8")
+
+
+# =========================================================
+# FIGHTERS
 # =========================================================
 
 var reptile
@@ -112,13 +124,66 @@ func _ready():
 
 	hide_round_ui()
 	hide_win_lose()
-
-	if Game.has_signal("points_changed"):
-
-		if not Game.points_changed.is_connected(_on_points_changed):
-			Game.points_changed.connect(_on_points_changed)
+	hide_round_win_sprites()
 
 	_find_fighters()
+
+
+# =========================================================
+# HIDE ROUND WIN SPRITES
+# =========================================================
+
+func hide_round_win_sprites():
+
+	if p1_round1_sprite != null:
+		p1_round1_sprite.visible = false
+
+	if p1_round2_sprite != null:
+		p1_round2_sprite.visible = false
+
+	if p2_round1_sprite != null:
+		p2_round1_sprite.visible = false
+
+	if p2_round2_sprite != null:
+		p2_round2_sprite.visible = false
+
+
+# =========================================================
+# UPDATE ROUND WIN SPRITES
+# =========================================================
+
+func update_round_wins():
+
+	hide_round_win_sprites()
+
+	# ---------------------------------------------------------
+	# PLAYER 1
+	# ---------------------------------------------------------
+
+	if Game.p1_round_wins >= 1:
+
+		if p1_round1_sprite != null:
+			p1_round1_sprite.visible = true
+
+	if Game.p1_round_wins >= 2:
+
+		if p1_round2_sprite != null:
+			p1_round2_sprite.visible = true
+
+
+	# ---------------------------------------------------------
+	# PLAYER 2 / CPU
+	# ---------------------------------------------------------
+
+	if Game.p2_round_wins >= 1:
+
+		if p2_round1_sprite != null:
+			p2_round1_sprite.visible = true
+
+	if Game.p2_round_wins >= 2:
+
+		if p2_round2_sprite != null:
+			p2_round2_sprite.visible = true
 
 
 # =========================================================
@@ -206,27 +271,15 @@ func show_round(round_number: int):
 
 	hide_round_ui()
 
-	# ---------------------------------------------------------
-	# ROUND 1
-	# ---------------------------------------------------------
-
 	if round_number == 1:
 
 		if round1 != null:
 			round1.visible = true
 
-	# ---------------------------------------------------------
-	# ROUND 2
-	# ---------------------------------------------------------
-
 	elif round_number == 2:
 
 		if round2 != null:
 			round2.visible = true
-
-	# ---------------------------------------------------------
-	# ROUND 3
-	# ---------------------------------------------------------
 
 	elif round_number == 3:
 
@@ -235,10 +288,6 @@ func show_round(round_number: int):
 
 	else:
 		return
-
-	# ---------------------------------------------------------
-	# KEEP ROUND IMAGE ON SCREEN
-	# ---------------------------------------------------------
 
 	await get_tree().create_timer(2.0).timeout
 
@@ -263,7 +312,7 @@ func show_fight():
 
 
 # =========================================================
-# RESET ALL HEALTH BARS
+# RESET HEALTH
 # =========================================================
 
 func reset_all_health_bars():
@@ -292,13 +341,12 @@ func reset_all_health_bars():
 	if johnny_cage_bar != null:
 		johnny_cage_bar.value = johnny_cage_bar.max_value
 
-	# ONLY THE REAL FIGHT SEGMENTS
-	update_p1_segments(603, 496)
-	update_p2_segments(1890, 496)
+	update_p1_segments(10, 10)
+	update_p2_segments(10, 10)
 
 
 # =========================================================
-# SHOW YOU WIN
+# WIN / LOSE
 # =========================================================
 
 func show_you_win():
@@ -310,10 +358,6 @@ func show_you_win():
 		you_win.visible = true
 
 
-# =========================================================
-# SHOW YOU LOSE
-# =========================================================
-
 func show_you_lose():
 
 	if you_win != null:
@@ -322,10 +366,6 @@ func show_you_lose():
 	if you_lose != null:
 		you_lose.visible = true
 
-
-# =========================================================
-# HIDE WIN / LOSE
-# =========================================================
 
 func hide_win_lose():
 
@@ -336,22 +376,10 @@ func hide_win_lose():
 		you_lose.visible = false
 
 
-# =========================================================
-# WINNER
-# =========================================================
-
 func show_winner(character_name: String):
 
-	if you_lose != null:
-		you_lose.visible = false
+	show_you_win()
 
-	if you_win != null:
-		you_win.visible = true
-
-
-# =========================================================
-# HIDE WINNER
-# =========================================================
 
 func hide_winner():
 
@@ -394,7 +422,7 @@ func update_p2_segments(health, max_hp):
 
 
 # =========================================================
-# DUKE
+# HEALTH CALLBACKS
 # =========================================================
 
 func _on_duke_health_changed(health):
@@ -407,10 +435,6 @@ func _on_duke_health_changed(health):
 		update_p1_segments(health, duke_bar.max_value)
 
 
-# =========================================================
-# REPTILE
-# =========================================================
-
 func _on_reptile_health_changed(health):
 
 	if reptile_label != null:
@@ -420,10 +444,6 @@ func _on_reptile_health_changed(health):
 		reptile_bar.value = health
 		update_p2_segments(health, reptile_bar.max_value)
 
-
-# =========================================================
-# SUBZERO
-# =========================================================
 
 func _on_subzero_health_changed(health):
 
@@ -435,10 +455,6 @@ func _on_subzero_health_changed(health):
 		update_p1_segments(health, subzero_bar.max_value)
 
 
-# =========================================================
-# RAIDEN
-# =========================================================
-
 func _on_raiden_health_changed(health):
 
 	if raiden_label != null:
@@ -448,10 +464,6 @@ func _on_raiden_health_changed(health):
 		raiden_bar.value = health
 		update_p1_segments(health, raiden_bar.max_value)
 
-
-# =========================================================
-# LIU KANG
-# =========================================================
 
 func _on_liu_kang_health_changed(health):
 
@@ -463,10 +475,6 @@ func _on_liu_kang_health_changed(health):
 		update_p1_segments(health, liu_kang_bar.max_value)
 
 
-# =========================================================
-# SONYA
-# =========================================================
-
 func _on_sonya_health_changed(health):
 
 	if sonya_label != null:
@@ -477,10 +485,6 @@ func _on_sonya_health_changed(health):
 		update_p1_segments(health, sonya_bar.max_value)
 
 
-# =========================================================
-# KANO
-# =========================================================
-
 func _on_kano_health_changed(health):
 
 	if kano_label != null:
@@ -490,10 +494,6 @@ func _on_kano_health_changed(health):
 		kano_bar.value = health
 		update_p1_segments(health, kano_bar.max_value)
 
-
-# =========================================================
-# JOHNNY CAGE
-# =========================================================
 
 func _on_johnny_cage_health_changed(health):
 
