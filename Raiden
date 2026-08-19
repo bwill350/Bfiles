@@ -898,16 +898,18 @@ func spawn_attack(anim_name: String):
 	attack.attack_type = anim_name
 
 # ---------------- DAMAGE ----------------
+# =========================================================
+# TAKE DAMAGE
+# =========================================================
+
 func take_damage(amount: int):
+
+	# =====================================================
+	# BASIC DAMAGE LOCKS
+	# =====================================================
 
 	if not can_take_damage:
 		return
-
-	can_take_damage = false
-
-	await get_tree().create_timer(0.25).timeout
-
-	can_take_damage = true
 
 	if state == State.DEAD:
 		return
@@ -915,55 +917,217 @@ func take_damage(amount: int):
 	if spawn_protection:
 		return
 
+
+	# =====================================================
+	# PREVENT MULTIPLE DAMAGE ON SAME PHYSICS FRAME
+	# =====================================================
+
+	var frame := Engine.get_physics_frames()
+
+	if has_meta("last_damage_frame"):
+
+		if get_meta("last_damage_frame") == frame:
+			return
+
+	set_meta("last_damage_frame", frame)
+
+
+	# =====================================================
+	# TEMPORARY DAMAGE COOLDOWN
+	# =====================================================
+
+	can_take_damage = false
+
+	get_tree().create_timer(0.25).timeout.connect(
+		func():
+
+			if is_instance_valid(self) and state != State.DEAD:
+				can_take_damage = true
+	)
+
+
+	# =====================================================
 	# BLOCK REDUCTION
+	# =====================================================
+
 	if is_blocking:
-		amount = max(amount - 1, 0)
+
+		amount = max(
+			amount - 1,
+			0
+		)
 
 	if amount <= 0:
 		return
 
-	health -= amount
-	health = max(health, 0)
 
-	print("Raiden took damage: ", amount, " HP=", health)
+	# =====================================================
+	# APPLY DAMAGE
+	# =====================================================
+
+	health -= amount
+	health = max(
+		health,
+		0
+	)
+
+	print("================================")
+	print("RAIDEN TOOK DAMAGE: ", amount)
+	print("RAIDEN HP: ", health)
+	print("ROUND: ", Game.current_round)
+	print("================================")
 
 	health_changed.emit(health)
-	hit_sound.play()
 
-# ---------------- FINISH HIM ----------------
-	if health == 1 and Game.current_round == 2 and not is_finish_state:
-		trigger_finish_state()
-		return
 
-	# ---------------- FINAL HIT ----------------
+	# =====================================================
+	# HIT SOUND
+	# =====================================================
+
+	if is_instance_valid(hit_sound):
+		hit_sound.play()
+
+
+	# =====================================================
+	# FINAL HIT
+	# =====================================================
+
 	if health <= 0:
+
 		is_attacking = false
-		finish_label.visible = false
+		is_shooting = false
+		is_hurting = false
+		is_blocking = false
+
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
+
 		die()
-		await get_tree().create_timer(0.5).timeout
 
 		return
 
-	# ---------------- NORMAL HURT ----------------
+
+	# =====================================================
+	# FINISH HIM
+	# =====================================================
+	#
+	# ONLY trigger FINISH HIM when the opponent already
+	# has 1 round win.
+	#
+	# This means killing Raiden will give the opponent
+	# their SECOND round win.
+	#
+	# Game.current_round is NOT used here.
+	# =====================================================
+
+	if health == 1 and not is_finish_state:
+
+		var opponent_will_win_match := false
+
+
+		# =================================================
+		# RAIDEN IS PLAYER 1
+		# =================================================
+
+		if is_in_group("player1"):
+
+			# CPU already has 1 round win.
+			if Game.p2_round_wins >= 1:
+				opponent_will_win_match = true
+
+
+		# =================================================
+		# RAIDEN IS CPU
+		# =================================================
+
+		else:
+
+			# Player 1 already has 1 round win.
+			if Game.p1_round_wins >= 1:
+				opponent_will_win_match = true
+
+
+		# =================================================
+		# TRIGGER FINISH HIM
+		# =================================================
+
+		if opponent_will_win_match:
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+
+			trigger_finish_state()
+
+			return
+
+
+	# =====================================================
+	# NORMAL HURT
+	# =====================================================
+
 	is_hurting = true
 	hurt_locked = true
 	action_locked = true
 
-	combo.clear()
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
 
 	state = State.IDLE
 
+	combo.clear()
+
 	play_anim("hurt")
-	$Electric.play()
-	var blood = BLOOD_EFFECT.instantiate()
-	get_tree().current_scene.add_child(blood)
-	blood.global_position = $BloodMarker.global_position
+
+
+	# =====================================================
+	# ELECTRIC HIT EFFECT
+	# =====================================================
+
+	if has_node("Electric"):
+
+		var electric_audio = get_node("Electric")
+
+		if electric_audio is AudioStreamPlayer or electric_audio is AudioStreamPlayer2D:
+
+			electric_audio.play()
+
+
+	# =====================================================
+	# BLOOD EFFECT
+	# =====================================================
+
+	if has_node("BloodMarker"):
+
+		var blood = BLOOD_EFFECT.instantiate()
+
+		get_tree().current_scene.add_child(blood)
+
+		blood.global_position = $BloodMarker.global_position
+
+
+	# =====================================================
+	# HURT DURATION
+	# =====================================================
 
 	await get_tree().create_timer(0.25).timeout
+
+	if state == State.DEAD:
+		return
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
+
+
+	# =====================================================
+	# RETURN TO IDLE
+	# =====================================================
+
+	if state != State.DEAD and not is_finish_state:
+
+		play_anim("idle")
 
 func trigger_finish_state():
 
@@ -1014,7 +1178,15 @@ func trigger_finish_state():
 # =====================================================
 # DEATH
 # =====================================================
+# =========================================================
+# DEATH
+# =========================================================
+
 func die():
+
+	# =====================================================
+	# ALREADY DEAD
+	# =====================================================
 
 	if state == State.DEAD:
 		return
@@ -1026,12 +1198,15 @@ func die():
 	state = State.DEAD
 
 	velocity = Vector2.ZERO
+
 	is_attacking = false
 	is_shooting = false
+	is_blocking = false
+	is_hurting = false
+
 	action_locked = true
 	hurt_locked = true
-	is_hurting = false
-	is_blocking = false
+
 	can_take_damage = false
 
 	# =====================================================
@@ -1041,195 +1216,110 @@ func die():
 	electricfly_active = false
 	special_move = false
 	special_move_timer = 0.0
+
 	stunned = false
+
 	knockback_x = 0.0
 	uppercut_launched = false
 	run_locked = false
 
+	# =====================================================
+	# STOP CPU ACTIONS
+	# =====================================================
+
+	ai_timer = 999999.0
 
 	# =====================================================
-	# HIDE NORMAL SPRITE
+	# HIDE FINISH HIM
+	# =====================================================
+
+	if is_instance_valid(finish_label):
+		finish_label.visible = false
+
+	# =====================================================
+	# DETERMINE ROUND WINNER
+	# =====================================================
+	#
+	# If Raiden is P1:
+	#     CPU wins.
+	#
+	# Otherwise:
+	#     P1 wins.
+	# =====================================================
+
+	var winner := ""
+
+	if is_in_group("player1"):
+
+		winner = "cpu"
+
+	else:
+
+		winner = "player1"
+
+	# =====================================================
+	# DEBUG
+	# =====================================================
+
+	print("================================")
+	print("RAIDEN DIED")
+	print("ROUND: ", Game.current_round)
+	print(
+		"CURRENT SCORE: ",
+		Game.p1_round_wins,
+		" - ",
+		Game.p2_round_wins
+	)
+	print("ROUND WINNER: ", winner)
+	print("================================")
+
+	# =====================================================
+	# DETERMINE IF THIS DEATH ENDS THE MATCH
+	# =====================================================
+	#
+	# Level1 has not awarded this round yet.
+	#
+	# If the winner already has one round win,
+	# this death will give them their second win.
+	# =====================================================
+
+	var match_will_end := false
+
+	if winner == "player1":
+
+		if Game.p1_round_wins >= 1:
+			match_will_end = true
+
+	else:
+
+		if Game.p2_round_wins >= 1:
+			match_will_end = true
+
+	print("MATCH WILL END: ", match_will_end)
+
+	# =====================================================
+	# HIDE NORMAL SPRITE / SHOW DEAD SPRITE
 	# =====================================================
 
 	$Sprite.visible = false
 	$Crispy.visible = true
 
+	$Crispy.flip_h = facing > 0
 
 	# =====================================================
-	# ROUND 1 DEATH
-	# START ROUND 2
+	# FINAL MATCH DEATH
 	# =====================================================
 
-	if Game.current_round == 1:
+	if match_will_end:
 
-		if is_in_group("player1"):
-			round_death.emit("cpu")
-		else:
-			round_death.emit("player1")
+		print("================================")
+		print("RAIDEN FINAL DEATH")
+		print("FATALITY ALLOWED")
+		print("================================")
 
-		await get_tree().create_timer(3.0).timeout
-
-		Game.current_round = 2
-
-
-		# =================================================
-		# FIND BOTH FIGHTERS
-		# =================================================
-
-		var p1 = get_tree().get_first_node_in_group("player1")
-		var p2 = get_tree().get_first_node_in_group("enemy")
-
-
-		# =================================================
-		# RESET PLAYER 1
-		# =================================================
-
-		if p1 != null and is_instance_valid(p1):
-
-			p1.global_position = Vector2(603, 496)
-
-			p1.health = 10
-			p1.velocity = Vector2.ZERO
-			p1.state = p1.State.IDLE
-
-			p1.is_hurting = false
-			p1.is_attacking = false
-			p1.is_shooting = false
-			p1.action_locked = false
-			p1.hurt_locked = false
-			p1.can_take_damage = true
-
-			if p1.has_method("set_blocking"):
-				p1.set_blocking(false)
-			else:
-				p1.is_blocking = false
-
-			if "is_finish_state" in p1.get_script().get_script_property_list():
-				p1.is_finish_state = false
-
-			if p1.has_node("Sprite"):
-				p1.get_node("Sprite").visible = true
-
-			if p1.has_node("Crispy"):
-				p1.get_node("Crispy").visible = false
-
-			if p1.has_signal("health_changed"):
-				p1.health_changed.emit(10)
-
-			if p1.has_method("play_anim"):
-				p1.play_anim("idle")
-
-
-		# =================================================
-		# RESET PLAYER 2
-		# =================================================
-
-		if p2 != null and is_instance_valid(p2):
-
-			p2.global_position = Vector2(1890, 496)
-
-			p2.health = 10
-			p2.velocity = Vector2.ZERO
-			p2.state = p2.State.IDLE
-
-			p2.is_hurting = false
-			p2.is_attacking = false
-			p2.is_shooting = false
-			p2.action_locked = false
-			p2.hurt_locked = false
-			p2.can_take_damage = true
-
-			if p2.has_method("set_blocking"):
-				p2.set_blocking(false)
-			else:
-				p2.is_blocking = false
-
-			if p2.has_node("Sprite"):
-				p2.get_node("Sprite").visible = true
-
-			if p2.has_node("Crispy"):
-				p2.get_node("Crispy").visible = false
-
-			if p2.has_signal("health_changed"):
-				p2.health_changed.emit(10)
-
-			if p2.has_method("play_anim"):
-				p2.play_anim("idle")
-
-
-		# =================================================
-		# RESET THIS RAIDEN
-		# =================================================
-
-		health = 10
-		max_health = 10
-
-		global_position = Vector2(1890, 496)
-
-		velocity = Vector2.ZERO
-
-		state = State.IDLE
-
-		is_hurting = false
-		is_attacking = false
-		is_shooting = false
-		action_locked = false
-		hurt_locked = false
-		can_take_damage = true
-		is_blocking = false
-
-		is_finish_state = false
-
-		stunned = false
-
-		electricfly_active = false
-
-
-		special_move = false
-		special_move_timer = 0.0
-
-		knockback_x = 0.0
-		uppercut_launched = false
-		run_locked = false
-
-		combo.clear()
-		combo_timer = 0.0
-		ai_timer = randf_range(0.2, 0.6)
-
-		$Sprite.visible = true
-		$Crispy.visible = false
-
-		health_changed.emit(10)
-
-		play_anim("idle")
-
-
-		# =================================================
-		# RESET HUD
-		# =================================================
-
-		var hud = get_tree().get_first_node_in_group("HUD")
-
-		if hud != null and is_instance_valid(hud):
-
-			if hud.has_method("_find_fighters"):
-				hud._find_fighters()
-
-			if hud.has_method("reset_all_health_bars"):
-				hud.reset_all_health_bars()
-
-			if hud.has_method("show_round"):
-				hud.show_round(2)
-
-		return
-
-
-	# =====================================================
-	# ROUND 2 DEATH
-	# FINAL FATALITY / BLOOD
-	# =====================================================
-
-	if Game.current_round == 2:
+		# -------------------------------------------------
+		# BLOOD DEATH EFFECT
+		# -------------------------------------------------
 
 		var blood = BLOOD_DEATH.instantiate()
 
@@ -1237,63 +1327,71 @@ func die():
 
 		blood.global_position = global_position
 
-
-		# =================================================
-		# FINAL DEATH SPRITE
-		# =================================================
+		# -------------------------------------------------
+		# MAKE SURE DEAD SPRITE IS SHOWN
+		# -------------------------------------------------
 
 		$Sprite.visible = false
 		$Crispy.visible = true
 
+		$Crispy.flip_h = facing > 0
 
-		# =================================================
-		# STOP RAIDEN
-		# =================================================
-
-		velocity = Vector2.ZERO
-
-		is_attacking = false
-		is_shooting = false
-		action_locked = true
-		hurt_locked = true
-		is_hurting = false
-		is_blocking = false
-		can_take_damage = false
-
-		electricfly_active = false
-
-		special_move = false
-		special_move_timer = 0.0
-
-		uppercut_launched = false
-		stunned = false
-
-
-		# =================================================
+		# -------------------------------------------------
 		# HIDE FINISH HIM
-		# =================================================
+		# -------------------------------------------------
 
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
 
-
-		# =================================================
-		# WAIT FOR FATALITY
-		# =================================================
+		# -------------------------------------------------
+		# WAIT FOR FINAL DEATH / FATALITY
+		# -------------------------------------------------
 
 		await get_tree().create_timer(3.0).timeout
 
+		# -------------------------------------------------
+		# TELL LEVEL1 WHO WON
+		# -------------------------------------------------
 
-		# =================================================
-		# FINAL MATCH RESULT
-		# =================================================
-
-		if is_in_group("player1"):
-			round_death.emit("cpu")
-		else:
-			round_death.emit("player1")
+		round_death.emit(winner)
 
 		return
+
+	# =====================================================
+	# NORMAL ROUND DEATH
+	# =====================================================
+	#
+	# Match is NOT over.
+	#
+	# Level1 handles:
+	#   - awarding the round
+	#   - updating the score
+	#   - starting Round 2
+	#   - resetting fighters
+	#   - resetting health bars
+	#   - showing Round 2
+	# =====================================================
+
+	print("================================")
+	print("RAIDEN ROUND DEATH")
+	print("NO FATALITY")
+	print("LEVEL1 WILL HANDLE NEXT ROUND")
+	print("================================")
+
+	# =====================================================
+	# HIDE FINISH HIM
+	# =====================================================
+
+	if is_instance_valid(finish_label):
+		finish_label.visible = false
+
+	# =====================================================
+	# GIVE LEVEL1 CONTROL
+	# =====================================================
+
+	round_death.emit(winner)
+
+	return
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
