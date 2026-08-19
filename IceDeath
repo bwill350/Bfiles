@@ -12,7 +12,10 @@ var damage_done := false
 var flicker_on := true
 
 
-# ---------------- READY ----------------
+# =========================================================
+# READY
+# =========================================================
+
 func _ready():
 
 	add_to_group("IceDeath")
@@ -35,29 +38,55 @@ func _ready():
 	stop_effect()
 
 
-# ---------------- ICE TWEEN ----------------
+# =========================================================
+# ICE ANIMATION
+# =========================================================
+
 func start_ice_animation():
 
 	var t = create_tween()
 
-	# grow in
-	t.tween_property(self, "scale", Vector2.ONE, 0.15)
+	# Grow in
+	t.tween_property(
+		self,
+		"scale",
+		Vector2.ONE,
+		0.15
+	)
 
-	# huge ice burst
-	t.tween_property(self, "scale", Vector2(5,5), 0.15)
+	# Huge ice burst
+	t.tween_property(
+		self,
+		"scale",
+		Vector2(5, 5),
+		0.15
+	)
 
-	# shrink back
-	t.tween_property(self, "scale", Vector2(1.5,1.5), 0.15)
+	# Shrink back
+	t.tween_property(
+		self,
+		"scale",
+		Vector2(1.5, 1.5),
+		0.15
+	)
 
-	# disappear
-	t.tween_property(self, "scale", Vector2.ZERO, 0.25)
+	# Disappear
+	t.tween_property(
+		self,
+		"scale",
+		Vector2.ZERO,
+		0.25
+	)
 
 
+# =========================================================
+# FLICKER
+# =========================================================
 
-# ---------------- FLICKER ----------------
 func start_flicker():
 
 	var flicker = create_tween()
+
 	flicker.set_loops(8)
 
 	flicker.tween_callback(func():
@@ -68,33 +97,51 @@ func start_flicker():
 		flicker_on = !flicker_on
 
 		if flicker_on:
-			sprite.modulate = Color.WHITE
-		else:
-			sprite.modulate = Color(0.4,0.8,1.5)
 
+			sprite.modulate = Color.WHITE
+
+		else:
+
+			sprite.modulate = Color(
+				0.4,
+				0.8,
+				1.5
+			)
 	)
 
 	flicker.tween_interval(0.05)
 
 
+# =========================================================
+# DAMAGE
+# =========================================================
 
-# ---------------- DAMAGE ----------------
 func _on_area_entered(area: Area2D):
 
 	if damage_done:
 		return
 
-	if area.is_in_group("Fighter"):
+	if area == null:
+		return
 
-		if area.has_method("take_damage"):
+	if not is_instance_valid(area):
+		return
 
-			damage_done = true
+	# Only damage actual fighters
+	if not area.is_in_group("Fighter"):
+		return
 
-			area.take_damage(1)
+	if area.has_method("take_damage"):
+
+		damage_done = true
+
+		area.take_damage(1)
 
 
+# =========================================================
+# STOP EFFECT
+# =========================================================
 
-# ---------------- CLEANUP ----------------
 func stop_effect():
 
 	if finished:
@@ -109,16 +156,37 @@ func stop_effect():
 		sound.stop()
 
 	var t = create_tween()
-	t.tween_property(self, "scale", Vector2.ZERO, 0.3)
+
+	t.tween_property(
+		self,
+		"scale",
+		Vector2.ZERO,
+		0.3
+	)
 
 	await t.finished
 
-	queue_free()
+	# =====================================================
+	# GO TO MAIN MENU
+	# =====================================================
+
+	print("================================")
+	print("ICE DEATH COMPLETE")
+	print("RETURNING TO MAIN MENU")
+	print("================================")
+
+	get_tree().change_scene_to_file(
+		"res://Scenes/MainMenu.tscn"
+	)
 
 
+# =========================================================
+# TIMER
+# =========================================================
 
-# ---------------- TIMER ----------------
 func _on_cleanup_timer_timeout():
 
-	if not finished:
-		stop_effect()
+	if finished:
+		return
+
+	stop_effect()
