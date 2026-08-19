@@ -23,7 +23,6 @@ Kano (CharacterBody2D)
 │   └── FinishLabel
 │       └── Sprite2D
 
-
 var spawn_protection := false
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -664,7 +663,7 @@ func cpu_logic(delta):
 
 	if Game.difficulty == "Easy":
 
-		var easy_stopping_distance := 90.0
+		var easy_stopping_distance := 100.0
 		var easy_attack_range := 110.0
 
 
@@ -1092,6 +1091,10 @@ func shoot_player():
 
 func take_damage(amount: int):
 
+	# =================================================
+	# ALREADY DEAD / INVINCIBLE
+	# =================================================
+
 	if state == State.DEAD:
 		return
 
@@ -1101,6 +1104,11 @@ func take_damage(amount: int):
 	if spawn_protection:
 		return
 
+
+	# =================================================
+	# PREVENT MULTIPLE DAMAGE ON SAME PHYSICS FRAME
+	# =================================================
+
 	var frame := Engine.get_physics_frames()
 
 	if has_meta("last_damage_frame"):
@@ -1109,6 +1117,11 @@ func take_damage(amount: int):
 
 	set_meta("last_damage_frame", frame)
 
+
+	# =================================================
+	# DAMAGE COOLDOWN
+	# =================================================
+
 	can_take_damage = false
 
 	get_tree().create_timer(0.25).timeout.connect(func():
@@ -1116,21 +1129,32 @@ func take_damage(amount: int):
 			can_take_damage = true
 	)
 
+
+	# =================================================
+	# BLOCK REDUCTION
+	# =================================================
+
 	if is_blocking:
 		amount = max(amount - 1, 0)
 
 	if amount <= 0:
 		return
 
+
+	# =================================================
+	# APPLY DAMAGE
+	# =================================================
+
 	health -= amount
 	health = max(health, 0)
 
-	print("Kano took damage: ", amount, " HP=", health)
+	print("JohnnyCage took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 
 	if is_instance_valid(hit_sound):
 		hit_sound.play()
+
 
 	# =================================================
 	# FINAL HIT
@@ -1147,23 +1171,54 @@ func take_damage(amount: int):
 			finish_label.visible = false
 
 		die()
+
 		return
 
 	# =================================================
 	# FINISH HIM
-	# ONLY WHEN OPPONENT ALREADY HAS 1 ROUND WIN
+	# =================================================
+	#
+	# Only show FINISH HIM when the opponent already
+	# has 1 round win.
+	#
+	# That means killing this fighter will give the
+	# opponent their SECOND round win.
+	#
+	# We do NOT use Game.current_round here.
 	# =================================================
 
 	if health == 1 and not is_finish_state:
 
 		var opponent_will_win_match := false
 
+
+		# =================================================
+		# JOHNNY IS PLAYER 1
+		# =================================================
+
 		if is_in_group("player1"):
+
+			# CPU already has 1 round win.
+			# This death would give CPU its 2nd win.
 			if Game.p2_round_wins >= 1:
 				opponent_will_win_match = true
+
+
+		# =================================================
+		# JOHNNY IS CPU
+		# =================================================
+
 		else:
+
+			# Player 1 already has 1 round win.
+			# This death would give P1 its 2nd win.
 			if Game.p1_round_wins >= 1:
 				opponent_will_win_match = true
+
+
+		# =================================================
+		# SHOW FINISH HIM ONLY FOR MATCH-ENDING ROUND
+		# =================================================
 
 		if opponent_will_win_match:
 
@@ -1172,7 +1227,9 @@ func take_damage(amount: int):
 			action_locked = false
 
 			trigger_finish_state()
+
 			return
+
 
 	# =================================================
 	# NORMAL HURT
@@ -1195,6 +1252,11 @@ func take_damage(amount: int):
 	if is_instance_valid(hurt_sound):
 		hurt_sound.play()
 
+
+	# =================================================
+	# BLOOD EFFECT
+	# =================================================
+
 	if has_node("BloodMarker"):
 
 		var blood = BLOOD_EFFECT.instantiate()
@@ -1202,6 +1264,11 @@ func take_damage(amount: int):
 		get_tree().current_scene.add_child(blood)
 
 		blood.global_position = $BloodMarker.global_position
+
+
+	# =================================================
+	# HURT DURATION
+	# =================================================
 
 	await get_tree().create_timer(0.25).timeout
 
@@ -1385,6 +1452,7 @@ func combo_attack(attacks: Array):
 
 # ---------------- DEATH ----------------
 # ---------------- DEATH ----------------
+# ---------------- DEATH ----------------
 func die():
 
 	# =====================================================
@@ -1445,8 +1513,11 @@ func die():
 	# SHOW DEAD / CRISPY SPRITE
 	# =====================================================
 
-	$Sprite.visible = false
-	$Crispy.visible = true
+	if has_node("Sprite"):
+		$Sprite.visible = false
+
+	if has_node("Crispy"):
+		$Crispy.visible = true
 
 
 	# =====================================================
@@ -1778,6 +1849,11 @@ func die():
 
 		stunned = false
 
+		is_pulled = false
+		is_spear_pulled = false
+		pull_target = null
+		pull_timer = 0.0
+
 		cannonball_active = false
 		cannonball_timer = 0.0
 		cannonball_ready = false
@@ -1792,6 +1868,8 @@ func die():
 		uppercut_launched = false
 		hurt_cooldown = false
 
+		knockback_x = 0.0
+
 
 		# =================================================
 		# MAKE SURE FINISH HIM IS HIDDEN
@@ -1802,20 +1880,35 @@ func die():
 
 
 		# =================================================
-		# WAIT FOR FATALITY
+		# WAIT FOR FATALITY / FINAL DEATH
 		# =================================================
 
 		await get_tree().create_timer(3.0).timeout
 
 
 		# =================================================
-		# FINAL MATCH RESULT
+		# TELL LEVEL1 WHO WON
 		# =================================================
 
 		if is_in_group("player1"):
 			round_death.emit("cpu")
 		else:
 			round_death.emit("player1")
+
+
+		# =================================================
+		# SMALL DELAY
+		# =================================================
+
+		await get_tree().create_timer(0.2).timeout
+
+
+		# =================================================
+		# FINAL MATCH OVER
+		# GO TO MAIN MENU
+		# =================================================
+
+		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
 		return
 
