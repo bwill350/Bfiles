@@ -39,18 +39,7 @@ signal round_death(winner: String)
 # =========================================================
 # STATE
 # =========================================================
-
-enum State {
-	IDLE,
-	WALK,
-	RUN,
-	JUMP,
-	KICK,
-	BLOCK,
-	PUNCH,
-	DEAD
-}
-
+enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
 var state: State = State.IDLE
 
 # =========================================================
@@ -65,27 +54,23 @@ var immune_groups := [
 
 var fire_finish_immunity := false
 var special_bullet: PackedScene = null
-
 var spawn_locked := true
 var spawn_protection := false
 var special_move_invincible := false
 var special_move_timer := 0.0
-
 var dead_locked := false
-
 var attack_owner: Node = null
 var attack_type := ""
-
 var uppercut_launched := false
 
 # =========================================================
 # CPU
 # =========================================================
-
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
 var stunned := false
+var was_uppercut := false
 
 # =========================================================
 # FLAGS
@@ -98,42 +83,31 @@ var is_attacking := false
 var action_locked := false
 var hurt_locked := false
 var can_take_damage := true
-
 var is_finish_state := false
 var lock_timer := 0.0
 var finish_triggered := false
-
 var is_pulled := false
 var pull_target: Node2D = null
 var pull_timer := 0.0
-
 var hurt_cooldown := false
-
 # =========================================================
 # MOVEMENT
 # =========================================================
-
 var facing := 1
 var current_anim := ""
 var health: int
-
 const GRAVITY = 5000
-
 var electricfly_y := 0.0
 var electricfly_active := false
 var special_move = true
 var knockback_x := 0.0
-
 # =========================================================
 # COOLDOWNS
-# =========================================================
-
+# ========================================================
 var shoot_cooldown: float = 0.0
-
 # =========================================================
 # EXPORTS
 # =========================================================
-
 @export var shoot_cooldown_time: float = 0.25
 @export var SPEED := 300.0
 @export var CLIMB_SPEED := 250.0
@@ -141,11 +115,9 @@ var shoot_cooldown: float = 0.0
 @export var jump_velocity := -2200.0
 @export var combo_reset_time := 0.6
 @export var player_controlled := false
-
 # =========================================================
 # PRELOADS
 # =========================================================
-
 const BULLET_SCENE = preload("res://Projectiles/ReptileBullet.tscn")
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
@@ -155,46 +127,35 @@ const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 const BLOOD_EFFECT = preload("res://Deaths/GreenBloodEffect.tscn")
 const REPTILE_BULLET = preload("res://Projectiles/ReptileBullet.tscn")
-
 # =========================================================
 # DEATH FX
 # =========================================================
-
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
-
 # =========================================================
 # NODES
 # =========================================================
-
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
 @onready var finishhim_sound: AudioStreamPlayer2D = $FinishHim
-
 @onready var hit_box: Area2D = $ReptileHurtBox
 @onready var shoot_marker: Marker2D = $Reptileshoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
-
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
-
 # =========================================================
 # COMBOS
 # =========================================================
-
 var combo := []
 var combo_timer := 0.0
-
 const FIRE_COMBO = ["down", "up"]
 const ICE_COMBO = ["up", "down"]
 const KICK_COMBO = ["right", "down", "down"]
 const ELECTRIC_COMBO = ["up", "down", "right"]
 const PUNCH_COMBO = ["right", "down", "right"]
 const FATALITY_COMBO = ["down", "right", "up"]
-
-
 # =========================================================
 # DEATH BULLET
 # =========================================================
@@ -207,7 +168,6 @@ func spawn_death_bullet():
 
 	bullet.global_position = $Reptileshoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
-
 
 # =========================================================
 # FIRE BULLET
@@ -223,7 +183,6 @@ func spawn_fire_bullet():
 
 	bullet.global_position = $Reptileshoot.global_position
 	bullet.velocity = Vector2(facing, 0) * bullet.speed
-
 
 # =========================================================
 # STUN
@@ -260,7 +219,6 @@ func apply_stun(_duration := 4.0):
 	hurt_locked = false
 	action_locked = false
 
-
 # =========================================================
 # RUN
 # =========================================================
@@ -276,7 +234,6 @@ func run(input_dir: float):
 	if not is_attacking:
 		play_anim("run")
 
-
 # =========================================================
 # READY
 # =========================================================
@@ -289,7 +246,7 @@ func _ready():
 	facing = 1
 
 	sprite.flip_h = facing > 0
-	$Crispy.flip_h = facing > 0
+	$Crispy.flip_h = -facing < 0
 
 	add_to_group("Fighter")
 	add_to_group("enemy")
@@ -307,7 +264,6 @@ func _ready():
 
 	if Input.is_action_pressed("jump"):
 		velocity.y = jump_velocity
-
 
 # =========================================================
 # INPUT
@@ -331,7 +287,6 @@ func _unhandled_input(event):
 		if event.is_action_pressed(i):
 			register_input(i)
 
-
 # =========================================================
 # PHYSICS
 # =========================================================
@@ -347,34 +302,26 @@ func _physics_process(delta):
 
 	if stunned:
 
-		velocity = Vector2.ZERO
-		move_and_slide()
-
-		return
-
-	# =====================================================
-	# FINISH HIM STATE
-	# =====================================================
-
-	if is_finish_state:
-
-		state = State.IDLE
-		velocity.x = 0
-
-		if not is_hurting:
-			play_anim("idle")
-
-		velocity.y += GRAVITY * delta
+		if not is_on_floor():
+			velocity.y += GRAVITY * delta
+		else:
+			velocity.y = 0
 
 		move_and_slide()
-
 		return
 
 	# =====================================================
 	# GRAVITY
 	# =====================================================
 
-	velocity.y += GRAVITY * delta
+	if not is_on_floor():
+
+		velocity.y += GRAVITY * delta
+
+	else:
+
+		if velocity.y > 0:
+			velocity.y = 0
 
 	# =====================================================
 	# UPPERCUT LAUNCH
@@ -382,11 +329,63 @@ func _physics_process(delta):
 
 	if uppercut_launched:
 
+		# Keep uppercut hurt animation while airborne
+		if sprite.animation != "wasuppercut":
+			current_anim = ""
+			sprite.play("wasuppercut")
+
+		# Do NOT allow normal movement while launched
+		velocity.x = move_toward(
+			velocity.x,
+			0.0,
+			1500.0 * delta
+		)
+
 		move_and_slide()
 
-		if is_on_floor():
-			uppercut_launched = false
+		# =================================================
+		# LANDED AFTER UPPERCUT
+		# =================================================
 
+		if is_on_floor():
+
+			velocity.x = 0
+			velocity.y = 0
+
+			uppercut_launched = false
+			was_uppercut = false
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+
+			is_attacking = false
+			is_shooting = false
+			is_blocking = false
+
+			state = State.IDLE
+
+			current_anim = ""
+			play_anim("idle")
+
+		return
+
+	# =====================================================
+	# FINISH HIM
+	# =====================================================
+
+	if is_finish_state:
+
+		state = State.IDLE
+		velocity.x = 0
+
+		if is_on_floor():
+			velocity.y = 0
+
+		if not is_hurting:
+			play_anim("idle")
+
+		move_and_slide()
 		return
 
 	# =====================================================
@@ -406,6 +405,12 @@ func _physics_process(delta):
 	# =====================================================
 	# CPU
 	# =====================================================
+	#
+	# IMPORTANT:
+	# CPU does NOT copy Player 1's jump.
+	#
+	# cpu_logic() controls CPU movement only.
+	# =====================================================
 
 	if is_cpu:
 
@@ -416,61 +421,55 @@ func _physics_process(delta):
 		return
 
 	# =====================================================
-	# DEAD
-	# =====================================================
-
-	if state == State.DEAD:
-		return
-
-	# =====================================================
-	# FINISH STATE
-	# =====================================================
-
-	if is_finish_state:
-
-		state = State.IDLE
-		velocity.x = 0
-
-		if not is_hurting:
-			play_anim("idle")
-
-		move_and_slide()
-
-		return
-
-	# =====================================================
 	# ACTION LOCK
 	# =====================================================
 
 	if action_locked:
+
+		velocity.x = 0
+
 		move_and_slide()
+
 		return
 
-	var input_dir = Input.get_axis("left", "right")
-	var climb_pressed = Input.is_action_pressed("climb")
-
 	# =====================================================
-	# FACING
+	# PLAYER MOVEMENT
 	# =====================================================
 
-	if input_dir != 0:
-		facing = sign(input_dir)
-
-	sprite.flip_h = facing > 0
-	$Crispy.flip_h = facing > 0
-
-	$AttackMarker.position = Vector2(
-		0 * facing,
-		0
-	)
-
-	$Reptileshoot.position = Vector2(
-		63 * facing,
-		-225
+	var input_dir := Input.get_axis(
+		"left",
+		"right"
 	)
 
 	# =====================================================
-	# MOVEMENT
+	# FACE TARGET
+	# =====================================================
+
+	if target != null and is_instance_valid(target):
+
+		var dist: float = (
+			target.global_position.x -
+			global_position.x
+		)
+
+		var direction: float = sign(dist)
+
+		if direction != 0:
+
+			facing = direction
+
+			sprite.flip_h = facing > 0
+			$Crispy.flip_h = facing > 0
+
+			$AttackMarker.position = Vector2.ZERO
+
+			$Reptileshoot.position = Vector2(
+				63 * facing,
+				-211
+			)
+
+	# =====================================================
+	# WALK / RUN
 	# =====================================================
 
 	if Input.is_action_pressed("run") and input_dir != 0:
@@ -501,22 +500,22 @@ func _physics_process(delta):
 
 		State.JUMP:
 
-			if not is_attacking:
+			if not is_attacking and not is_hurting:
 				play_anim("jump")
 
 		State.WALK:
 
-			if not is_attacking:
+			if not is_attacking and not is_hurting:
 				play_anim("walk")
 
 		State.RUN:
 
-			if not is_attacking:
+			if not is_attacking and not is_hurting:
 				play_anim("run")
 
 		State.IDLE:
 
-			if not is_attacking:
+			if not is_attacking and not is_hurting:
 				play_anim("idle")
 
 	# =====================================================
@@ -524,16 +523,26 @@ func _physics_process(delta):
 	# =====================================================
 
 	if is_hurting and hurt_locked:
+
 		move_and_slide()
+
 		return
 
 	# =====================================================
-	# JUMP
+	# PLAYER JUMP ONLY
+	# =====================================================
+	#
+	# This is ONLY reached for a human-controlled Reptile.
+	# CPU returns above before getting here.
 	# =====================================================
 
-	if Input.is_action_just_pressed("jump") and is_on_floor():
+	if (
+		Input.is_action_just_pressed("jump")
+		and is_on_floor()
+	):
 
 		velocity.y = jump_velocity
+		state = State.JUMP
 
 	# =====================================================
 	# ATTACKS
@@ -611,6 +620,10 @@ func _physics_process(delta):
 	else:
 
 		stop_block()
+
+	# =====================================================
+	# FINAL MOVEMENT
+	# =====================================================
 
 	move_and_slide()
 
@@ -693,236 +706,267 @@ func invisible():
 
 func cpu_logic(delta):
 
-	# =====================================================
-	# HURT HAS ABSOLUTE PRIORITY
-	# =====================================================
+	# =========================================================
+	# DEAD
+	# =========================================================
+	if state == State.DEAD:
+		return
 
+	# =========================================================
+	# FINISH HIM
+	# =========================================================
+	if is_finish_state:
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
+
+		return
+
+	# =========================================================
+	# HURT
+	# =========================================================
 	if is_hurting:
 
-		if is_pulled:
-
-			velocity.x = -facing * -600
-
-		else:
-
-			velocity.x = -facing * 100
+		velocity.x = knockback_x
 
 		knockback_x = move_toward(
 			knockback_x,
-			0,
-			1500 * delta
+			0.0,
+			1500.0 * delta
 		)
 
-		if abs(knockback_x) < 10:
+		move_and_slide()
 
-			knockback_x = 0
-			is_hurting = false
-			is_pulled = false
+		if abs(knockback_x) > 10.0:
+			return
+
+		knockback_x = 0.0
+		is_hurting = false
+		hurt_locked = false
+		is_attacking = false
+		is_shooting = false
+		action_locked = false
+
+		state = State.IDLE
+		play_anim("idle")
+
+		ai_timer = 0.1
 
 		return
 
-	# =====================================================
-	# TARGET
-	# =====================================================
+	# =========================================================
+	# ACTION LOCK
+	# =========================================================
+	if action_locked:
+		velocity.x = 0
+		return
 
+	# =========================================================
+	# FIND PLAYER 1
+	# =========================================================
+	if target == null or not is_instance_valid(target):
+
+		target = get_tree().get_first_node_in_group("player1")
+
+		# Backup: find human Fighter
+		if target == null or not is_instance_valid(target):
+
+			for node in get_tree().get_nodes_in_group("Fighter"):
+
+				if node == self:
+					continue
+
+				if not is_instance_valid(node):
+					continue
+
+				if node is Node2D and not node.is_cpu:
+					target = node
+					break
+
+	# =========================================================
+	# NO TARGET
+	# =========================================================
 	if target == null or not is_instance_valid(target):
 
 		velocity.x = 0
+		state = State.IDLE
+		play_anim("idle")
 
 		return
 
-	# =====================================================
-	# FINISH HIM / 1 HP
-	# =====================================================
+	# =========================================================
+	# DISTANCE TO PLAYER 1
+	# =========================================================
+	var dist: float = target.global_position.x - global_position.x
+	var distance: float = abs(dist)
+	var direction: float = sign(dist)
 
-	if health <= 1:
+# =========================================================
+# FACE PLAYER 1
+# =========================================================
+	if direction != 0:
 
-		health = 1
+		facing = -direction
 
-		is_attacking = false
-		is_shooting = false
-		is_blocking = false
-		velocity.x = 0
+		sprite.flip_h = -facing > 0
+		$Crispy.flip_h = facing > 0
 
-		combo.clear()
+		$AttackMarker.position = Vector2.ZERO
+		$Reptileshoot.position = Vector2(63 * facing, -211)
 
-		# Do NOT disable is_cpu.
-		# The CPU must remain alive so the finish state works.
+	# =========================================================
+	# CPU DISTANCES
+	# =========================================================
+	var attack_range := 110.0
+	var stopping_distance := 90.0
 
-		if not is_finish_state:
+	# =========================================================
+	# WALK TOWARD PLAYER 1
+	# =========================================================
+	if distance > stopping_distance:
 
-			if Game.current_round == 2:
-				trigger_finish_state()
+		velocity.x = direction * SPEED
 
-		return
+		state = State.WALK
 
-	# =====================================================
-	# ACTION LOCK
-	# =====================================================
+		if not is_attacking and not is_hurting:
+			play_anim("walk")
 
-	if action_locked:
-		return
-
-	var dist = target.global_position.x - global_position.x
-	var direction = sign(dist)
-
-	if direction == 0:
-		direction = facing
-
-	# =====================================================
-	# TIMER
-	# =====================================================
-
+	# =========================================================
+	# AI ATTACK TIMER
+	# =========================================================
 	ai_timer -= delta
 
-	# =====================================================
-	# FACING
-	# =====================================================
-
-	facing = direction
-
-	sprite.flip_h = facing > 0
-	$Crispy.flip_h = facing > 0
-
-	# =====================================================
-	# MOVEMENT
-	# =====================================================
-
-	if not is_attacking:
-
-		if abs(dist) > 220:
-
-			velocity.x = direction * SPEED * 0.8
-			state = State.WALK
-
-			play_anim("walk")
-
-		else:
-
-			velocity.x = direction * SPEED * 0.8
-			state = State.WALK
-
-			play_anim("walk")
-
-	# =====================================================
-	# AI ACTIONS
-	# =====================================================
-
-	if ai_timer > 0:
+	if ai_timer > 0.0:
 		return
 
-	match Game.difficulty:
+	# =========================================================
+	# ATTACK ONLY WHEN CLOSE
+	# =========================================================
+	if (
+		distance <= attack_range
+		and not is_hurting
+		and not is_finish_state
+		and not action_locked
+		and not is_attacking
+	):
 
-		"Hard":
+		match Game.difficulty:
 
-			ai_timer = randf_range(
-				0.05,
-				0.15
-			)
+			"Hard":
 
-			var choice = randi() % 100
+				ai_timer = randf_range(
+					0.05,
+					0.15
+				)
 
-			if choice < 20:
+				var choice = randi() % 100
 
-				do_action("punch")
+				if choice < 20:
 
-			elif choice < 35:
+					do_action("punch")
 
-				do_action("highpunch")
+				elif choice < 35:
 
-			elif choice < 45:
+					do_action("highpunch")
 
-				do_action("lowpunch")
+				elif choice < 45:
 
-			elif choice < 60:
+					do_action("lowpunch")
 
-				do_action("kick")
+				elif choice < 60:
 
-			elif choice < 70:
+					do_action("kick")
 
-				do_action("highkick")
+				elif choice < 70:
 
-			elif choice < 80:
+					do_action("highkick")
 
-				do_action("lowkick")
+				elif choice < 80:
 
-			elif choice < 88:
+					do_action("lowkick")
 
-				do_action("uppercut")
+				elif choice < 88:
 
-			elif choice < 94:
+					do_action("uppercut")
 
-				do_action("roundhousekick")
+				elif choice < 94:
 
-			elif choice < 97:
+					do_action("roundhousekick")
 
-				start_spear()
+				elif choice < 97:
 
-			else:
+					start_spear()
 
-				shoot_player()
+				else:
 
-		"Easy":
+					shoot_player()
 
-			ai_timer = randf_range(
-				0.5,
-				0.9
-			)
+			"Easy":
 
-			var choice = randi() % 100
+				ai_timer = randf_range(
+					0.5,
+					0.9
+				)
 
-			if choice < 40:
+				var choice = randi() % 100
 
-				do_action("punch")
+				if choice < 40:
 
-			elif choice < 55:
+					do_action("punch")
 
-				do_action("kick")
+				elif choice < 55:
 
-			elif choice < 65:
+					do_action("kick")
 
-				do_action("highkick")
+				elif choice < 65:
 
-			elif choice < 75:
+					do_action("highkick")
 
-				do_action("lowkick")
+				elif choice < 75:
 
-			elif choice < 85:
+					do_action("lowkick")
 
-				do_action("uppercut")
+				elif choice < 85:
 
-			elif choice < 92:
+					do_action("uppercut")
 
-				start_spear()
+				elif choice < 92:
 
-			else:
+					start_spear()
 
-				do_action("roundhousekick")
+				else:
 
-		_:
+					do_action("roundhousekick")
 
-			ai_timer = randf_range(
-				0.25,
-				0.5
-			)
+			_:
 
-			var choice = randi() % 100
+				ai_timer = randf_range(
+					0.25,
+					0.5
+				)
 
-			if choice < 50:
+				var choice = randi() % 100
 
-				do_action("punch")
+				if choice < 50:
 
-			elif choice < 75:
+					do_action("punch")
 
-				do_action("kick")
+				elif choice < 75:
 
-			elif choice < 90:
+					do_action("kick")
 
-				do_action("uppercut")
+				elif choice < 90:
 
-			else:
+					do_action("uppercut")
 
-				shoot_player()
+				else:
+
+					shoot_player()
 
 
 # =========================================================
@@ -1513,10 +1557,6 @@ func spawn_attack(anim_name: String):
 # TAKE DAMAGE
 # =========================================================
 
-# =========================================================
-# TAKE DAMAGE
-# =========================================================
-
 func take_damage(amount: int):
 
 	# =====================================================
@@ -1744,6 +1784,8 @@ func take_damage(amount: int):
 # FINISH HIM
 # =========================================================
 
+
+
 func trigger_finish_state():
 
 	if is_finish_state:
@@ -1808,9 +1850,7 @@ func trigger_finish_state():
 		finish_label.visible = false
 
 
-# =========================================================
-# DEATH
-# =========================================================
+
 
 # =========================================================
 # DEATH
@@ -1870,13 +1910,6 @@ func die():
 	# =====================================================
 	# DETERMINE ROUND WINNER
 	# =====================================================
-	#
-	# If Reptile is P1:
-	#     CPU wins.
-	#
-	# Otherwise Reptile is CPU:
-	#     P1 wins.
-	# =====================================================
 
 	var winner := ""
 
@@ -1889,7 +1922,7 @@ func die():
 		winner = "player1"
 
 	# =====================================================
-	# PRINT DEBUG
+	# DEBUG
 	# =====================================================
 
 	print("================================")
@@ -1908,13 +1941,10 @@ func die():
 	# DETERMINE IF THIS DEATH ENDS THE MATCH
 	# =====================================================
 	#
-	# IMPORTANT:
+	# Level1 has not awarded this round yet.
 	#
-	# The score has NOT been incremented here yet.
-	# Level1 is responsible for awarding the round.
-	#
-	# If the winner already has 1 win, this death
-	# will give them their second win.
+	# If winner already has 1 round win,
+	# this death will be their SECOND win.
 	# =====================================================
 
 	var match_will_end := false
@@ -1946,11 +1976,13 @@ func die():
 		# BLOOD DEATH EFFECT
 		# -------------------------------------------------
 
-		var blood = BLOOD_DEATH.instantiate()
+		if BLOOD_DEATH != null:
 
-		get_tree().current_scene.add_child(blood)
+			var blood = BLOOD_DEATH.instantiate()
 
-		blood.global_position = global_position
+			get_tree().current_scene.add_child(blood)
+
+			blood.global_position = global_position
 
 		# -------------------------------------------------
 		# SHOW DEAD SPRITE
@@ -1959,7 +1991,7 @@ func die():
 		$Sprite.visible = false
 		$Crispy.visible = true
 
-		$Crispy.flip_h = facing > 0
+		$Crispy.flip_h = -facing > 0
 
 		# -------------------------------------------------
 		# HIDE FINISH HIM
@@ -1969,16 +2001,33 @@ func die():
 			finish_label.visible = false
 
 		# -------------------------------------------------
-		# WAIT FOR FINAL DEATH
+		# WAIT FOR FINAL DEATH / FATALITY
 		# -------------------------------------------------
 
 		await get_tree().create_timer(3.0).timeout
 
 		# -------------------------------------------------
-		# TELL LEVEL1
+		# TELL LEVEL1 WHO WON
 		# -------------------------------------------------
 
 		round_death.emit(winner)
+
+		# -------------------------------------------------
+		# GIVE LEVEL1 TIME TO AWARD FINAL ROUND
+		# -------------------------------------------------
+
+		await get_tree().create_timer(0.5).timeout
+
+		# -------------------------------------------------
+		# GO TO MAIN MENU
+		# -------------------------------------------------
+
+		print("================================")
+		print("REPTILE FATALITY COMPLETE")
+		print("RETURNING TO MAIN MENU")
+		print("================================")
+
+		get_tree().change_scene_to_file("res://MainMenu.tscn")
 
 		return
 
@@ -1986,19 +2035,14 @@ func die():
 	# NORMAL ROUND DEATH
 	# =====================================================
 	#
-	# This means the match is NOT over.
+	# Match is NOT over.
 	#
-	# Examples:
+	# Level1 receives round_death and handles:
 	#
-	# Score 0-0
-	# Reptile dies
-	# Winner gets Round 1
+	# - round winner
+	# - score
+	# - next round
 	#
-	# Score 1-0
-	# Reptile dies and CPU wins
-	# Score becomes 1-1
-	#
-	# Level1 handles the score and next round.
 	# =====================================================
 
 	print("================================")
@@ -2021,20 +2065,15 @@ func die():
 	$Sprite.visible = false
 	$Crispy.visible = true
 
-	$Crispy.flip_h = facing > 0
+	$Crispy.flip_h = -facing > 0
 
 	# =====================================================
-	# GIVE LEVEL1 CONTROL
+	# TELL LEVEL1
 	# =====================================================
 
 	round_death.emit(winner)
 
 	return
-
-
-# =========================================================
-# ANIMATION
-# =========================================================
 
 func play_anim(anim_name: String):
 
@@ -2097,6 +2136,9 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 	if not can_take_damage:
 		return
 
+	if state == State.DEAD:
+		return
+
 	# =====================================================
 	# ONLY ACCEPT REAL ATTACK GROUPS
 	# =====================================================
@@ -2114,44 +2156,110 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 		or area.is_in_group("IceBullet")
 		or area.is_in_group("KanoAttack")
 	):
-
 		return
 
 	hurt_cooldown = true
 
 	# =====================================================
-	# ANIMATION
+	# UPPERCUT
 	# =====================================================
 
-	var attack_name = area.get("attack_name")
+	if area.get("attack_name") == "uppercut":
 
-	if attack_name == "uppercut":
+		uppercut_launched = true
+		was_uppercut = true
 
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		state = State.JUMP
+
+		knockback_x = -facing * 100
+
+		velocity.x = knockback_x
+		velocity.y = jump_velocity
+
+		current_anim = ""
 		sprite.play("wasuppercut")
 
-	else:
+		if is_instance_valid(hurt_sound):
+			hurt_sound.play()
 
-		sprite.play("hurt")
+		take_damage(1)
+
+		hurt_cooldown = false
+
+		return
+
+		# =================================================
+		# RETURN TO IDLE
+		# =================================================
+
+		if state != State.DEAD:
+
+			uppercut_launched = false
+
+			velocity.x = 0
+			velocity.y = 0
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+			is_attacking = false
+			is_shooting = false
+			is_blocking = false
+
+			state = State.IDLE
+
+			current_anim = ""
+			play_anim("idle")
+
+		await get_tree().create_timer(0.2).timeout
+
+		hurt_cooldown = false
+
+		return
 
 	# =====================================================
-	# SOUND
+	# NORMAL HIT
 	# =====================================================
+
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
+	knockback_x = -facing * 100
+	velocity.x = knockback_x
+
+	current_anim = ""
+	sprite.play("hurt")
 
 	if is_instance_valid(hurt_sound):
 		hurt_sound.play()
 
-	# =====================================================
-	# KNOCKBACK
-	# =====================================================
-
-	knockback_x = -facing * 100
-
-	# =====================================================
-	# DAMAGE
-	# =====================================================
-
 	take_damage(1)
 
 	await get_tree().create_timer(0.2).timeout
+
+	if state != State.DEAD:
+
+		is_hurting = false
+		hurt_locked = false
+		action_locked = false
+
+		state = State.IDLE
+		velocity.x = 0
+
+		current_anim = ""
+		play_anim("idle")
 
 	hurt_cooldown = false
