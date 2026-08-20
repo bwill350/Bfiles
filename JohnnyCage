@@ -41,6 +41,7 @@ var run_locked := false
 var waiting_for_cannonkick_direction := false
 var jump_held := false
 var uppercut_launched := false
+var spear_pull_animation_locked := false
 
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
@@ -374,45 +375,110 @@ func _physics_process(delta):
 	move_and_slide()
 
 func spear_pulled_to_p1():
-	print("START PULL")
+
+	print("START JOHNNY CAGE SPEAR PULL")
 
 	is_pulled = true
+	spear_pull_animation_locked = true
+
 	stunned = true
 	action_locked = true
-	is_hurting = true
+	is_hurting = false
+	hurt_locked = false
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
+	state = State.IDLE
+
+	velocity = Vector2.ZERO
+
+	# =====================================================
+	# STOP WHATEVER ANIMATION WAS PLAYING
+	# =====================================================
+
+	sprite.stop()
+
+	# Do NOT play idle, hurt, walk, run, jump, etc.
+	current_anim = ""
 
 	pull_timer = 0.35
 
 	pull_target = get_tree().get_first_node_in_group("Reptile")
 
 func run_pull_logic(delta):
-	print("Running pull logic")
+
+	print("Running Johnny Cage pull logic")
+
+	# =====================================================
+	# NO ANIMATION WHILE BEING PULLED
+	# =====================================================
+
+	if spear_pull_animation_locked:
+		sprite.stop()
+		current_anim = ""
+
+	# =====================================================
+	# FIND PULL TARGET
+	# =====================================================
+
 	if pull_target == null or !is_instance_valid(pull_target):
+
 		is_pulled = false
+		spear_pull_animation_locked = false
+
 		stunned = false
 		action_locked = false
+		is_hurting = false
+
+		velocity = Vector2.ZERO
+
 		return
 
-	var dir = sign(pull_target.global_position.x - global_position.x)
+	# =====================================================
+	# PULL JOHNNY TOWARD REPTILE
+	# =====================================================
+
+	var dir = sign(
+		pull_target.global_position.x -
+		global_position.x
+	)
 
 	velocity.x = dir * 900
 	velocity.y = -120
 
 	pull_timer -= delta
 
+	# =====================================================
+	# PULL FINISHED
+	# =====================================================
+
 	if pull_timer <= 0.0:
 
 		is_pulled = false
+		spear_pull_animation_locked = false
 
-		# SNAP to Reptile AttackMarker (THIS IS MK MOMENT)
-		global_position = pull_target.attack_marker.global_position + Vector2(40 * pull_target.facing, 0)
+		# Snap to Reptile's attack marker
+		global_position = (
+			pull_target.attack_marker.global_position
+			+ Vector2(40 * pull_target.facing, 0)
+		)
+
+		velocity = Vector2.ZERO
 
 		stunned = false
 		is_hurting = false
+		hurt_locked = false
 		action_locked = false
+
 		is_attacking = true
 
 		pull_target = null
+
+		# IMPORTANT:
+		# Do not force an animation here.
+		# The spear's actual hit will decide whether
+		# Johnny plays hurt / wasuppercut.
 
 # ---------------- BLOCK ----------------
 func start_block():
@@ -466,132 +532,345 @@ func shoot_acid():
 
 # ---------------- CPU ----------------
 func cpu_logic(delta):
-	# ---------------- HURT PRIORITY ----------------
-	if is_hurting:
 
-		if is_spear_pulled:
-				velocity.x = -facing * -600
-		else:
-			velocity.x = -facing * 100
-
-	# gradually reduce knockback
-		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
-
-		if abs(knockback_x) < 10:
-			knockback_x = 0
-			is_hurting = false
-
-			velocity.y += GRAVITY * delta
-			move_and_slide()
-			return
-
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
+	# =========================================================
+	# DEAD
+	# =========================================================
+	if state == State.DEAD:
 		return
 
-	var dist = target.global_position.x - global_position.x
-	var direction = sign(dist)
+	# =========================================================
+	# STOP ALL ACTIONS AT 1HP
+	# =========================================================
+	if health <= 1:
 
-	# HARD LOCK (Liu Kang style behavior)
-	if action_locked:
-		return
-
-# STOP ALL ACTIONS AT 1HP
-	if is_finish_state:
+		health = 0
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
-		move_and_slide()
+		combo.clear()
+
+		# Stop CPU from continuing to attack
+		if "is_cpu" in self:
+			is_cpu = false
+
+		# Make sure health UI shows exactly 1
+		health_changed.emit(health)
+
 		return
 
+	# =========================================================
+	# FINISH HIM
+	# =========================================================
+	if is_finish_state:
+
+		velocity.x = 0.0
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
+
+		velocity.y += GRAVITY * delta
+		move_and_slide()
+
+		return
+
+	# =========================================================
+	# ALWAYS FIND PLAYER 1
+	# =========================================================
+	if target == null or not is_instance_valid(target):
+
+		target = get_tree().get_first_node_in_group("player1")
+
+		if target == null or not is_instance_valid(target):
+
+			for node in get_tree().get_nodes_in_group("Fighter"):
+
+				if node == self:
+					continue
+
+				if not is_instance_valid(node):
+					continue
+
+				if node is Node2D and not node.is_cpu:
+					target = node
+					break
+
+	# =========================================================
+	# NO PLAYER FOUND
+	# =========================================================
+	if target == null or not is_instance_valid(target):
+
+		# CPU still walks instead of standing idle
+		state = State.WALK
+		velocity.x = facing * SPEED
+
+		if not is_attacking and not is_hurting:
+			play_anim("walk")
+
+		velocity.y += GRAVITY * delta
+		move_and_slide()
+
+		ai_timer = 0.01
+
+		return
+
+	# =========================================================
+	# GRAVITY
+	# =========================================================
+	velocity.y += GRAVITY * delta
+
+	# =========================================================
+	# UPPERCUT RECOVERY
+	# =========================================================
+	if uppercut_launched:
+
+		velocity.x = 0.0
+		move_and_slide()
+
+		if is_on_floor():
+
+			uppercut_launched = false
+			velocity.y = 0.0
+
+			# FIND PLAYER 1 AGAIN
+			target = get_tree().get_first_node_in_group("player1")
+
+			ai_timer = 0.01
+
+		return
+
+	# =========================================================
+	# HURT RECOVERY
+	# =========================================================
+	if is_hurting:
+
+		velocity.x = knockback_x
+
+		knockback_x = move_toward(
+			knockback_x,
+			0.0,
+			1500.0 * delta
+		)
+
+		move_and_slide()
+
+		# Still getting knocked backward
+		if abs(knockback_x) > 10.0:
+			return
+
+		# =====================================================
+		# HURT IS FINISHED
+		# =====================================================
+
+		knockback_x = 0.0
+
+		is_hurting = false
+		hurt_locked = false
+		is_attacking = false
+		is_shooting = false
+		action_locked = false
+
+		state = State.IDLE
+
+		current_anim = ""
+		play_anim("idle")
+
+		# =====================================================
+		# IMMEDIATELY FIND PLAYER 1
+		# =====================================================
+
+		target = get_tree().get_first_node_in_group("player1")
+
+		# Backup search
+		if target == null or not is_instance_valid(target):
+
+			for node in get_tree().get_nodes_in_group("Fighter"):
+
+				if node == self:
+					continue
+
+				if not is_instance_valid(node):
+					continue
+
+				if node is Node2D and not node.is_cpu:
+					target = node
+					break
+
+		# =====================================================
+		# DO NOT WAIT
+		# =====================================================
+
+		ai_timer = 0.01
+
+		# Continue AI immediately on next physics frame
+		return
+
+	# =========================================================
+	# ACTION LOCK
+	# =========================================================
+	if action_locked:
+
+		velocity.x = 0.0
+		move_and_slide()
+
+		return
+
+	# =========================================================
+	# TARGET VALIDATION
+	# =========================================================
+	if target == null or not is_instance_valid(target):
+
+		target = get_tree().get_first_node_in_group("player1")
+
+		if target == null or not is_instance_valid(target):
+
+			velocity.x = 0.0
+			state = State.IDLE
+			play_anim("idle")
+
+			move_and_slide()
+
+			ai_timer = 0.01
+
+			return
+
+	# =========================================================
+	# DISTANCE TO PLAYER 1
+	# =========================================================
+	var dist: float = target.global_position.x - global_position.x
+	var distance: float = abs(dist)
+	var direction: float = sign(dist)
+
+	# =========================================================
+	# FACE PLAYER 1
+	# =========================================================
+	if direction != 0:
+
+		facing = direction
+
+		sprite.flip_h = facing > 0
+		$Crispy.flip_h = facing > 0
+
+		$AttackMarker.position = Vector2(0, 0)
+		$JohnnyCageShoot.position = Vector2(63 * facing, -225)
+
+	# =========================================================
+	# ATTACK DISTANCE
+	# =========================================================
+	var attack_range := 110.0
+
+	# =========================================================
+	# ALWAYS CHASE PLAYER 1
+	# =========================================================
+	velocity.x = direction * SPEED * 1.05
+
+	state = State.RUN
+
+	if not is_attacking and not is_hurting:
+		play_anim("walk")
+
+	# =========================================================
+	# AI ATTACK TIMER
+	# =========================================================
 	ai_timer -= delta
 
-	velocity.y += GRAVITY * delta
-	facing = direction
-	sprite.flip_h = facing > 0
-	$Crispy.flip_h = facing > 0
+	if ai_timer <= 0.0:
 
-# ---------------- MOVEMENT ----------------
-	if abs(dist) > 220:
+		# =====================================================
+		# ATTACK PLAYER 1
+		# =====================================================
+		if (
+			distance <= attack_range
+			and not is_hurting
+			and not is_finish_state
+			and not action_locked
+			and not is_attacking
+		):
 
-		velocity.x = direction * SPEED * 0.8
+			match Game.difficulty:
 
-	if state != State.RUN:
-		state = State.RUN
+				# =================================================
+				# HARD
+				# =================================================
+				"Hard":
 
-	if not is_attacking:
-		play_anim("walk")
+					# Very fast reactions
+					ai_timer = randf_range(0.05, 0.15)
 
-	if abs(dist) > 220:
-		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
-		play_anim("walk")
-	else:
-		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
-		play_anim("walk")
+					var choice = randi() % 100
 
-# ---------------- AI ACTIONS ----------------
-	if ai_timer <= 0:
+					if choice < 20:
+						do_action("punch")
 
-		match Game.difficulty:
+					elif choice < 20:
+						do_action("highpunch")
 
-			"Hard":
+					elif choice < 20:
+						do_action("lowpunch")
 
-				# Very fast reactions
-				ai_timer = randf_range(0.05, 0.15)
+					elif choice < 40:
+						do_action("kick")
 
-				var choice = randi() % 100
+					elif choice < 40:
+						do_action("lowkick")
 
-				if choice < 20:
-					do_action("punch")
-				elif choice < 20:
-					do_action("highpunch")
-				elif choice < 20:
-					do_action("lowpunch")
-				elif choice < 40:
-					do_action("kick")
-				elif choice < 40:
-					do_action("lowkick")
-				elif choice < 40:
-					do_action("highkick")
-				elif choice < 65:
-					do_action("uppercut")
-				elif choice < 80:
-					do_action("roundhousekick")
-				elif choice < 90:
-					do_action("cannonkick")
-				elif choice < 95:
-					do_action("nutcracker")
-				else:
-					shoot_player()
+					elif choice < 40:
+						do_action("highkick")
 
-			"Easy":
+					elif choice < 65:
+						do_action("uppercut")
 
-				ai_timer = randf_range(0.5, 0.9)
+					elif choice < 80:
+						do_action("roundhousekick")
 
-				var choice = randi() % 100
+					elif choice < 90:
+						do_action("cannonkick")
 
-				if choice < 40:
-					do_action("punch")
-				elif choice < 45:
-					do_action("highpunch")
-				elif choice < 50:
-					do_action("lowpunch")
-				elif choice < 70:
-					do_action("kick")
-				elif choice < 70:
-					do_action("highkick")
-				elif choice < 70:
-					do_action("lowkick")
-				elif choice < 85:
-					do_action("uppercut")
-				elif choice < 90:
-					do_action("cannonkick")
-				elif choice < 95:
-					do_action("nutcracker")
-				else:
-					do_action("roundhousekick")
+					elif choice < 95:
+						do_action("nutcracker")
+
+					else:
+						shoot_player()
+
+				# =================================================
+				# EASY
+				# =================================================
+				"Easy":
+
+					ai_timer = randf_range(0.5, 0.9)
+
+					var choice = randi() % 100
+
+					if choice < 40:
+						do_action("punch")
+
+					elif choice < 45:
+						do_action("highpunch")
+
+					elif choice < 50:
+						do_action("lowpunch")
+
+					elif choice < 70:
+						do_action("kick")
+
+					elif choice < 70:
+						do_action("highkick")
+
+					elif choice < 70:
+						do_action("lowkick")
+
+					elif choice < 85:
+						do_action("uppercut")
+
+					elif choice < 90:
+						do_action("cannonkick")
+
+					elif choice < 95:
+						do_action("nutcracker")
+
+					else:
+						do_action("roundhousekick")
 
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
@@ -1367,7 +1646,9 @@ func play_anim(anim_name: String):
 		current_anim = anim_name
 
 # ---------------- HURT BOX ----------------
+# ---------------- HURT BOX ----------------
 func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
+
 	if hurt_cooldown:
 		return
 
@@ -1377,31 +1658,133 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 	if not can_take_damage:
 		return
 
+	# =====================================================
+	# DETERMINE IF THIS IS AN UPPERCUT
+	# =====================================================
+
+	var was_uppercut := false
+
 	if area.get("attack_name") and area.attack_name == "uppercut":
-		$Sprite.play("wasuppercut")
-	else:
-		$Sprite.play("hurt")
+		was_uppercut = true
 
-	$Hurt.play()
+	# =====================================================
+	# NORMAL DAMAGE SOURCES
+	# =====================================================
 
-	# ---------------- NORMAL DAMAGE SOURCES ----------------
-	if area.is_in_group("HitBox") \
-		or area.is_in_group("ReptileAcid") \
-		or area.is_in_group("ReptileBullet") \
-		or area.is_in_group("RaidenElectricBullet") \
-		or area.is_in_group("FireBullet") \
-		or area.is_in_group("Fireball") \
-		or area.is_in_group("SonyaBullet") \
-		or area.is_in_group("JohnnyCageBullet") \
-		or area.is_in_group("KanoBullet") \
-		or area.is_in_group("IceBullet") \
-		or area.is_in_group("Subzerobullet") \
-		or area.is_in_group("SubzeroAttack") \
-		or area.is_in_group("KanoAttack"):
+	if not (
+		area.is_in_group("HitBox")
+		or area.is_in_group("ReptileAcid")
+		or area.is_in_group("ReptileBullet")
+		or area.is_in_group("RaidenElectricBullet")
+		or area.is_in_group("FireBullet")
+		or area.is_in_group("Fireball")
+		or area.is_in_group("SonyaBullet")
+		or area.is_in_group("JohnnyCageBullet")
+		or area.is_in_group("KanoBullet")
+		or area.is_in_group("IceBullet")
+		or area.is_in_group("Subzerobullet")
+		or area.is_in_group("SubzeroAttack")
+		or area.is_in_group("KanoAttack")
+	):
+		return
 
-		hurt_cooldown = true
+	# =====================================================
+	# LOCK MULTIPLE HITS
+	# =====================================================
+
+	hurt_cooldown = true
+
+	# =====================================================
+	# UPPERCUT
+	# =====================================================
+
+	if was_uppercut:
+
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		state = State.IDLE
 
 		knockback_x = -facing * 100
-		take_damage(1)
-		await get_tree().create_timer(0.2).timeout
+
+		# Play the uppercut reaction
+		current_anim = ""
+		sprite.play("wasuppercut")
+		sprite.play("idle")
+
+	else:
+
+		# Normal hurt
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		state = State.IDLE
+
+		knockback_x = -facing * 100
+
+		current_anim = ""
+		sprite.play("hurt")
+
+	# =====================================================
+	# SOUND
+	# =====================================================
+
+	if is_instance_valid(hurt_sound):
+		hurt_sound.play()
+
+	# =====================================================
+	# DAMAGE
+	# =====================================================
+
+	take_damage(1)
+
+	# =====================================================
+	# WAIT FOR UPPERCUT / HURT ANIMATION
+	# =====================================================
+
+	await sprite.animation_finished
+
+	# =====================================================
+	# DEAD CHECK
+	# =====================================================
+
+	if state == State.DEAD:
 		hurt_cooldown = false
+		return
+
+	if is_finish_state:
+		hurt_cooldown = false
+		return
+
+	# =====================================================
+	# RETURN TO IDLE
+	# =====================================================
+
+	is_hurting = false
+	hurt_locked = false
+	action_locked = false
+	is_attacking = false
+	is_shooting = false
+
+	knockback_x = 0.0
+
+	state = State.IDLE
+
+	current_anim = ""
+	play_anim("idle")
+
+	# =====================================================
+	# RELEASE HURT COOLDOWN
+	# =====================================================
+
+	await get_tree().create_timer(0.2).timeout
+
+	hurt_cooldown = false
