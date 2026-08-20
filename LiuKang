@@ -640,45 +640,175 @@ func end_grab():
 	play_anim("idle")
 
 func spear_pulled_to_p1():
-	print("START PULL")
+
+	if state == State.DEAD:
+		return
+
+	print("LIU KANG PULLED")
+
+	# =====================================================
+	# LOCK LIU KANG DURING PULL
+	# =====================================================
 
 	is_pulled = true
 	stunned = true
+
 	action_locked = true
-	is_hurting = true
+	hurt_locked = true
+	is_hurting = false
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
+	flyingkick_active = false
+	bicyclekick_active = false
+	special_move = false
+	uppercut_launched = false
+	was_uppercut = false
+
+	velocity = Vector2.ZERO
+
+	# Cancel any combo
+	combo.clear()
+	combo_timer = 0.0
+
+	# Force idle animation
+	current_anim = ""
+	play_anim("idle")
 
 	pull_timer = 0.35
 
+	# Find Reptile
 	pull_target = get_tree().get_first_node_in_group("Reptile")
 
+
 func run_pull_logic(delta):
-	print("Running pull logic")
-	if pull_target == null or !is_instance_valid(pull_target):
+
+	# =====================================================
+	# NO TARGET
+	# =====================================================
+
+	if pull_target == null or not is_instance_valid(pull_target):
+
 		is_pulled = false
 		stunned = false
+
 		action_locked = false
+		hurt_locked = false
+		is_hurting = false
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		velocity = Vector2.ZERO
+
+		state = State.IDLE
+
+		current_anim = ""
+		play_anim("idle")
+
 		return
 
-	var dir = sign(pull_target.global_position.x - global_position.x)
 
-	velocity.x = dir * 900
-	velocity.y = -120
+	# =====================================================
+	# PULL LIU KANG TOWARD REPTILE
+	# =====================================================
+
+	var dir: float = sign(
+		pull_target.global_position.x -
+		global_position.x
+	)
+
+	velocity.x = dir * 900.0
+	velocity.y = -120.0
 
 	pull_timer -= delta
+
+
+	# =====================================================
+	# PULL FINISHED
+	# =====================================================
 
 	if pull_timer <= 0.0:
 
 		is_pulled = false
 
-		# SNAP to Reptile AttackMarker (THIS IS MK MOMENT)
-		global_position = pull_target.attack_marker.global_position + Vector2(40 * pull_target.facing, 0)
+		# Snap Liu Kang beside Reptile
+		global_position = (
+			pull_target.attack_marker.global_position
+			+ Vector2(
+				40.0 * pull_target.facing,
+				0.0
+			)
+		)
+
+		# =================================================
+		# COMPLETELY CANCEL ALL ACTIONS
+		# =================================================
+
+		velocity = Vector2.ZERO
 
 		stunned = false
+
 		is_hurting = false
+		hurt_locked = false
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
 		action_locked = false
-		is_attacking = true
+
+		flyingkick_active = false
+		bicyclekick_active = false
+		special_move = false
+		uppercut_launched = false
+		was_uppercut = false
+
+		grabbed_enemy = null
+		is_grabbing = false
+
+		combo.clear()
+		combo_timer = 0.0
+
+		# =================================================
+		# FORCE IDLE
+		# =================================================
+
+		state = State.IDLE
+
+		current_anim = ""
+		play_anim("idle")
+
+		# =================================================
+		# FACE REPTILE
+		# =================================================
+
+		if is_instance_valid(pull_target):
+
+			var face_dir: float = sign(
+				pull_target.global_position.x -
+				global_position.x
+			)
+
+			if face_dir != 0.0:
+				facing = face_dir
+
+			sprite.flip_h = facing > 0
+			$Crispy.flip_h = facing > 0
+
+			$AttackMarker.position = Vector2(0, 0)
+
+			$LiuKangShoot.position = Vector2(
+				63 * facing,
+				-225
+			)
 
 		pull_target = null
+
+		print("LIU KANG PULL FINISHED - IDLE")
 
 func invisible() -> void:
 	sprite.visible = false
