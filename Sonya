@@ -250,6 +250,7 @@ func _physics_process(delta):
 	if uppercut_launched:
 
 		move_and_slide()
+		play_anim("idle")
 
 		if is_on_floor():
 			uppercut_launched = false
@@ -422,73 +423,155 @@ func run_pull_logic(delta):
 		pull_target = null
 
 func cpu_logic(delta):
-	# ---------------- HURT PRIORITY ----------------
-	if is_hurting:
 
-		if is_spear_pulled:
-				velocity.x = -facing * -600
-		else:
-			velocity.x = -facing * 100
-
-	# gradually reduce knockback
-		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
-
-		if abs(knockback_x) < 10:
-			knockback_x = 0
-			is_hurting = false
-
-			velocity.y += GRAVITY * delta
-			move_and_slide()
-			return
-
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
+	# =========================================================
+	# DEAD
+	# =========================================================
+	if state == State.DEAD:
 		return
 
-	var dist = target.global_position.x - global_position.x
-	var direction = sign(dist)
-
-	# HARD LOCK (Liu Kang style behavior)
-	if action_locked:
-		return
-
-# STOP ALL ACTIONS AT 1HP
+	# =========================================================
+	# FINISH HIM
+	# =========================================================
 	if is_finish_state:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
-		move_and_slide()
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
+
 		return
 
+	# =========================================================
+	# HURT
+	# =========================================================
+	if is_hurting:
+
+		velocity.x = knockback_x
+
+		knockback_x = move_toward(
+			knockback_x,
+			0.0,
+			1500.0 * delta
+		)
+
+		move_and_slide()
+
+		if abs(knockback_x) > 10.0:
+			return
+
+		knockback_x = 0.0
+		is_hurting = false
+		hurt_locked = false
+		is_attacking = false
+		is_shooting = false
+		action_locked = false
+
+		state = State.IDLE
+		play_anim("idle")
+
+		ai_timer = 0.1
+
+		return
+
+	# =========================================================
+	# ACTION LOCK
+	# =========================================================
+	if action_locked:
+		velocity.x = 0
+		return
+
+	# =========================================================
+	# FIND PLAYER 1
+	# =========================================================
+	if target == null or not is_instance_valid(target):
+
+		target = get_tree().get_first_node_in_group("player1")
+
+		# Backup: find human Fighter
+		if target == null or not is_instance_valid(target):
+
+			for node in get_tree().get_nodes_in_group("Fighter"):
+
+				if node == self:
+					continue
+
+				if not is_instance_valid(node):
+					continue
+
+				if node is Node2D and not node.is_cpu:
+					target = node
+					break
+
+	# =========================================================
+	# NO TARGET
+	# =========================================================
+	if target == null or not is_instance_valid(target):
+
+		velocity.x = 0
+		state = State.IDLE
+		play_anim("idle")
+
+		return
+
+	# =========================================================
+	# DISTANCE TO PLAYER 1
+	# =========================================================
+	var dist: float = target.global_position.x - global_position.x
+	var distance: float = abs(dist)
+	var direction: float = sign(dist)
+
+	# =========================================================
+	# FACE PLAYER 1
+	# =========================================================
+	if direction != 0:
+
+		facing = direction
+
+		sprite.flip_h = facing > 0
+		$Crispy.flip_h = facing > 0
+
+		$AttackMarker.position = Vector2(0, 0)
+		$SonyaShoot.position = Vector2(63 * facing, -225)
+
+	# =========================================================
+	# CPU DISTANCES
+	# =========================================================
+	var attack_range := 110.0
+	var stopping_distance := 90.0
+
+	# =========================================================
+	# WALK TOWARD PLAYER 1
+	# =========================================================
+	if distance > stopping_distance:
+
+		velocity.x = direction * SPEED
+
+		state = State.WALK
+
+		if not is_attacking and not is_hurting:
+			play_anim("walk")
+
+	# =========================================================
+	# AI ATTACK TIMER
+	# =========================================================
 	ai_timer -= delta
 
-	velocity.y += GRAVITY * delta
-	facing = direction
-	sprite.flip_h = facing > 0
-	$Crispy.flip_h = facing > 0
+	if ai_timer > 0.0:
+		return
 
-# ---------------- MOVEMENT ----------------
-	if abs(dist) > 220:
-
-		velocity.x = direction * SPEED * 0.8
-
-	if state != State.RUN:
-		state = State.RUN
-
-	if not is_attacking:
-		play_anim("walk")
-
-	if abs(dist) > 220:
-		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
-		play_anim("walk")
-	else:
-		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
-		play_anim("walk")
-
-# ---------------- AI ACTIONS ----------------
-	if ai_timer <= 0:
+	# =========================================================
+	# ATTACK ONLY WHEN CLOSE
+	# =========================================================
+	if (
+		distance <= attack_range
+		and not is_hurting
+		and not is_finish_state
+		and not action_locked
+		and not is_attacking
+	):
 
 		match Game.difficulty:
 
