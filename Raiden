@@ -239,36 +239,108 @@ func end_electricfly():
 
 func _on_health_changed(h):
 
+	# =========================================================
+	# 1 HP — RAiden MUST RETURN TO IDLE
+	# =========================================================
 	if h == 1 and not is_finish_state:
 
-		is_finish_state = true
+		# -----------------------------------------------------
+		# STOP ALL HURT / ATTACK STATES
+		# -----------------------------------------------------
 
 		is_attacking = false
 		is_shooting = false
 		is_hurting = false
+		is_blocking = false
 
 		action_locked = false
 		hurt_locked = false
+		hurt_cooldown = false
 
-		state = State.IDLE
+		stunned = false
+		knockback_x = 0.0
 		velocity = Vector2.ZERO
 
-		# ---------------- DELAYED CONFIRMATION ----------------
+		# -----------------------------------------------------
+		# FORCE RAiden BACK TO NORMAL STATE
+		# -----------------------------------------------------
+
+		state = State.IDLE
+
+		# Make sure the normal sprite is visible
+		if is_instance_valid(sprite):
+			sprite.visible = true
+
+		# Hide dead sprite if it was showing
+		if has_node("Crispy"):
+			$Crispy.visible = false
+
+		# -----------------------------------------------------
+		# IMPORTANT:
+		# Cancel hurt/laying animation and return to IDLE
+		# -----------------------------------------------------
+
+		current_anim = ""
+
+		if is_instance_valid(sprite):
+			sprite.play("idle")
+
+		# -----------------------------------------------------
+		# FINISH HIM
+		# -----------------------------------------------------
+
+		is_finish_state = true
+
+		# Small delay before showing FINISH HIM
 		await get_tree().create_timer(0.2).timeout
 
-		# double-check health didn’t change again
-		if health == 1 and state != State.DEAD:
+		# -----------------------------------------------------
+		# CHECK AGAIN
+		# -----------------------------------------------------
 
-			if finish_label:
-				finish_label.visible = true
+		if health != 1:
+			return
 
-				if finish_label.has_method("start_flicker"):
-					finish_label.start_flicker(2.0, 0.05)
+		if state == State.DEAD:
+			return
 
-			await get_tree().create_timer(2.0).timeout
+		# -----------------------------------------------------
+		# FORCE IDLE ONE MORE TIME
+		# -----------------------------------------------------
 
-			if is_instance_valid(finish_label):
-				finish_label.visible = false
+		is_hurting = false
+		hurt_locked = false
+		action_locked = false
+		is_attacking = false
+		is_shooting = false
+		velocity = Vector2.ZERO
+		state = State.IDLE
+
+		current_anim = ""
+
+		if is_instance_valid(sprite):
+			sprite.visible = true
+			sprite.play("idle")
+
+		# -----------------------------------------------------
+		# SHOW FINISH HIM
+		# -----------------------------------------------------
+
+		if is_instance_valid(finish_label):
+
+			finish_label.visible = true
+
+			if finish_label.has_method("start_flicker"):
+				finish_label.start_flicker(2.0, 0.05)
+
+		# -----------------------------------------------------
+		# KEEP RAiden IDLE DURING FINISH HIM
+		# -----------------------------------------------------
+
+		await get_tree().create_timer(2.0).timeout
+
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
 
 # ---------------- READY ----------------
 func _ready():
@@ -570,71 +642,169 @@ func run_pull_logic(delta):
 		pull_target = null
 
 func cpu_logic(delta):
-	# ---------------- HURT PRIORITY ----------------
-	if is_hurting:
 
-		if is_spear_pulled:
-				velocity.x = -facing * -400
-		else:
-			velocity.x = -facing * 100
-
-	# gradually reduce knockback
-		knockback_x = move_toward(knockback_x, 0, 1500 * delta)
-
-		if abs(knockback_x) < 10:
-			knockback_x = 0
-			is_hurting = false
-
-			move_and_slide()
-			return
-
-	if target == null or !is_instance_valid(target):
-		velocity.x = 0
+	# =========================================================
+	# DEAD
+	# =========================================================
+	if state == State.DEAD:
 		return
 
-	var dist = target.global_position.x - global_position.x
-	var direction = sign(dist)
-
-	# HARD LOCK (Liu Kang style behavior)
-	if action_locked:
-		return
-
-# STOP ALL ACTIONS AT 1HP
+	# =========================================================
+	# FINISH HIM
+	# =========================================================
 	if is_finish_state:
 		is_attacking = false
 		action_locked = true
 		velocity.x = 0
-		move_and_slide()
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
+
 		return
 
+	# =========================================================
+	# HURT
+	# =========================================================
+	if is_hurting:
+
+		velocity.x = knockback_x
+
+		knockback_x = move_toward(
+			knockback_x,
+			0.0,
+			1500.0 * delta
+		)
+
+		move_and_slide()
+
+		if abs(knockback_x) > 10.0:
+			return
+
+		knockback_x = 0.0
+		is_hurting = false
+		hurt_locked = false
+		is_attacking = false
+		is_shooting = false
+		action_locked = false
+
+		state = State.IDLE
+		play_anim("idle")
+
+		ai_timer = 0.1
+
+		return
+
+	# =========================================================
+	# ACTION LOCK
+	# =========================================================
+	if action_locked:
+		velocity.x = 0
+		return
+
+	# =========================================================
+	# FIND PLAYER 1
+	# =========================================================
+	if target == null or not is_instance_valid(target):
+
+		target = get_tree().get_first_node_in_group("player1")
+
+		# Backup: find human Fighter
+		if target == null or not is_instance_valid(target):
+
+			for node in get_tree().get_nodes_in_group("Fighter"):
+
+				if node == self:
+					continue
+
+				if not is_instance_valid(node):
+					continue
+
+				if node is Node2D and not node.is_cpu:
+					target = node
+					break
+
+	# =========================================================
+	# NO TARGET
+	# =========================================================
+	if target == null or not is_instance_valid(target):
+
+		velocity.x = 0
+		state = State.IDLE
+		play_anim("idle")
+
+		return
+
+	# =========================================================
+	# DISTANCE TO PLAYER 1
+	# =========================================================
+	var dist: float = target.global_position.x - global_position.x
+	var distance: float = abs(dist)
+	var direction: float = sign(dist)
+
+	# =========================================================
+	# FACE PLAYER 1
+	# =========================================================
+	if direction != 0:
+
+		facing = direction
+
+		sprite.flip_h = facing > 0
+		$Crispy.flip_h = facing > 0
+
+		$AttackMarker.position = Vector2(0, 0)
+		$Raidenshoot.position = Vector2(63 * facing, -225)
+
+	# =========================================================
+	# CPU DISTANCES
+	# =========================================================
+	var attack_range := 120.0
+	var stopping_distance := 100.0
+
+	# =========================================================
+	# WALK TOWARD PLAYER 1
+	# =========================================================
+	if distance > stopping_distance:
+
+		# Move toward Player 1
+		velocity.x = direction * SPEED
+
+		# Set walking state
+		state = State.WALK
+
+		# Play walk animation
+		if not is_attacking and not is_hurting:
+			play_anim("walk")
+
+	# =========================================================
+	# STOP WHEN CLOSE ENOUGH
+	# =========================================================
+	else:
+
+		velocity.x = 0
+		state = State.IDLE
+
+		if not is_attacking and not is_hurting:
+			play_anim("idle")
+
+	# =========================================================
+	# AI ATTACK TIMER
+	# =========================================================
 	ai_timer -= delta
 
-	facing = direction
-	sprite.flip_h = facing > 0
-	$Crispy.flip_h = facing > 0
+	if ai_timer > 0.0:
+		return
 
-# ---------------- MOVEMENT ----------------
-	if abs(dist) > 220:
-
-		velocity.x = direction * SPEED * 0.8
-
-	if state != State.RUN:
-		state = State.RUN
-
-	if not is_attacking:
-		play_anim("walk")
-
-	if abs(dist) > 220:
-		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
-		play_anim("walk")
-	else:
-		velocity.x = direction * SPEED * 0.8
-		state = State.RUN
-		play_anim("walk")
-
-# ---------------- AI ACTIONS ----------------
-	if ai_timer <= 0:
+	# =========================================================
+	# ATTACK ONLY WHEN CLOSE
+	# =========================================================
+	if (
+		distance <= attack_range
+		and not is_hurting
+		and not is_finish_state
+		and not action_locked
+		and not is_attacking
+	):
 
 		match Game.difficulty:
 
@@ -686,10 +856,12 @@ func cpu_logic(delta):
 					do_action("lowkick")
 				elif choice < 85:
 					do_action("uppercut")
-				elif choice < 85:
+				elif choice < 95:
 					do_action("electricfly")
-				else:
+				elif choice < 95:
 					do_action("roundhousekick")
+				else:
+					shoot_player()
 
 # ---------------- SHOOT ----------------
 func shoot_player():
@@ -902,6 +1074,11 @@ func spawn_attack(anim_name: String):
 # TAKE DAMAGE
 # =========================================================
 
+# ---------------- DAMAGE ----------------
+# =========================================================
+# TAKE DAMAGE
+# =========================================================
+
 func take_damage(amount: int):
 
 	# =====================================================
@@ -917,7 +1094,6 @@ func take_damage(amount: int):
 	if spawn_protection:
 		return
 
-
 	# =====================================================
 	# PREVENT MULTIPLE DAMAGE ON SAME PHYSICS FRAME
 	# =====================================================
@@ -931,7 +1107,6 @@ func take_damage(amount: int):
 
 	set_meta("last_damage_frame", frame)
 
-
 	# =====================================================
 	# TEMPORARY DAMAGE COOLDOWN
 	# =====================================================
@@ -944,7 +1119,6 @@ func take_damage(amount: int):
 			if is_instance_valid(self) and state != State.DEAD:
 				can_take_damage = true
 	)
-
 
 	# =====================================================
 	# BLOCK REDUCTION
@@ -960,12 +1134,12 @@ func take_damage(amount: int):
 	if amount <= 0:
 		return
 
-
 	# =====================================================
 	# APPLY DAMAGE
 	# =====================================================
 
 	health -= amount
+
 	health = max(
 		health,
 		0
@@ -979,14 +1153,12 @@ func take_damage(amount: int):
 
 	health_changed.emit(health)
 
-
 	# =====================================================
 	# HIT SOUND
 	# =====================================================
 
 	if is_instance_valid(hit_sound):
 		hit_sound.play()
-
 
 	# =====================================================
 	# FINAL HIT
@@ -999,6 +1171,11 @@ func take_damage(amount: int):
 		is_hurting = false
 		is_blocking = false
 
+		action_locked = true
+		hurt_locked = true
+
+		velocity = Vector2.ZERO
+
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
 
@@ -1006,24 +1183,18 @@ func take_damage(amount: int):
 
 		return
 
-
 	# =====================================================
-	# FINISH HIM
+	# FINISH HIM CHECK
 	# =====================================================
 	#
-	# ONLY trigger FINISH HIM when the opponent already
-	# has 1 round win.
+	# Finish Him only happens when the opponent already
+	# has one round win.
 	#
-	# This means killing Raiden will give the opponent
-	# their SECOND round win.
-	#
-	# Game.current_round is NOT used here.
 	# =====================================================
 
 	if health == 1 and not is_finish_state:
 
 		var opponent_will_win_match := false
-
 
 		# =================================================
 		# RAIDEN IS PLAYER 1
@@ -1031,10 +1202,8 @@ func take_damage(amount: int):
 
 		if is_in_group("player1"):
 
-			# CPU already has 1 round win.
 			if Game.p2_round_wins >= 1:
 				opponent_will_win_match = true
-
 
 		# =================================================
 		# RAIDEN IS CPU
@@ -1042,10 +1211,8 @@ func take_damage(amount: int):
 
 		else:
 
-			# Player 1 already has 1 round win.
 			if Game.p1_round_wins >= 1:
 				opponent_will_win_match = true
-
 
 		# =================================================
 		# TRIGGER FINISH HIM
@@ -1053,14 +1220,46 @@ func take_damage(amount: int):
 
 		if opponent_will_win_match:
 
+			# ---------------------------------------------
+			# STOP HURT / ATTACK / MOVEMENT
+			# ---------------------------------------------
+
 			is_hurting = false
 			hurt_locked = false
 			action_locked = false
 
+			is_attacking = false
+			is_shooting = false
+			is_blocking = false
+
+			stunned = false
+
+			knockback_x = 0.0
+			velocity = Vector2.ZERO
+
+			# ---------------------------------------------
+			# FORCE IDLE BEFORE FINISH HIM
+			# ---------------------------------------------
+
+			state = State.IDLE
+
+			current_anim = ""
+
+			if is_instance_valid(sprite):
+
+				sprite.visible = true
+				sprite.play("idle")
+
+			if has_node("Crispy"):
+				$Crispy.visible = false
+
+			# ---------------------------------------------
+			# FINISH HIM
+			# ---------------------------------------------
+
 			trigger_finish_state()
 
 			return
-
 
 	# =====================================================
 	# NORMAL HURT
@@ -1076,10 +1275,25 @@ func take_damage(amount: int):
 
 	state = State.IDLE
 
+	velocity.x = 0
+	knockback_x = 0.0
+
 	combo.clear()
 
-	play_anim("hurt")
+	# =====================================================
+	# HURT ANIMATION
+	# =====================================================
 
+	# IMPORTANT:
+	# If Raiden is at 1 HP, do NOT leave him in hurt/laying.
+	# The 1 HP state must return him to idle.
+
+	if health > 1:
+
+		current_anim = ""
+
+		if is_instance_valid(sprite):
+			sprite.play("hurt")
 
 	# =====================================================
 	# ELECTRIC HIT EFFECT
@@ -1089,10 +1303,10 @@ func take_damage(amount: int):
 
 		var electric_audio = get_node("Electric")
 
-		if electric_audio is AudioStreamPlayer or electric_audio is AudioStreamPlayer2D:
+		if electric_audio is AudioStreamPlayer \
+		or electric_audio is AudioStreamPlayer2D:
 
 			electric_audio.play()
-
 
 	# =====================================================
 	# BLOOD EFFECT
@@ -1106,28 +1320,79 @@ func take_damage(amount: int):
 
 		blood.global_position = $BloodMarker.global_position
 
-
 	# =====================================================
 	# HURT DURATION
 	# =====================================================
 
 	await get_tree().create_timer(0.25).timeout
 
+	# =====================================================
+	# DEAD CHECK
+	# =====================================================
+
 	if state == State.DEAD:
 		return
+
+	# =====================================================
+	# 1 HP — FORCE RAiden BACK TO IDLE
+	# =====================================================
+
+	if health == 1:
+
+		is_hurting = false
+		hurt_locked = false
+		action_locked = false
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		stunned = false
+
+		knockback_x = 0.0
+		velocity = Vector2.ZERO
+
+		state = State.IDLE
+
+		# ---------------------------------------------
+		# CANCEL LAYING / HURT ANIMATION
+		# ---------------------------------------------
+
+		current_anim = ""
+
+		if is_instance_valid(sprite):
+
+			sprite.visible = true
+			sprite.play("idle")
+
+		if has_node("Crispy"):
+			$Crispy.visible = false
+
+		return
+
+	# =====================================================
+	# NORMAL RETURN TO IDLE
+	# =====================================================
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
 
+	is_attacking = false
+	is_shooting = false
 
-	# =====================================================
-	# RETURN TO IDLE
-	# =====================================================
+	knockback_x = 0.0
+
+	state = State.IDLE
+
+	velocity.x = 0
 
 	if state != State.DEAD and not is_finish_state:
 
-		play_anim("idle")
+		current_anim = ""
+
+		if is_instance_valid(sprite):
+			sprite.play("idle")
 
 func trigger_finish_state():
 
@@ -1518,46 +1783,177 @@ func combo_attack(attacks: Array):
 		play_anim("idle")
 
 func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
+
+	# =====================================================
+	# BASIC CHECKS
+	# =====================================================
+
 	if hurt_cooldown:
 		return
 
-	if area == null or !is_instance_valid(area):
+	if area == null or not is_instance_valid(area):
 		return
 
+	if state == State.DEAD:
+		return
+
+	if spawn_protection:
+		return
+
+	# Ignore hurt boxes
 	if area.is_in_group("HurtBox"):
 		return
 
-	if area.get("attack_name") and area.attack_name == "uppercut":
-		$Sprite.play("wasuppercut")
-	else:
-		$Sprite.play("hurt")
+	# =====================================================
+	# ELECTRIC FLY DAMAGE
+	# =====================================================
 
-# ---------------- ELECTRIC FLY DAMAGE ----------------
 	if electricfly_active:
+
 		if area.has_method("take_damage"):
 			area.take_damage(1)
+
 		elif area.get_parent() and area.get_parent().has_method("take_damage"):
 			area.get_parent().take_damage(1)
 
 		end_electricfly()
 		return
 
-	if area.is_in_group("HitBox") \
-		or area.is_in_group("ReptileAcid") \
-		or area.is_in_group("ReptileBullet") \
-		or area.is_in_group("RaidenElectricBullet") \
-		or area.is_in_group("FireBullet") \
-		or area.is_in_group("Fireball") \
-		or area.is_in_group("SonyaBullet") \
-		or area.is_in_group("JohnnyCageBullet") \
-		or area.is_in_group("KanoBullet") \
-		or area.is_in_group("IceBullet") \
-		or area.is_in_group("KanoAttack"):
+	# =====================================================
+	# VALID ATTACK / PROJECTILE
+	# =====================================================
 
-		hurt_cooldown = true
+	var valid_attack := (
+		area.is_in_group("HitBox")
+		or area.is_in_group("ReptileAcid")
+		or area.is_in_group("ReptileBullet")
+		or area.is_in_group("RaidenElectricBullet")
+		or area.is_in_group("FireBullet")
+		or area.is_in_group("Fireball")
+		or area.is_in_group("SonyaBullet")
+		or area.is_in_group("JohnnyCageBullet")
+		or area.is_in_group("KanoBullet")
+		or area.is_in_group("IceBullet")
+		or area.is_in_group("KanoAttack")
+	)
 
-		knockback_x = -facing * 100
-		take_damage(1)
+	if not valid_attack:
+		return
 
-		await get_tree().create_timer(0.2).timeout
+	# =====================================================
+	# DAMAGE COOLDOWN
+	# =====================================================
+
+	hurt_cooldown = true
+
+	# =====================================================
+	# UPPERCUT CHECK
+	# =====================================================
+
+	var was_uppercut := false
+
+	if area.get("attack_name") != null:
+		if area.attack_name == "uppercut":
+			was_uppercut = true
+
+	# =====================================================
+	# KNOCKBACK
+	# =====================================================
+
+	knockback_x = -facing * 100
+
+	# =====================================================
+	# PLAY HIT ANIMATION
+	# =====================================================
+
+	if was_uppercut:
+
+		current_anim = ""
+		sprite.play("wasuppercut")
+
+	else:
+
+		current_anim = ""
+		sprite.play("hurt")
+
+	# =====================================================
+	# APPLY DAMAGE
+	# =====================================================
+
+	take_damage(1)
+
+	# =====================================================
+	# WAIT FOR HIT ANIMATION
+	# =====================================================
+
+	if state != State.DEAD and health > 1 and not is_finish_state:
+
+		if was_uppercut:
+
+			await sprite.animation_finished
+
+		else:
+
+			await get_tree().create_timer(0.2).timeout
+
+	# =====================================================
+	# FINISH HIM / 1 HP
+	# =====================================================
+
+	if state == State.DEAD:
 		hurt_cooldown = false
+		return
+
+	if is_finish_state:
+		hurt_cooldown = false
+		return
+
+	if health <= 1:
+
+		is_hurting = false
+		hurt_locked = false
+		action_locked = false
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		velocity = Vector2.ZERO
+		knockback_x = 0.0
+
+		state = State.IDLE
+
+		current_anim = ""
+
+		if is_instance_valid(sprite):
+			sprite.visible = true
+			sprite.play("idle")
+
+		hurt_cooldown = false
+		return
+
+	# =====================================================
+	# RETURN TO IDLE AFTER UPPERCUT
+	# =====================================================
+
+	is_hurting = false
+	hurt_locked = false
+	action_locked = false
+	is_attacking = false
+
+	state = State.IDLE
+	velocity.x = 0
+	knockback_x = 0
+
+	current_anim = ""
+
+	if is_instance_valid(sprite):
+		sprite.visible = true
+		sprite.play("idle")
+
+	# =====================================================
+	# RELEASE DAMAGE COOLDOWN
+	# =====================================================
+
+	await get_tree().create_timer(0.2).timeout
+
+	hurt_cooldown = false
