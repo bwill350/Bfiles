@@ -490,6 +490,7 @@ func stop_block():
 
 
 # ---------------- CPU ----------------
+# ---------------- CPU ----------------
 func cpu_logic(delta):
 
 	# =========================================================
@@ -498,6 +499,7 @@ func cpu_logic(delta):
 
 	if state == State.DEAD:
 		return
+
 
 	# =========================================================
 	# HURT RECOVERY
@@ -528,7 +530,7 @@ func cpu_logic(delta):
 		current_anim = ""
 		play_anim("idle")
 
-		# Find human player
+		# Find human player again
 		target = null
 
 		for node in get_tree().get_nodes_in_group("Fighter"):
@@ -543,11 +545,10 @@ func cpu_logic(delta):
 				target = node
 				break
 
-		# Give Easy CPU some breathing room
 		if Game.difficulty == "Easy":
-			ai_timer = randf_range(1.0, 1.8)
+			ai_timer = randf_range(0.6, 1.2)
 		else:
-			ai_timer = randf_range(0.2, 0.5)
+			ai_timer = randf_range(0.15, 0.35)
 
 		return
 
@@ -570,10 +571,12 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# FIND HUMAN PLAYER
+	# FIND PLAYER 1
 	# =========================================================
 
 	if target == null or not is_instance_valid(target):
+
+		target = null
 
 		for node in get_tree().get_nodes_in_group("Fighter"):
 
@@ -594,26 +597,13 @@ func cpu_logic(delta):
 
 	if target == null or not is_instance_valid(target):
 
-		# On Easy don't constantly chase around the screen.
-		if Game.difficulty == "Easy":
+		velocity.x = 0.0
+		state = State.IDLE
 
-			velocity.x = 0.0
-			state = State.IDLE
+		if not is_attacking:
+			play_anim("idle")
 
-			if not is_attacking:
-				play_anim("idle")
-
-			return
-
-		else:
-
-			state = State.WALK
-			velocity.x = facing * SPEED
-
-			if not is_attacking:
-				play_anim("walk")
-
-			return
+		return
 
 
 	# =========================================================
@@ -632,7 +622,7 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# DISTANCE
+	# DISTANCE TO PLAYER
 	# =========================================================
 
 	var dist: float = target.global_position.x - global_position.x
@@ -650,7 +640,7 @@ func cpu_logic(delta):
 
 		sprite.flip_h = facing > 0
 
-		if $Crispy:
+		if has_node("Crispy"):
 			$Crispy.flip_h = facing > 0
 
 		$AttackMarker.position = Vector2(0 * facing, 0)
@@ -663,17 +653,16 @@ func cpu_logic(delta):
 
 	if Game.difficulty == "Easy":
 
-		var easy_stopping_distance := 100.0
-		var easy_attack_range := 110.0
+		var easy_stopping_distance := 105.0
+		var easy_attack_range := 125.0
 
 
 		# -----------------------------------------------------
-		# TOO FAR
+		# MOVE TOWARD PLAYER
 		# -----------------------------------------------------
 
 		if distance > easy_stopping_distance:
 
-			# Slow approach instead of constantly rushing.
 			velocity.x = direction * SPEED * 1.05
 
 			state = State.WALK
@@ -683,7 +672,6 @@ func cpu_logic(delta):
 
 		else:
 
-			# Stop farther away.
 			velocity.x = 0.0
 
 			if not is_attacking:
@@ -692,16 +680,12 @@ func cpu_logic(delta):
 
 
 		# -----------------------------------------------------
-		# ATTACK TIMER
+		# EASY ATTACK TIMER
 		# -----------------------------------------------------
 
 		ai_timer -= delta
 
 		if ai_timer <= 0.0:
-
-			# -------------------------------------------------
-			# EASY CPU ONLY ATTACKS SOMETIMES
-			# -------------------------------------------------
 
 			if (
 				distance <= easy_attack_range
@@ -711,36 +695,35 @@ func cpu_logic(delta):
 				and not is_attacking
 			):
 
-				# Wait much longer between decisions.
-				ai_timer = randf_range(1.4, 2.4)
+				# Give Easy CPU a reasonable delay.
+				ai_timer = randf_range(0.8, 1.5)
 
-				# 45% chance to attack.
-				# 55% chance to simply stand there.
+				# 65% chance to attack.
 				var attack_roll := randi() % 100
 
-				if attack_roll < 45:
+				if attack_roll < 65:
 
 					var choice := randi() % 100
 
-					if choice < 35:
+					if choice < 30:
 						do_action("punch")
 
-					elif choice < 55:
+					elif choice < 50:
 						do_action("kick")
 
-					elif choice < 67:
+					elif choice < 62:
 						do_action("highpunch")
 
-					elif choice < 77:
+					elif choice < 72:
 						do_action("lowpunch")
 
-					elif choice < 87:
+					elif choice < 82:
 						do_action("highkick")
 
-					elif choice < 94:
+					elif choice < 90:
 						do_action("lowkick")
 
-					elif choice < 98:
+					elif choice < 96:
 						do_action("uppercut")
 
 					else:
@@ -748,15 +731,13 @@ func cpu_logic(delta):
 
 				else:
 
-					# EASY CPU DOES NOTHING
 					state = State.IDLE
 					velocity.x = 0.0
 					play_anim("idle")
 
 			else:
 
-				# Don't constantly retry every 0.01 seconds.
-				ai_timer = randf_range(0.5, 1.0)
+				ai_timer = randf_range(0.3, 0.7)
 
 		return
 
@@ -765,17 +746,19 @@ func cpu_logic(delta):
 	# HARD AI
 	# =========================================================
 
-	var stopping_distance := 75.0
-	var attack_range := 90.0
+	# Keep Kano close enough to actually attack.
+	var stopping_distance := 100.0
+	var attack_range := 145.0
 
 
 	# =========================================================
-	# CHASE
+	# CHASE PLAYER
 	# =========================================================
 
 	if distance > stopping_distance:
 
 		velocity.x = direction * SPEED
+
 		state = State.WALK
 
 		if not is_attacking:
@@ -796,50 +779,120 @@ func cpu_logic(delta):
 
 	ai_timer -= delta
 
-	if ai_timer <= 0.0:
+	if ai_timer > 0.0:
+		return
 
-		if (
-			distance <= attack_range
-			and not is_hurting
-			and not is_finish_state
-			and not action_locked
-			and not is_attacking
-		):
 
-			ai_timer = randf_range(0.05, 0.15)
+	# =========================================================
+	# ATTACK WHEN CLOSE
+	# =========================================================
 
-			var choice := randi() % 100
+	if (
+		distance <= attack_range
+		and not is_hurting
+		and not is_finish_state
+		and not action_locked
+		and not is_attacking
+	):
 
-			if choice < 15:
-				do_action("punch")
+		# IMPORTANT:
+		# Do not use 0.01 here.
+		# Give Kano a short attack decision delay.
+		ai_timer = randf_range(0.25, 0.55)
 
-			elif choice < 30:
-				do_action("kick")
+		var choice := randi() % 100
 
-			elif choice < 45:
-				do_action("highpunch")
 
-			elif choice < 60:
-				do_action("lowpunch")
+		# -----------------------------------------------------
+		# PUNCH
+		# -----------------------------------------------------
 
-			elif choice < 70:
-				do_action("highkick")
+		if choice < 18:
+			do_action("punch")
 
-			elif choice < 80:
-				do_action("lowkick")
 
-			elif choice < 90:
-				do_action("uppercut")
+		# -----------------------------------------------------
+		# KICK
+		# -----------------------------------------------------
 
-			elif choice < 97:
-				do_action("roundhousekick")
+		elif choice < 34:
+			do_action("kick")
 
-			else:
-				shoot_player()
+
+		# -----------------------------------------------------
+		# HIGH PUNCH
+		# -----------------------------------------------------
+
+		elif choice < 47:
+			do_action("highpunch")
+
+
+		# -----------------------------------------------------
+		# LOW PUNCH
+		# -----------------------------------------------------
+
+		elif choice < 58:
+			do_action("lowpunch")
+
+
+		# -----------------------------------------------------
+		# HIGH KICK
+		# -----------------------------------------------------
+
+		elif choice < 69:
+			do_action("highkick")
+
+
+		# -----------------------------------------------------
+		# LOW KICK
+		# -----------------------------------------------------
+
+		elif choice < 79:
+			do_action("lowkick")
+
+
+		# -----------------------------------------------------
+		# UPPERCUT
+		# -----------------------------------------------------
+
+		elif choice < 87:
+			do_action("uppercut")
+
+
+		# -----------------------------------------------------
+		# ROUNDHOUSE
+		# -----------------------------------------------------
+
+		elif choice < 94:
+			do_action("roundhousekick")
+
+
+		# -----------------------------------------------------
+		# CANNONBALL
+		# -----------------------------------------------------
+
+		elif choice < 98:
+			do_action("cannonball")
+
+
+		# -----------------------------------------------------
+		# SHOOT
+		# -----------------------------------------------------
 
 		else:
 
-			ai_timer = 0.01
+			if shoot_cooldown <= 0.0:
+				shoot_player()
+
+
+	# =========================================================
+	# PLAYER IS TOO FAR
+	# =========================================================
+
+	else:
+
+		# Recheck fairly quickly while chasing.
+		ai_timer = randf_range(0.08, 0.18)
 
 # ---------------- ACID SHOOT ----------------
 func shoot_acid():
@@ -1924,6 +1977,13 @@ func play_anim(anim_name: String):
 # ---------------- HURT BOX ----------------
 func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 
+	# =====================================================
+	# BASIC CHECKS
+	# =====================================================
+
+	if hurt_cooldown:
+		return
+
 	if area == null or not is_instance_valid(area):
 		return
 
@@ -1933,11 +1993,18 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 	if not can_take_damage:
 		return
 
-	if hurt_cooldown:
+	if spawn_protection:
 		return
 
 	# =====================================================
-	# CHECK VALID ATTACK
+	# IGNORE HURT BOXES
+	# =====================================================
+
+	if area.is_in_group("HurtBox"):
+		return
+
+	# =====================================================
+	# VALID ATTACK / PROJECTILE
 	# =====================================================
 
 	var valid_attack := (
@@ -1964,15 +2031,14 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 	hurt_cooldown = true
 
 	# =====================================================
-	# ANIMATION
+	# UPPERCUT CHECK
 	# =====================================================
 
-	if area.get("attack_name") and area.attack_name == "uppercut":
-		sprite.play("wasuppercut")
-	else:
-		sprite.play("hurt")
+	var was_uppercut := false
 
-	$Hurt.play()
+	if area.get("attack_name") != null:
+		if area.attack_name == "uppercut":
+			was_uppercut = true
 
 	# =====================================================
 	# KNOCKBACK
@@ -1981,16 +2047,121 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 	knockback_x = -facing * 100
 
 	# =====================================================
-	# DAMAGE
+	# PLAY HIT ANIMATION
+	# =====================================================
+
+	if was_uppercut:
+
+		current_anim = ""
+		sprite.play("wasuppercut")
+
+	else:
+
+		current_anim = ""
+		sprite.play("hurt")
+
+	# =====================================================
+	# HURT SOUND
+	# =====================================================
+
+	if is_instance_valid(hurt_sound):
+		hurt_sound.play()
+
+	# =====================================================
+	# APPLY DAMAGE
 	# =====================================================
 
 	take_damage(1)
 
 	# =====================================================
-	# SHORT HIT COOLDOWN
+	# WAIT FOR HIT ANIMATION
+	# =====================================================
+
+	if state != State.DEAD and health > 1 and not is_finish_state:
+
+		if was_uppercut:
+
+			await sprite.animation_finished
+
+		else:
+
+			await get_tree().create_timer(0.2).timeout
+
+	# =====================================================
+	# DEAD CHECK
+	# =====================================================
+
+	if state == State.DEAD:
+		hurt_cooldown = false
+		return
+
+	# =====================================================
+	# FINISH HIM CHECK
+	# =====================================================
+
+	if is_finish_state:
+		hurt_cooldown = false
+		return
+
+	# =====================================================
+	# 1 HP — FORCE KANO TO IDLE
+	# =====================================================
+
+	if health <= 1:
+
+		is_hurting = false
+		hurt_locked = false
+		action_locked = false
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		stunned = false
+
+		velocity = Vector2.ZERO
+		knockback_x = 0.0
+
+		state = State.IDLE
+
+		current_anim = ""
+
+		if is_instance_valid(sprite):
+			sprite.visible = true
+			sprite.play("idle")
+
+		if has_node("Crispy"):
+			$Crispy.visible = false
+
+		hurt_cooldown = false
+		return
+
+	# =====================================================
+	# RETURN TO IDLE
+	# =====================================================
+
+	is_hurting = false
+	hurt_locked = false
+	action_locked = false
+
+	is_attacking = false
+	is_shooting = false
+
+	state = State.IDLE
+
+	velocity.x = 0
+	knockback_x = 0
+
+	current_anim = ""
+
+	if is_instance_valid(sprite):
+		sprite.visible = true
+		sprite.play("idle")
+
+	# =====================================================
+	# RELEASE DAMAGE COOLDOWN
 	# =====================================================
 
 	await get_tree().create_timer(0.2).timeout
 
-	if is_instance_valid(self) and state != State.DEAD:
-		hurt_cooldown = false
+	hurt_cooldown = false
