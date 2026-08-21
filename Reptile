@@ -28,7 +28,6 @@ signal combo_used(combo_name: String)
 signal round_death(winner: String)
 
 @onready var character = get_parent()
-
 @onready var round1 = $Round1
 @onready var round2 = $Round2
 @onready var round3 = $Round3
@@ -442,31 +441,29 @@ func _physics_process(delta):
 	)
 
 	# =====================================================
-	# FACE TARGET
+	# PLAYER FACING
+	# =====================================================
+	#
+	# Only change facing when the player actually presses
+	# left or right.
+	#
+	# This prevents the target from changing Reptile's
+	# direction while jumping.
 	# =====================================================
 
-	if target != null and is_instance_valid(target):
+	if input_dir != 0:
 
-		var dist: float = (
-			target.global_position.x -
-			global_position.x
+		facing = input_dir
+
+		sprite.flip_h = facing > 0
+		$Crispy.flip_h = -facing > 0
+
+		$AttackMarker.position = Vector2.ZERO
+
+		$Reptileshoot.position = Vector2(
+			63 * facing,
+			-211
 		)
-
-		var direction: float = sign(dist)
-
-		if direction != 0:
-
-			facing = direction
-
-			sprite.flip_h = facing > 0
-			$Crispy.flip_h = facing > 0
-
-			$AttackMarker.position = Vector2.ZERO
-
-			$Reptileshoot.position = Vector2(
-				63 * facing,
-				-211
-			)
 
 	# =====================================================
 	# WALK / RUN
@@ -1991,7 +1988,7 @@ func die():
 		$Sprite.visible = false
 		$Crispy.visible = true
 
-		$Crispy.flip_h = -facing > 0
+		$Crispy.flip_h = facing > 0
 
 		# -------------------------------------------------
 		# HIDE FINISH HIM
@@ -2065,7 +2062,7 @@ func die():
 	$Sprite.visible = false
 	$Crispy.visible = true
 
-	$Crispy.flip_h = -facing > 0
+	$Crispy.flip_h = facing > 0
 
 	# =====================================================
 	# TELL LEVEL1
