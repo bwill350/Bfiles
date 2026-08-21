@@ -230,6 +230,7 @@ func _physics_process(delta):
 	# =========================================================
 	# SPEAR PULL
 	# =========================================================
+
 	if is_pulled:
 		run_pull_logic(delta)
 		move_and_slide()
@@ -238,6 +239,7 @@ func _physics_process(delta):
 	# =========================================================
 	# STUN
 	# =========================================================
+
 	if stunned:
 		velocity = Vector2.ZERO
 		return
@@ -245,11 +247,13 @@ func _physics_process(delta):
 	# =========================================================
 	# GRAVITY
 	# =========================================================
+
 	velocity.y += GRAVITY * delta
 
 	# =========================================================
 	# UPPERCUT LAUNCH
 	# =========================================================
+
 	if was_uppercut:
 
 		move_and_slide()
@@ -260,6 +264,7 @@ func _physics_process(delta):
 			was_uppercut = false
 
 			if state != State.DEAD:
+
 				is_hurting = false
 				hurt_locked = false
 				action_locked = false
@@ -273,12 +278,15 @@ func _physics_process(delta):
 	# =========================================================
 	# NORMAL GROUND GRAVITY
 	# =========================================================
+
 	if is_on_floor():
+
 		velocity.y = 0
 
 	# =========================================================
 	# DEATH / FINISH
 	# =========================================================
+
 	if state == State.DEAD:
 		return
 
@@ -296,7 +304,11 @@ func _physics_process(delta):
 	# =========================================================
 	# COOLDOWNS
 	# =========================================================
-	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
+
+	shoot_cooldown = max(
+		shoot_cooldown - delta,
+		0.0
+	)
 
 	combo_timer += delta
 
@@ -306,6 +318,7 @@ func _physics_process(delta):
 	# =========================================================
 	# CPU
 	# =========================================================
+
 	if is_cpu:
 
 		cpu_logic(delta)
@@ -317,67 +330,134 @@ func _physics_process(delta):
 	# =========================================================
 	# PLAYER CONTROL
 	# =========================================================
+
 	if action_locked:
 		return
 
-	var input_dir = Input.get_axis("left", "right")
-	var climb_pressed = Input.is_action_pressed("climb")
+	var input_dir := Input.get_axis(
+		"left",
+		"right"
+	)
 
-	# ---------------- FACING ----------------
+	var climb_pressed := Input.is_action_pressed("climb")
+
+	# =========================================================
+	# FACING
+	# =========================================================
+	#
+	# IMPORTANT:
+	# Only change facing when LEFT or RIGHT is actually pressed.
+	#
+	# This works while airborne too.
+	# =========================================================
+
 	if input_dir != 0:
+
 		facing = input_dir
 
-	sprite.flip_h = facing > 0
-	$Crispy.flip_h = facing > 0
+		sprite.flip_h = facing > 0
+		$Crispy.flip_h = facing > 0
 
-	$AttackMarker.position = Vector2(0 * facing, 0)
-	$Subzeroshoot.position = Vector2(63 * facing, -211)
+		$AttackMarker.position = Vector2(
+			0,
+			0
+		)
+
+		$Subzeroshoot.position = Vector2(
+			63 * facing,
+			-211
+		)
 
 	# =========================================================
-	# 🟢 MOVEMENT (RUN ADDED HERE)
+	# PLAYER JUMP
 	# =========================================================
-	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
-	else:
+	#
+	# Check jump BEFORE movement state so pressing
+	# LEFT/RIGHT in the air does not cancel jump.
+	# =========================================================
+
+	if (
+		Input.is_action_just_pressed("jump")
+		and is_on_floor()
+	):
+
+		velocity.y = jump_velocity
+		state = State.JUMP
+
+	# =========================================================
+	# AIRBORNE
+	# =========================================================
+	#
+	# Once Sub-Zero is in the air, ALWAYS keep JUMP state.
+	# Left/right can change facing and horizontal movement,
+	# but cannot change the animation to walk/run/idle.
+	# =========================================================
+
+	if not is_on_floor():
+
 		velocity.x = input_dir * SPEED
 
-		# ---------------- STATE ----------------
-		if not is_on_floor():
-			state = State.JUMP
-		elif input_dir != 0:
-			state = State.WALK
-		elif input_dir != 0:
-			state = State.RUN
-		else:
-			state = State.IDLE
+		state = State.JUMP
 
-	# ---------------- ANIMS ----------------
+	# =========================================================
+	# GROUND MOVEMENT
+	# =========================================================
+
+	else:
+
+		if Input.is_action_pressed("run") and input_dir != 0:
+
+			run(input_dir)
+
+		else:
+
+			velocity.x = input_dir * SPEED
+
+			if input_dir != 0:
+
+				state = State.WALK
+
+			else:
+
+				state = State.IDLE
+
+	# =========================================================
+	# ANIMATIONS
+	# =========================================================
+
 	match state:
 
 		State.JUMP:
+
 			if not is_attacking:
 				play_anim("jump")
 
 		State.WALK:
+
 			if not is_attacking:
 				play_anim("walk")
 
 		State.RUN:
+
 			if not is_attacking:
 				play_anim("run")
 
 		State.IDLE:
+
 			if not is_attacking:
 				play_anim("idle")
+
+	# =========================================================
+	# HURT LOCK
+	# =========================================================
 
 	if is_hurting and hurt_locked:
 		return
 
-	# ---------------- JUMP ----------------
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jump_velocity
+	# =========================================================
+	# ATTACKS
+	# =========================================================
 
-	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("punch"):
 		do_action("punch")
 
@@ -389,9 +469,6 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
-
-	elif Input.is_action_just_pressed("kick"):
-		do_action("kick")
 
 	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
@@ -414,16 +491,17 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("shoot"):
 		shoot_player()
 
-
-
 	elif Input.is_action_pressed("block"):
 		start_block()
 
 	else:
 		stop_block()
 
+	# =========================================================
+	# MOVE
+	# =========================================================
 
-	move_and_slide()
+	move_and_slide() 
 
 func spear_pulled_to_p1():
 	print("START PULL")
