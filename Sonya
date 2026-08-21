@@ -240,144 +240,233 @@ func _physics_process(delta):
 	if is_finish_state:
 		state = State.IDLE
 		velocity.x = 0
+
 		if not is_hurting:
 			play_anim("idle")
+
+		move_and_slide()
 		return
 
 	# ---------------- GRAVITY ----------------
 	velocity.y += GRAVITY * delta
 
+	# ---------------- UPPERCUT ----------------
 	if uppercut_launched:
 
 		move_and_slide()
-		play_anim("idle")
 
 		if is_on_floor():
+
 			uppercut_launched = false
+			velocity.y = 0
+			velocity.x = 0
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+			is_attacking = false
+
+			state = State.IDLE
+
+			current_anim = ""
+			play_anim("idle")
 
 		return
 
 	# ---------------- COOLDOWNS ----------------
-	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
+	shoot_cooldown = max(
+		shoot_cooldown - delta,
+		0.0
+	)
 
 	combo_timer += delta
+
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
 	# ---------------- CPU ----------------
 	if is_cpu:
+
 		cpu_logic(delta)
-		move_and_slide()
-		return
-
-	if state == State.DEAD:
-		return
-
-	if is_finish_state:
-		state = State.IDLE
-		velocity.x = 0
-
-		if not is_hurting:
-			play_anim("idle")
 
 		move_and_slide()
+
 		return
 
+	# ---------------- ACTION LOCK ----------------
 	if action_locked:
 		return
 
-	var input_dir = Input.get_axis("left", "right")
-	var climb_pressed = Input.is_action_pressed("climb")
+	var input_dir := Input.get_axis(
+		"left",
+		"right"
+	)
 
-	# ---------------- FACING ----------------
+	var climb_pressed := Input.is_action_pressed("climb")
+
+	# =====================================================
+	# FACING
+	# =====================================================
+	#
+	# Works both on the ground and in the air.
+	# Pressing LEFT/RIGHT changes facing but does NOT
+	# change the jump animation.
+	# =====================================================
+
 	if input_dir != 0:
-		facing = input_dir
 
-	sprite.flip_h = facing > 0
-	$Crispy.flip_h = facing > 0
+		facing = sign(input_dir)
 
-	$AttackMarker.position = Vector2(0 * facing, 0)
-	$SonyaShoot.position = Vector2(63 * facing, -225)
+		sprite.flip_h = facing > 0
+		$Crispy.flip_h = facing > 0
 
-	# =========================================================
-	# 🟢 MOVEMENT (RUN ADDED HERE)
-	# =========================================================
-	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
-	else:
+		$AttackMarker.position = Vector2(
+			0,
+			0
+		)
+
+		$SonyaShoot.position = Vector2(
+			63 * facing,
+			-225
+		)
+
+	# =====================================================
+	# JUMP
+	# =====================================================
+
+	if (
+		Input.is_action_just_pressed("jump")
+		and is_on_floor()
+	):
+
+		velocity.y = jump_velocity
+		state = State.JUMP
+
+	# =====================================================
+	# AIR MOVEMENT
+	# =====================================================
+	#
+	# LEFT/RIGHT works in the air.
+	#
+	# RUN in the air makes Sonya move faster, but she
+	# stays in the JUMP animation.
+	# =====================================================
+
+	if not is_on_floor():
+
 		velocity.x = input_dir * SPEED
 
-		# ---------------- STATE ----------------
-		if not is_on_floor():
-			state = State.JUMP
-		elif input_dir != 0:
-			state = State.WALK
-		elif input_dir != 0:
-			state = State.RUN
-		else:
-			state = State.IDLE
+		if Input.is_action_pressed("run") and input_dir != 0:
 
-	# ---------------- ANIMS ----------------
+			velocity.x = input_dir * SPEED * 4
+
+		state = State.JUMP
+
+	# =====================================================
+	# GROUND MOVEMENT
+	# =====================================================
+
+	else:
+
+		if Input.is_action_pressed("run") and input_dir != 0:
+
+			run(input_dir)
+
+		else:
+
+			velocity.x = input_dir * SPEED
+
+			if input_dir != 0:
+
+				state = State.WALK
+
+			else:
+
+				state = State.IDLE
+
+	# =====================================================
+	# ANIMATIONS
+	# =====================================================
+
 	match state:
 
 		State.JUMP:
-			if not is_attacking:
+
+			if not is_attacking and not is_hurting:
 				play_anim("jump")
 
 		State.WALK:
-			if not is_attacking:
+
+			if not is_attacking and not is_hurting:
 				play_anim("walk")
 
 		State.RUN:
-			if not is_attacking:
+
+			if not is_attacking and not is_hurting:
 				play_anim("run")
 
 		State.IDLE:
-			if not is_attacking:
+
+			if not is_attacking and not is_hurting:
 				play_anim("idle")
+
+	# =====================================================
+	# HURT LOCK
+	# =====================================================
 
 	if is_hurting and hurt_locked:
 		return
-
-	# ---------------- JUMP ----------------
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jump_velocity
 
 	# =====================================================
 	# ATTACKS
 	# =====================================================
 
 	if Input.is_action_just_pressed("punch"):
+
 		do_action("punch")
 
 	if Input.is_action_just_pressed("highpunch"):
+
 		do_action("highpunch")
 
 	if Input.is_action_just_pressed("lowpunch"):
+
 		do_action("lowpunch")
 
 	elif Input.is_action_just_pressed("kick"):
+
 		do_action("kick")
 
 	elif Input.is_action_just_pressed("highkick"):
+
 		do_action("highkick")
 
 	elif Input.is_action_just_pressed("lowkick"):
+
 		do_action("lowkick")
 
 	elif Input.is_action_just_pressed("uppercut"):
+
 		do_action("uppercut")
 
 	elif Input.is_action_just_pressed("roundhousekick"):
+
 		do_action("roundhousekick")
 
 	elif Input.is_action_just_pressed("shoot"):
+
 		do_action("shoot")
+
 		var bullet = SONYA_BULLET.instantiate()
+
 		get_tree().current_scene.add_child(bullet)
 
 		bullet.global_position = $SonyaShoot.global_position
 		bullet.velocity = Vector2(facing, 0) * bullet.speed
+
+	# =====================================================
+	# MOVE
+	# =====================================================
 
 	move_and_slide()
 
