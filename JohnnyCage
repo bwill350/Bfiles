@@ -211,124 +211,226 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# ---------------- STUN ----------------
+	# =====================================================
+	# STUN
+	# =====================================================
+
 	if stunned:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
 
-	# ---------------- DEATH / FINISH ----------------
-	if state == State.DEAD:
-		return
+	# =====================================================
+	# FINISH HIM
+	# =====================================================
 
 	if is_finish_state:
+
 		state = State.IDLE
 		velocity.x = 0
+
 		if not is_hurting:
 			play_anim("idle")
+
 		move_and_slide()
 		return
 
-	# ---------------- GRAVITY ----------------
+	# =====================================================
+	# GRAVITY
+	# =====================================================
+
 	velocity.y += GRAVITY * delta
+
+	# =====================================================
+	# UPPERCUT LAUNCH
+	# =====================================================
 
 	if uppercut_launched:
 
 		move_and_slide()
 
 		if is_on_floor():
+
 			uppercut_launched = false
+			velocity.y = 0
+			velocity.x = 0
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+			is_attacking = false
+
+			state = State.IDLE
+
+			current_anim = ""
+			play_anim("idle")
 
 		return
 
-	# ---------------- COOLDOWNS ----------------
-	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
+	# =====================================================
+	# COOLDOWNS
+	# =====================================================
+
+	shoot_cooldown = max(
+		shoot_cooldown - delta,
+		0.0
+	)
 
 	combo_timer += delta
+
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
-	# ---------------- CPU ----------------
+	# =====================================================
+	# CPU
+	# =====================================================
+
 	if is_cpu:
+
 		cpu_logic(delta)
-		move_and_slide()
-		return
-
-	if state == State.DEAD:
-		return
-
-	if is_finish_state:
-		state = State.IDLE
-		velocity.x = 0
-
-		if not is_hurting:
-			play_anim("idle")
 
 		move_and_slide()
+
 		return
+
+	# =====================================================
+	# ACTION LOCK
+	# =====================================================
 
 	if action_locked and !cannonkick_active:
 		return
 
-	var input_dir = Input.get_axis("left", "right")
-	var climb_pressed = Input.is_action_pressed("climb")
+	# =====================================================
+	# PLAYER INPUT
+	# =====================================================
 
-	# ---------------- FACING ----------------
+	var input_dir := Input.get_axis(
+		"left",
+		"right"
+	)
+
+	# =====================================================
+	# FACING
+	# =====================================================
+	#
+	# This works on the ground AND in the air.
+	# Pressing left/right changes facing without
+	# changing the jump animation.
+	# =====================================================
+
 	if input_dir != 0:
+
 		facing = sign(input_dir)
 
-	sprite.flip_h = facing > 0
-	$Crispy.flip_h = -facing < 0
+		sprite.flip_h = facing > 0
+		$Crispy.flip_h = -facing < 0
 
-	$AttackMarker.position = Vector2(0 * facing, 0)
-	$JohnnyCageShoot.position = Vector2(63 * facing, -225)
+		$AttackMarker.position = Vector2(
+			0,
+			0
+		)
 
-	# =========================================================
-	# 🟢 MOVEMENT (RUN ADDED HERE)
-	# =========================================================
-	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
-	else:
+		$JohnnyCageShoot.position = Vector2(
+			63 * facing,
+			-225
+		)
+
+	# =====================================================
+	# JUMP
+	# =====================================================
+	#
+	# Do this BEFORE movement state selection.
+	# =====================================================
+
+	if (
+		Input.is_action_just_pressed("jump")
+		and is_on_floor()
+	):
+
+		velocity.y = jump_velocity
+		state = State.JUMP
+
+	# =====================================================
+	# AIR MOVEMENT
+	# =====================================================
+	#
+	# IMPORTANT:
+	# Run button does NOT create RUN state in the air.
+	# Johnny stays in JUMP animation.
+	# =====================================================
+
+	if not is_on_floor():
+
+		# Normal air movement
 		velocity.x = input_dir * SPEED
 
-		# ---------------- STATE ----------------
-		if not is_on_floor():
-			state = State.JUMP
-		elif input_dir != 0:
-			state = State.WALK
-		elif input_dir != 0:
-			state = State.RUN
-		else:
-			state = State.IDLE
+		# Run while airborne = faster horizontal movement,
+		# BUT still JUMP animation.
+		if Input.is_action_pressed("run") and input_dir != 0:
 
-	# ---------------- ANIMS ----------------
+			velocity.x = input_dir * SPEED * 4
+
+		state = State.JUMP
+
+	# =====================================================
+	# GROUND MOVEMENT
+	# =====================================================
+
+	else:
+
+		if Input.is_action_pressed("run") and input_dir != 0:
+
+			run(input_dir)
+
+		else:
+
+			velocity.x = input_dir * SPEED
+
+			if input_dir != 0:
+
+				state = State.WALK
+
+			else:
+
+				state = State.IDLE
+
+	# =====================================================
+	# ANIMATIONS
+	# =====================================================
+
 	match state:
 
 		State.JUMP:
-			if not is_attacking:
+
+			if not is_attacking and not is_hurting:
 				play_anim("jump")
 
 		State.WALK:
-			if not is_attacking:
+
+			if not is_attacking and not is_hurting:
 				play_anim("walk")
 
 		State.RUN:
-			if not is_attacking:
+
+			if not is_attacking and not is_hurting:
 				play_anim("run")
 
 		State.IDLE:
-			if not is_attacking:
+
+			if not is_attacking and not is_hurting:
 				play_anim("idle")
+
+	# =====================================================
+	# HURT LOCK
+	# =====================================================
 
 	if is_hurting and hurt_locked:
 		return
 
-	# ---------------- JUMP ----------------
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jump_velocity
-		play_anim("jump")
+	# =====================================================
+	# ATTACKS
+	# =====================================================
 
-	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("kick"):
 		do_action("kick")
 
@@ -363,14 +465,21 @@ func _physics_process(delta):
 		do_action("kickfatality")
 
 	elif Input.is_action_just_pressed("shoot"):
+
 		if shoot_cooldown <= 0:
 			shoot_player()
 
 	elif Input.is_action_pressed("block"):
-			start_block()
+
+		start_block()
 
 	else:
+
 		stop_block()
+
+	# =====================================================
+	# MOVE
+	# =====================================================
 
 	move_and_slide()
 
