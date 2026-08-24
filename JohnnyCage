@@ -23,6 +23,9 @@ JohnnyCage (CharacterBody2D)
 │   └── FinishLabel
 │       └── Sprite2D
 
+extends CharacterBody2D
+class_name JohnnyCage
+
 signal round_death(winner: String)
 var spawn_locked := true
 var spawn_protection := false
@@ -1764,11 +1767,14 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 	if area == null or !is_instance_valid(area):
 		return
 
+	if area.is_in_group("HurtBox"):
+		return
+
 	if not can_take_damage:
 		return
 
 	# =====================================================
-	# DETERMINE IF THIS IS AN UPPERCUT
+	# CHECK IF THIS IS AN UPPERCUT
 	# =====================================================
 
 	var was_uppercut := false
@@ -1777,123 +1783,77 @@ func _on_johnny_cage_hurt_box_area_entered(area: Area2D) -> void:
 		was_uppercut = true
 
 	# =====================================================
-	# NORMAL DAMAGE SOURCES
-	# =====================================================
-
-	if not (
-		area.is_in_group("HitBox")
-		or area.is_in_group("ReptileAcid")
-		or area.is_in_group("ReptileBullet")
-		or area.is_in_group("RaidenElectricBullet")
-		or area.is_in_group("FireBullet")
-		or area.is_in_group("Fireball")
-		or area.is_in_group("SonyaBullet")
-		or area.is_in_group("JohnnyCageBullet")
-		or area.is_in_group("KanoBullet")
-		or area.is_in_group("IceBullet")
-		or area.is_in_group("Subzerobullet")
-		or area.is_in_group("SubzeroAttack")
-		or area.is_in_group("KanoAttack")
-	):
-		return
-
-	# =====================================================
-	# LOCK MULTIPLE HITS
-	# =====================================================
-
-	hurt_cooldown = true
-
-	# =====================================================
-	# UPPERCUT
+	# PLAY HURT ANIMATION
 	# =====================================================
 
 	if was_uppercut:
-
 		is_hurting = true
 		hurt_locked = true
 		action_locked = true
 		is_attacking = false
 		is_shooting = false
-		is_blocking = false
 
-		state = State.IDLE
-
-		knockback_x = -facing * 100
-
-		# Play the uppercut reaction
 		current_anim = ""
 		sprite.play("wasuppercut")
-		sprite.play("idle")
 
 	else:
+		sprite.play("hurt")
 
-		# Normal hurt
-		is_hurting = true
-		hurt_locked = true
-		action_locked = true
-		is_attacking = false
-		is_shooting = false
-		is_blocking = false
+		if is_instance_valid(hurt_sound):
+			hurt_sound.play()
 
-		state = State.IDLE
+	# =====================================================
+	# DAMAGE TYPES
+	# =====================================================
+
+	if area.is_in_group("HitBox") \
+		or area.is_in_group("ReptileAcid") \
+		or area.is_in_group("ReptileBullet") \
+		or area.is_in_group("RaidenElectricBullet") \
+		or area.is_in_group("FireBullet") \
+		or area.is_in_group("Fireball") \
+		or area.is_in_group("SonyaBullet") \
+		or area.is_in_group("JohnnyCageBullet") \
+		or area.is_in_group("KanoBullet") \
+		or area.is_in_group("IceBullet") \
+		or area.is_in_group("KanoAttack"):
+
+		hurt_cooldown = true
 
 		knockback_x = -facing * 100
 
-		current_anim = ""
-		sprite.play("hurt")
+		take_damage(1)
 
-	# =====================================================
-	# SOUND
-	# =====================================================
+		# =================================================
+		# WAIT FOR UPPERCUT ANIMATION
+		# =================================================
 
-	if is_instance_valid(hurt_sound):
-		hurt_sound.play()
+		if was_uppercut:
 
-	# =====================================================
-	# DAMAGE
-	# =====================================================
+			await sprite.animation_finished
 
-	take_damage(1)
+			if state == State.DEAD:
+				return
 
-	# =====================================================
-	# WAIT FOR UPPERCUT / HURT ANIMATION
-	# =====================================================
+			if is_finish_state:
+				return
 
-	await sprite.animation_finished
+			# -----------------------------
+			# RETURN TO NORMAL
+			# -----------------------------
 
-	# =====================================================
-	# DEAD CHECK
-	# =====================================================
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+			is_attacking = false
+			is_shooting = false
 
-	if state == State.DEAD:
+			velocity.x = 0
+
+			state = State.IDLE
+
+			current_anim = ""
+			play_anim("idle")
+
+		await get_tree().create_timer(0.10).timeout
 		hurt_cooldown = false
-		return
-
-	if is_finish_state:
-		hurt_cooldown = false
-		return
-
-	# =====================================================
-	# RETURN TO IDLE
-	# =====================================================
-
-	is_hurting = false
-	hurt_locked = false
-	action_locked = false
-	is_attacking = false
-	is_shooting = false
-
-	knockback_x = 0.0
-
-	state = State.IDLE
-
-	current_anim = ""
-	play_anim("idle")
-
-	# =====================================================
-	# RELEASE HURT COOLDOWN
-	# =====================================================
-
-	await get_tree().create_timer(0.2).timeout
-
-	hurt_cooldown = false
