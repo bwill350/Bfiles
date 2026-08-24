@@ -60,6 +60,7 @@ var ai_timer := 0.0
 var stunned := false
 
 # ---------------- FLAGS ----------------
+var kick_combo_active := false
 var is_blocking := false
 var is_hurting := false
 var is_shooting := false
@@ -1468,8 +1469,17 @@ func start_punch_combo():
 
 func start_kick_combo():
 
+	if kick_combo_active:
+		return
+
 	if action_locked or is_hurting or state == State.DEAD:
 		return
+
+	if health <= 1:
+		return
+
+	kick_combo_active = true
+	can_take_damage = false
 
 	await combo_attack([
 		"kick",
@@ -1480,6 +1490,12 @@ func start_kick_combo():
 		"roundhousekick",
 		"highkick"
 	])
+
+	# Combo is completely finished
+	kick_combo_active = false
+
+	if state != State.DEAD:
+		can_take_damage = true
 
 func combo_attack(attacks: Array):
 
