@@ -65,6 +65,7 @@ var hit_from_reptileacid := false
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
 # ---------------- COMBAT ----------------
+var kick_combo_active := false
 var is_hurting := false
 var is_shooting := false
 var is_attacking := false
@@ -159,8 +160,8 @@ func _ready():
 	ai_timer = randf_range(0.2, 0.6)
 
 	facing = 1
-	sprite.flip_h = -facing < 0
-	$Crispy.flip_h = -facing < 0
+	sprite.flip_h = facing > 0
+	$Crispy.flip_h = facing > 0
 
 func emit_health():
 
@@ -473,7 +474,7 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("kick"):
 		do_action("kick")
 
-	elif Input.is_action_just_pressed("highkick"):
+	elif Input.is_action_pressed("highkick"):
 		do_action("highkick")
 
 	elif Input.is_action_just_pressed("lowkick"):
@@ -482,10 +483,10 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
 
-	elif Input.is_action_pressed("knee"):
+	elif Input.is_action_just_pressed("knee"):
 		do_action("knee")
 
-	elif Input.is_action_pressed("splat"):
+	elif Input.is_action_just_pressed("splat"):
 		do_action("splat")
 
 	elif Input.is_action_just_pressed("shoot"):
@@ -669,10 +670,10 @@ func cpu_logic(delta):
 	if direction != 0:
 
 		# CPU faces opposite the direction of Player 1
-		facing = -direction
+		facing = direction
 
 		# Same flip convention used by Sub-Zero's player controls
-		sprite.flip_h = -facing > 0
+		sprite.flip_h = facing > 0
 		$Crispy.flip_h = facing > 0
 
 		$AttackMarker.position = Vector2(0, 0)
@@ -987,6 +988,18 @@ func start_punch_combo():
 
 func start_kick_combo():
 
+	if kick_combo_active:
+		return
+
+	if action_locked or is_hurting or state == State.DEAD:
+		return
+
+	if health <= 1:
+		return
+
+	kick_combo_active = true
+	can_take_damage = false
+
 	await combo_attack([
 		"kick",
 		"knee",
@@ -996,6 +1009,16 @@ func start_kick_combo():
 		"roundhousekick",
 		"highkick"
 	])
+
+	# Combo is completely finished
+	kick_combo_active = false
+
+	if state != State.DEAD:
+		can_take_damage = true
+
+# =========================================================
+# COMBO ATTACK
+# =========================================================
 
 func combo_attack(attacks: Array):
 
@@ -1522,7 +1545,7 @@ func die():
 		$Crispy.visible = true
 
 		# Crispy uses opposite flip direction
-		$Crispy.flip_h = -facing > 0
+		$Crispy.flip_h = facing > 0
 
 		# -------------------------------------------------
 		# HIDE FINISH HIM
@@ -1570,7 +1593,7 @@ func die():
 	$Crispy.visible = true
 
 	# Crispy uses opposite flip convention
-	$Crispy.flip_h = -facing > 0
+	$Crispy.flip_h = facing > 0
 
 	# =====================================================
 	# GIVE LEVEL1 CONTROL
