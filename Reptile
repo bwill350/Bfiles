@@ -75,7 +75,7 @@ var was_uppercut := false
 # =========================================================
 # FLAGS
 # =========================================================
-
+var kick_combo_active := false
 var is_blocking := false
 var is_hurting := false
 var is_shooting := false
@@ -1360,13 +1360,23 @@ func start_punch_combo():
 # KICK COMBO
 # =========================================================
 
+# =========================================================
+# KICK COMBO
+# =========================================================
+
 func start_kick_combo():
+
+	if kick_combo_active:
+		return
 
 	if action_locked or is_hurting or state == State.DEAD:
 		return
 
 	if health <= 1:
 		return
+
+	kick_combo_active = true
+	can_take_damage = false
 
 	await combo_attack([
 		"kick",
@@ -1378,6 +1388,11 @@ func start_kick_combo():
 		"highkick"
 	])
 
+	# Combo is completely finished
+	kick_combo_active = false
+
+	if state != State.DEAD:
+		can_take_damage = true
 
 # =========================================================
 # COMBO ATTACK
@@ -1388,28 +1403,79 @@ func combo_attack(attacks: Array):
 	if health <= 1:
 		return
 
+	if state == State.DEAD:
+		return
+
+	if is_hurting or is_finish_state:
+		return
+
 	action_locked = true
 	is_attacking = true
+	state = State.PUNCH
 
 	for attack in attacks:
+
+		# -----------------------------------------
+		# STOP COMBO IF INTERRUPTED
+		# -----------------------------------------
 
 		if health <= 1:
 			break
 
-		if is_hurting or state == State.DEAD:
+		if state == State.DEAD:
 			break
 
+		if is_hurting:
+			break
+
+		if is_finish_state:
+			break
+
+		# -----------------------------------------
+		# PLAY ATTACK
+		# -----------------------------------------
+
+		current_anim = ""
 		play_anim(attack)
 
 		spawn_attack(attack)
 
+		# -----------------------------------------
+		# WAIT FOR THIS ATTACK TO FINISH
+		# -----------------------------------------
+
 		await sprite.animation_finished
+
+		# -----------------------------------------
+		# CHECK AGAIN AFTER ANIMATION
+		# -----------------------------------------
+
+		if health <= 1:
+			break
+
+		if state == State.DEAD:
+			break
+
+		if is_hurting:
+			break
+
+		if is_finish_state:
+			break
+
+	# =================================================
+	# COMBO FINISHED
+	# =================================================
 
 	is_attacking = false
 	action_locked = false
+	hurt_locked = false
 
-	if not is_hurting and state != State.DEAD:
+	if state != State.DEAD and not is_hurting and not is_finish_state:
 
+		state = State.IDLE
+		velocity.x = 0
+
+		current_anim = ""
 		play_anim("idle")
 
 
@@ -1433,13 +1499,9 @@ func do_action(anim_name: String):
 
 	action_locked = true
 	is_attacking = true
-	lock_timer = 0.3
+	state = State.PUNCH
 
 	play_anim(anim_name)
-
-	# =====================================================
-	# NORMAL ATTACKS
-	# =====================================================
 
 	if anim_name in [
 		"punch",
@@ -1456,7 +1518,7 @@ func do_action(anim_name: String):
 
 		spawn_attack(anim_name)
 
-	await get_tree().create_timer(0.5).timeout
+	await sprite.animation_finished
 
 	if state == State.DEAD:
 		return
@@ -1466,12 +1528,12 @@ func do_action(anim_name: String):
 	hurt_locked = false
 
 	if not is_hurting and not is_finish_state:
+
+		state = State.IDLE
+		velocity.x = 0
+
+		current_anim = ""
 		play_anim("idle")
-
-
-# =========================================================
-# SPAWN ATTACK
-# =========================================================
 
 func spawn_attack(anim_name: String):
 
@@ -2162,6 +2224,10 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 	# UPPERCUT
 	# =====================================================
 
+	# =====================================================
+# UPPERCUT
+# =====================================================
+
 	if area.get("attack_name") == "uppercut":
 
 		uppercut_launched = true
@@ -2177,6 +2243,7 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 
 		state = State.JUMP
 
+		# Launch Reptile backwards
 		knockback_x = -facing * 100
 
 		velocity.x = knockback_x
@@ -2185,42 +2252,37 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 		current_anim = ""
 		sprite.play("wasuppercut")
 
-		if is_instance_valid(hurt_sound):
-			hurt_sound.play()
+	if is_instance_valid(hurt_sound):
+		hurt_sound.play()
 
-		take_damage(1)
+	take_damage(1)
 
-		hurt_cooldown = false
+	# Let _physics_process() handle the landing.
+	# It will return Reptile to IDLE when he touches the floor.
 
-		return
+	hurt_cooldown = false
+
+	return
 
 		# =================================================
 		# RETURN TO IDLE
 		# =================================================
 
-		if state != State.DEAD:
-
-			uppercut_launched = false
-
-			velocity.x = 0
-			velocity.y = 0
-
-			is_hurting = false
-			hurt_locked = false
-			action_locked = false
-			is_attacking = false
-			is_shooting = false
-			is_blocking = false
-
-			state = State.IDLE
-
-			current_anim = ""
-			play_anim("idle")
-
+	if state != State.DEAD:
+		uppercut_launched = false
+		velocity.x = 0
+		velocity.y = 0
+		is_hurting = false
+		hurt_locked = false
+		action_locked = false
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+		state = State.IDLE
+		current_anim = ""
+		play_anim("idle")
 		await get_tree().create_timer(0.2).timeout
-
 		hurt_cooldown = false
-
 		return
 
 	# =====================================================
