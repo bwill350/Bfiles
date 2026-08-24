@@ -64,6 +64,7 @@ var pull_timer := 0.0
 var pull_target: Node = null
 
 # ---------------- FLAGS ----------------
+var kick_combo_active := false
 var is_blocking := false
 var is_hurting := false
 var is_shooting := false
@@ -1439,10 +1440,6 @@ func trigger_finish_state():
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
 
-# ---------------- DEATH ----------------
-# =====================================================
-# DEATH
-# =====================================================
 # =========================================================
 # DEATH
 # =========================================================
@@ -1745,10 +1742,20 @@ func start_punch_combo():
 		"uppercut"
 	])
 
+
 func start_kick_combo():
+
+	if kick_combo_active:
+		return
 
 	if action_locked or is_hurting or state == State.DEAD:
 		return
+
+	if health <= 1:
+		return
+
+	kick_combo_active = true
+	can_take_damage = false
 
 	await combo_attack([
 		"kick",
@@ -1760,6 +1767,15 @@ func start_kick_combo():
 		"highkick"
 	])
 
+	# Combo is completely finished
+	kick_combo_active = false
+
+	if state != State.DEAD:
+		can_take_damage = true
+
+# =========================================================
+# COMBO ATTACK
+# =========================================================
 func combo_attack(attacks: Array):
 
 	action_locked = true
