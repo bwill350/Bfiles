@@ -491,7 +491,6 @@ func stop_block():
 
 
 # ---------------- CPU ----------------
-# ---------------- CPU ----------------
 func cpu_logic(delta):
 
 	# =========================================================
@@ -988,7 +987,6 @@ func do_action(anim_name: String):
 	action_locked = false
 	hurt_locked = false
 
-# ---------------- ATTACK ----------------
 # ---------------- ATTACK ----------------
 func spawn_attack(anim_name: String):
 
@@ -1519,8 +1517,7 @@ func combo_attack(attacks: Array):
 	if not is_hurting:
 		play_anim("idle")
 
-# ---------------- DEATH ----------------
-# ---------------- DEATH ----------------
+
 # ---------------- DEATH ----------------
 func die():
 
@@ -1530,7 +1527,6 @@ func die():
 
 	if state == State.DEAD:
 		return
-
 
 	# =====================================================
 	# LOCK KANO AS DEAD
@@ -1548,7 +1544,6 @@ func die():
 	action_locked = true
 	hurt_locked = true
 	can_take_damage = false
-
 
 	# =====================================================
 	# STOP ALL KANO ACTIONS
@@ -1576,7 +1571,6 @@ func die():
 	special_move = false
 	special_move_timer = 0.0
 
-
 	# =====================================================
 	# HIDE NORMAL SPRITE
 	# SHOW DEAD / CRISPY SPRITE
@@ -1588,299 +1582,44 @@ func die():
 	if has_node("Crispy"):
 		$Crispy.visible = true
 
-
 	# =====================================================
-	# ROUND 1 DEATH
-	# START ROUND 2
+	# DETERMINE ROUND WINNER
 	# =====================================================
 
-	if Game.current_round == 1:
-
-		# -------------------------------------------------
-		# TELL LEVEL1 WHO WON ROUND 1
-		# -------------------------------------------------
-
-		if is_in_group("player1"):
-			round_death.emit("cpu")
-		else:
-			round_death.emit("player1")
-
-
-		# -------------------------------------------------
-		# WAIT BEFORE ROUND 2
-		# -------------------------------------------------
-
-		await get_tree().create_timer(3.0).timeout
-
-
-		# -------------------------------------------------
-		# CHANGE TO ROUND 2
-		# -------------------------------------------------
-
-		Game.current_round = 2
-
-
-		# =================================================
-		# FIND PLAYER 1
-		# =================================================
-
-		var p1 = get_tree().get_first_node_in_group("player1")
-
-
-		# =================================================
-		# FIND PLAYER 2 / CPU
-		# =================================================
-
-		var p2 = get_tree().get_first_node_in_group("enemy")
-
-
-		# =================================================
-		# RESET PLAYER 1
-		# =================================================
-
-		if p1 != null and is_instance_valid(p1):
-
-			p1.global_position = Vector2(603, 496)
-
-			p1.health = 10
-			p1.max_health = 10
-
-			p1.velocity = Vector2.ZERO
-
-			p1.state = p1.State.IDLE
-
-			p1.is_hurting = false
-			p1.is_attacking = false
-			p1.is_shooting = false
-			p1.action_locked = false
-			p1.hurt_locked = false
-			p1.can_take_damage = true
-			p1.is_blocking = false
-
-			if "stunned" in p1:
-				p1.stunned = false
-
-			if "is_pulled" in p1:
-				p1.is_pulled = false
-
-			if "is_spear_pulled" in p1:
-				p1.is_spear_pulled = false
-
-			if "pull_target" in p1:
-				p1.pull_target = null
-
-			if "pull_timer" in p1:
-				p1.pull_timer = 0.0
-
-			if "knockback_x" in p1:
-				p1.knockback_x = 0.0
-
-			if "uppercut_launched" in p1:
-				p1.uppercut_launched = false
-
-			if "hurt_cooldown" in p1:
-				p1.hurt_cooldown = false
-
-			if "is_finish_state" in p1:
-				p1.is_finish_state = false
-
-			if "spawn_protection" in p1:
-				p1.spawn_protection = false
-
-			if p1.has_node("Sprite"):
-				p1.get_node("Sprite").visible = true
-
-			if p1.has_node("Crispy"):
-				p1.get_node("Crispy").visible = false
-
-			if p1.has_signal("health_changed"):
-				p1.health_changed.emit(10)
-
-			if p1.has_method("play_anim"):
-				p1.play_anim("idle")
-
-
-		# =================================================
-		# RESET PLAYER 2 / CPU
-		# =================================================
-
-		if p2 != null and is_instance_valid(p2):
-
-			p2.global_position = Vector2(1890, 496)
-
-			p2.health = 10
-			p2.max_health = 10
-
-			p2.velocity = Vector2.ZERO
-
-			p2.state = p2.State.IDLE
-
-			p2.is_hurting = false
-			p2.is_attacking = false
-			p2.is_shooting = false
-			p2.action_locked = false
-			p2.hurt_locked = false
-			p2.can_take_damage = true
-			p2.is_blocking = false
-
-			if "stunned" in p2:
-				p2.stunned = false
-
-			if "is_pulled" in p2:
-				p2.is_pulled = false
-
-			if "is_spear_pulled" in p2:
-				p2.is_spear_pulled = false
-
-			if "pull_target" in p2:
-				p2.pull_target = null
-
-			if "pull_timer" in p2:
-				p2.pull_timer = 0.0
-
-			if "knockback_x" in p2:
-				p2.knockback_x = 0.0
-
-			if "uppercut_launched" in p2:
-				p2.uppercut_launched = false
-
-			if "hurt_cooldown" in p2:
-				p2.hurt_cooldown = false
-
-			if "is_finish_state" in p2:
-				p2.is_finish_state = false
-
-			if "spawn_protection" in p2:
-				p2.spawn_protection = false
-
-			if p2.has_node("Sprite"):
-				p2.get_node("Sprite").visible = true
-
-			if p2.has_node("Crispy"):
-				p2.get_node("Crispy").visible = false
-
-			if p2.has_signal("health_changed"):
-				p2.health_changed.emit(10)
-
-			if p2.has_method("play_anim"):
-				p2.play_anim("idle")
-
-
-		# =================================================
-		# RESET THIS KANO
-		# =================================================
-
-		health = 10
-		max_health = 10
-
-		global_position = Vector2(1890, 496)
-
-		velocity = Vector2.ZERO
-
-		state = State.IDLE
-
-		is_hurting = false
-		is_attacking = false
-		is_shooting = false
-		is_blocking = false
-
-		action_locked = false
-		hurt_locked = false
-		can_take_damage = true
-
-		stunned = false
-
-		is_pulled = false
-		is_spear_pulled = false
-		pull_target = null
-		pull_timer = 0.0
-
-		knockback_x = 0.0
-		uppercut_launched = false
-		hurt_cooldown = false
-
-		cannonball_active = false
-		cannonball_timer = 0.0
-		cannonball_ready = false
-		cannonball_hit_lock = false
-
-		run_locked = false
-		bullet_spawned = false
-
-		special_move = false
-		special_move_timer = 0.0
-
-		spawn_locked = false
-		spawn_protection = false
-
-		is_finish_state = false
-
-		combo.clear()
-		combo_timer = 0.0
-
-		ai_timer = randf_range(0.2, 0.6)
-
-
-		# =================================================
-		# HIDE FINISH HIM
-		# =================================================
-
-		if is_instance_valid(finish_label):
-			finish_label.visible = false
-
-
-		# =================================================
-		# SHOW NORMAL KANO
-		# =================================================
-
-		$Sprite.visible = true
-		$Crispy.visible = false
-
-		health_changed.emit(10)
-
-		play_anim("idle")
-
-
-		# =================================================
-		# RESET HUD
-		# =================================================
-
-		var hud = get_tree().get_first_node_in_group("HUD")
-
-		if hud != null and is_instance_valid(hud):
-
-			if hud.has_method("_find_fighters"):
-				hud._find_fighters()
-
-			if hud.has_method("reset_all_health_bars"):
-				hud.reset_all_health_bars()
-
-			if hud.has_node("KanoHealthBar"):
-				hud.get_node("KanoHealthBar").value = 10
-
-			if hud.has_node("DukeHealthBar"):
-				hud.get_node("DukeHealthBar").value = 10
-
-			if hud.has_node("ReptileHealthBar"):
-				hud.get_node("ReptileHealthBar").value = 10
-
-			if hud.has_method("show_round"):
-				hud.show_round(2)
-
-
-		# =================================================
-		# ROUND 2 STARTED
-		# =================================================
-
-		return
-
+	var winner := ""
+
+	if is_in_group("player1"):
+		winner = "cpu"
+	else:
+		winner = "player1"
 
 	# =====================================================
-	# ROUND 2 DEATH
-	# FINAL DEATH / MATCH OVER
+	# DETERMINE IF THIS DEATH ENDS THE MATCH
+	# =====================================================
+	#
+	# Level1 has not awarded this round yet.
+	#
+	# If winner already has 1 round win,
+	# this death will be their SECOND win.
 	# =====================================================
 
-	if Game.current_round == 2:
+	var match_will_end := false
+
+	if winner == "player1":
+
+		if Game.p1_round_wins >= 1:
+			match_will_end = true
+
+	else:
+
+		if Game.p2_round_wins >= 1:
+			match_will_end = true
+
+	# =====================================================
+	# FINAL MATCH DEATH
+	# =====================================================
+
+	if match_will_end:
 
 		# =================================================
 		# BLOOD EFFECT
@@ -1892,14 +1631,12 @@ func die():
 
 		blood.global_position = global_position
 
-
 		# =================================================
 		# FINAL DEATH SPRITE
 		# =================================================
 
 		$Sprite.visible = false
 		$Crispy.visible = true
-
 
 		# =================================================
 		# STOP ALL KANO ACTIONS
@@ -1928,9 +1665,6 @@ func die():
 		cannonball_ready = false
 		cannonball_hit_lock = false
 
-		special_move = false
-		special_move_timer = 0.0
-
 		run_locked = true
 		bullet_spawned = false
 
@@ -1939,7 +1673,6 @@ func die():
 
 		knockback_x = 0.0
 
-
 		# =================================================
 		# MAKE SURE FINISH HIM IS HIDDEN
 		# =================================================
@@ -1947,30 +1680,23 @@ func die():
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
 
-
 		# =================================================
 		# WAIT FOR FATALITY / FINAL DEATH
 		# =================================================
 
 		await get_tree().create_timer(3.0).timeout
 
-
 		# =================================================
 		# TELL LEVEL1 WHO WON
 		# =================================================
 
-		if is_in_group("player1"):
-			round_death.emit("cpu")
-		else:
-			round_death.emit("player1")
-
+		round_death.emit(winner)
 
 		# =================================================
 		# SMALL DELAY
 		# =================================================
 
 		await get_tree().create_timer(0.2).timeout
-
 
 		# =================================================
 		# FINAL MATCH OVER
@@ -1980,6 +1706,42 @@ func die():
 		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
 
 		return
+
+	# =====================================================
+	# NORMAL ROUND DEATH
+	# =====================================================
+	#
+	# Match is NOT over.
+	#
+	# Level1 receives round_death and handles:
+	#
+	# - round winner
+	# - score
+	# - next round
+	#
+	# =====================================================
+
+	# =====================================================
+	# HIDE FINISH HIM
+	# =====================================================
+
+	if is_instance_valid(finish_label):
+		finish_label.visible = false
+
+	# =====================================================
+	# DEAD SPRITE
+	# =====================================================
+
+	$Sprite.visible = false
+	$Crispy.visible = true
+
+	# =====================================================
+	# TELL LEVEL1
+	# =====================================================
+
+	round_death.emit(winner)
+
+	return
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
