@@ -1482,7 +1482,6 @@ func die():
 		Game.p2_round_wins
 	)
 	print("ROUND WINNER: ", winner)
-	print("SUB-ZERO FACING: ", facing)
 	print("================================")
 
 	# =====================================================
