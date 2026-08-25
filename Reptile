@@ -139,6 +139,7 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
+@onready var getoverhere_sound: AudioStreamPlayer2D = $GetOverHere
 @onready var finishhim_sound: AudioStreamPlayer2D = $FinishHim
 @onready var hit_box: Area2D = $ReptileHurtBox
 @onready var shoot_marker: Marker2D = $Reptileshoot
@@ -972,7 +973,6 @@ func cpu_logic(delta):
 # =========================================================
 
 func pull_enemy(enemy: CharacterBody2D):
-
 	if enemy == null or not is_instance_valid(enemy):
 		return
 
@@ -1031,6 +1031,9 @@ func start_spear():
 
 	play_anim("spear")
 
+	# PLAY GET OVER HERE SOUND
+	getoverhere_sound.play()
+
 	await get_tree().create_timer(0.15).timeout
 
 	if state == State.DEAD:
@@ -1072,7 +1075,6 @@ func spawn_spear():
 # =========================================================
 
 func spear_pulled_to_p1():
-
 	is_pulled = true
 	pull_timer = 0.35
 	stunned = true
