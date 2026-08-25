@@ -23,9 +23,6 @@ JohnnyCage (CharacterBody2D)
 │   └── FinishLabel
 │       └── Sprite2D
 
-extends CharacterBody2D
-class_name JohnnyCage
-
 signal round_death(winner: String)
 var spawn_locked := true
 var spawn_protection := false
