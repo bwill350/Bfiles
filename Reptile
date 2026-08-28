@@ -35,7 +35,7 @@ signal round_death(winner: String)
 @onready var fight = $Fight
 @onready var you_win = $YouWin
 @onready var you_lose = $YouLosed
-
+@onready var fatality_sound: AudioStreamPlayer2D = $Fatality
 # =========================================================
 # STATE
 # =========================================================
@@ -542,6 +542,7 @@ func _physics_process(delta):
 
 		velocity.y = jump_velocity
 		state = State.JUMP
+		$Jump.play()
 
 	# =====================================================
 	# ATTACKS
@@ -599,10 +600,22 @@ func _physics_process(delta):
 	elif Input.is_action_pressed("fatalitycombo"):
 
 		do_action("fatalitycombo")
+		# PLAY FATALITY SOUND
+		if is_instance_valid(fatality_sound):
+			fatality_sound.play()
+			print("================================")
+			print("===========FATALITY=============")
+			print("================================")
 
 	elif Input.is_action_pressed("FATALITY_COMBO"):
 
 		do_action("fatalitycombo")
+		# PLAY FATALITY SOUND
+		if is_instance_valid(fatality_sound):
+			fatality_sound.play()
+			print("================================")
+			print("===========FATALITY=============")
+			print("================================")
 
 	elif Input.is_action_just_pressed("spear"):
 
@@ -1034,6 +1047,9 @@ func start_spear():
 	# PLAY GET OVER HERE SOUND
 	getoverhere_sound.play()
 
+	# PLAY SPEAR SOUND
+	$Spear.play()
+
 	await get_tree().create_timer(0.15).timeout
 
 	if state == State.DEAD:
@@ -1211,10 +1227,11 @@ func spawn_fx(scene: PackedScene):
 	fx.owner_character = self
 	fx.damage_done = false
 
-	get_tree().current_scene.call_deferred(
-		"add_child",
-		fx
-	)
+	get_tree().current_scene.call_deferred("add_child", fx)
+	if is_instance_valid(fatality_sound):
+		fatality_sound.play()
+		await get_tree().process_frame
+
 
 	await get_tree().process_frame
 
@@ -1250,7 +1267,9 @@ func check_combos():
 		special_bullet = FIRE_BULLET
 
 		combo.clear()
-
+		print("================================")
+		print("===========FATALITY=============")
+		print("================================")
 		shoot_player()
 
 		return
@@ -1356,11 +1375,6 @@ func start_punch_combo():
 		"highpunch",
 		"uppercut"
 	])
-
-
-# =========================================================
-# KICK COMBO
-# =========================================================
 
 # =========================================================
 # KICK COMBO
