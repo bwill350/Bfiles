@@ -127,7 +127,7 @@ const SMOKE_EFFECT = preload("res://Projectiles/SmokeEffect.tscn")
 @onready var kanoyell_sound: AudioStreamPlayer2D = $Kanoyell
 @onready var hit_box: Area2D = $KanoHurtBox
 @onready var shoot_marker: Marker2D = $KanoShoot
-
+@onready var fatality_sound: AudioStreamPlayer2D = $Fatality
 @onready var blood_marker: Marker2D = $BloodMarker
 @onready var smoke_marker: Marker2D = $SmokeMarker
 
@@ -385,6 +385,7 @@ func _physics_process(delta):
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
+		$Jump.play()
 
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("punch"):
@@ -421,6 +422,12 @@ func _physics_process(delta):
 
 	elif Input.is_action_pressed("fatality"):
 		do_action("fatality")
+		if is_instance_valid(fatality_sound):
+			fatality_sound.play()
+			await get_tree().process_frame
+			print("================================")
+			print("===========FATALITY=============")
+			print("================================")
 
 
 	elif Input.is_action_pressed("block"):
@@ -432,7 +439,6 @@ func _physics_process(delta):
 	move_and_slide()
 
 func spear_pulled_to_p1():
-	print("START PULL")
 
 	is_pulled = true
 	stunned = true
@@ -444,7 +450,6 @@ func spear_pulled_to_p1():
 	pull_target = get_tree().get_first_node_in_group("Reptile")
 
 func run_pull_logic(delta):
-	print("Running pull logic")
 	if pull_target == null or !is_instance_valid(pull_target):
 		is_pulled = false
 		stunned = false
@@ -1073,6 +1078,9 @@ func start_cannonball(dir: float):
 
 	play_anim("cannonball")
 
+	# PLAY CANNONBALL SOUND
+	$Cannonball.play()
+
 	velocity = Vector2(facing * 2200, 0)
 
 	# Stop after 1 second
@@ -1104,7 +1112,12 @@ func shoot_player():
 	action_locked = true
 
 	play_anim("shoot")
+
+	# PLAY KNIFE SOUND
+	$Knife.play()
+
 	$Kanoyell.play()
+
 	var bullet_scene: PackedScene
 
 	# ---------------- SPECIAL BULLET ----------------
@@ -1200,7 +1213,7 @@ func take_damage(amount: int):
 	health -= amount
 	health = max(health, 0)
 
-	print("JohnnyCage took damage: ", amount, " HP=", health)
+	print("Kano took damage: ", amount, " HP=", health)
 
 	health_changed.emit(health)
 
