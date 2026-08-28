@@ -27,7 +27,6 @@ LiuKang (CharacterBody2D)
 signal round_death(winner: String)
 signal health_changed(health)
 signal combo_used(combo_name: String)
-@export var speed := 300.0
 const GRAB_ATTACK = preload("res://GrabAttack.tscn")
 var grabbed_enemy: CharacterBody2D = null
 var is_grabbing := false
@@ -97,6 +96,7 @@ const GRAVITY = 5000
 @export var jump_velocity := -2400.0
 @export var combo_reset_time := 0.6
 @export var shoot_cooldown_time: float = 0.01
+@export var speed := 300.0
 @export var player_controlled := false
 
 # ---------------- PRELOADS ----------------
@@ -114,6 +114,7 @@ const FIREBALL = preload("res://Projectiles/Fireball.tscn")
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var shoot_marker: Marker2D = $LiuKangShoot
+@onready var fatality_sound: AudioStreamPlayer2D = $Fatality
 @onready var character = get_parent()
 
 
@@ -495,19 +496,32 @@ func _physics_process(delta):
 				grabbed_enemy.velocity = Vector2.ZERO
 			elif not is_attacking:
 				play_anim("jump")
+	# ---------------- ANIMS ----------------
+	match state:
+
+		State.JUMP:
+			if not is_attacking:
+				play_anim("jump")
+
 		State.WALK:
 			if not is_attacking:
 				play_anim("walk")
+
 		State.RUN:
 			if not is_attacking:
 				play_anim("run")
+
 		State.IDLE:
 			if not is_attacking:
 				play_anim("idle")
 
+	if is_hurting and hurt_locked:
+		return
+
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
+
 
 	if Input.is_action_just_pressed("grab") and is_on_floor():
 		is_grabbing = true
@@ -643,8 +657,6 @@ func spear_pulled_to_p1():
 
 	if state == State.DEAD:
 		return
-
-	print("LIU KANG PULLED")
 
 	# =====================================================
 	# LOCK LIU KANG DURING PULL
@@ -1257,6 +1269,9 @@ func shoot_fireball():
 
 	play_anim("shoot")
 
+	# PLAY FIREBALL SOUND
+	$Fireball.play()
+
 	var bullet_scene: PackedScene
 
 	# 🔥 Combo override bullet
@@ -1840,6 +1855,9 @@ func register_input(input: String):
 
 func spawn_fx(scene: PackedScene):
 
+	if scene == null:
+		return
+
 	var fx = scene.instantiate()
 
 	# IMPORTANT: set owner BEFORE it can collide
@@ -1848,8 +1866,14 @@ func spawn_fx(scene: PackedScene):
 
 	get_tree().current_scene.call_deferred("add_child", fx)
 
+	# Wait for FX to be added
 	await get_tree().process_frame
 
+	# PLAY FATALITY SOUND
+	if is_instance_valid(fatality_sound):
+		fatality_sound.play()
+
+	# Position FX
 	if target and is_instance_valid(target):
 		fx.global_position = target.global_position + Vector2(60 * facing, 0)
 	else:
@@ -1863,9 +1887,13 @@ func check_combos():
 		combo_used.emit("fire")
 
 		special_bullet = FIRE_BULLET
-
+		print("================================")
+		print("===========FATALITY=============")
+		print("================================")
 		combo.clear()
-
+		# PLAY FATALITY SOUND
+		if is_instance_valid(fatality_sound):
+			fatality_sound.play()
 		shoot_fireball()
 		return
 
@@ -1909,11 +1937,15 @@ func check_combos():
 
 		var fx = DRAGON_DEATH.instantiate()
 		get_tree().current_scene.add_child(fx)
-
+		# PLAY FATALITY SOUND
+		if is_instance_valid(fatality_sound):
+			fatality_sound.play()
 		fx.global_position = global_position + Vector2(0 * facing, 0)
 
 		play_anim("dragon")
-
+		print("================================")
+		print("===========FATALITY=============")
+		print("================================")
 		combo.clear()
 
 		await get_tree().create_timer(0.4).timeout
