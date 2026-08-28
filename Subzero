@@ -45,7 +45,7 @@ var stunned := false
 @onready var fight = $Fight
 @onready var you_win = $YouWin
 @onready var you_lose = $YouLosed
-
+@onready var fatality_sound: AudioStreamPlayer2D = $Fatality
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
 var state: State = State.IDLE
@@ -384,6 +384,7 @@ func _physics_process(delta):
 
 		velocity.y = jump_velocity
 		state = State.JUMP
+		$Jump.play()
 
 	# =========================================================
 	# AIRBORNE
@@ -505,7 +506,6 @@ func _physics_process(delta):
 	move_and_slide() 
 
 func spear_pulled_to_p1():
-	print("START PULL")
 
 	is_pulled = true
 	stunned = true
@@ -517,7 +517,6 @@ func spear_pulled_to_p1():
 	pull_target = get_tree().get_first_node_in_group("Reptile")
 
 func run_pull_logic(delta):
-	print("Running pull logic")
 	if pull_target == null or !is_instance_valid(pull_target):
 		is_pulled = false
 		stunned = false
@@ -853,7 +852,9 @@ func ice_combo():
 	combo_used.emit("ice")
 
 	special_bullet = BULLET_SCENE
-
+	print("================================")
+	print("===========FATALITY=============")
+	print("================================")
 	combo.clear()
 	combo_timer = 0.0
 
@@ -871,7 +872,9 @@ func check_combos():
 	if combo == ICE_DEATH_TWO_COMBO:
 
 		combo_used.emit("ice_death_two")
-
+		print("================================")
+		print("===========FATALITY=============")
+		print("================================")
 		combo.clear()
 		combo_timer = 0.0
 
@@ -883,7 +886,9 @@ func check_combos():
 
 		# Play Sub-Zero animation
 		play_anim("uppercut")
-
+		# PLAY FATALITY SOUND
+		if is_instance_valid(fatality_sound):
+			fatality_sound.play()
 		await sprite.animation_finished
 
 		is_attacking = false
@@ -936,9 +941,13 @@ func check_combos():
 
 		combo.clear()
 		combo_timer = 0.0
-
+		print("================================")
+		print("===========FATALITY=============")
+		print("================================")
 		ice_combo()
-
+		# PLAY FATALITY SOUND
+		if is_instance_valid(fatality_sound):
+			fatality_sound.play()
 		return
 
 
@@ -1098,11 +1107,15 @@ func spawn_attack(anim_name: String):
 func shoot_player():
 	if is_shooting:
 		return
+
 	is_shooting = true
 	is_attacking = true
 	action_locked = true
 
 	play_anim("shoot")
+
+	# PLAY ICE SOUND
+	$Ice.play()
 
 	var bullet_scene: PackedScene = BULLET_SCENE
 
@@ -1125,7 +1138,6 @@ func shoot_player():
 # ---------------- DAMAGE ----------------
 # =========================================================
 # TAKE DAMAGE
-# =========================================================
 
 func take_damage(amount: int):
 
@@ -1609,8 +1621,7 @@ func spawn_fx(scene: PackedScene):
 	fx.damage_done = false
 
 	get_tree().current_scene.call_deferred("add_child", fx)
-
-	await get_tree().process_frame
+	# PLAY FATALITY SOUND
 
 	if target and is_instance_valid(target):
 		fx.global_position = target.global_position + Vector2(60 * facing, 0)
