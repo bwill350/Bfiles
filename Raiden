@@ -121,6 +121,7 @@ const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
+@onready var fatality_sound: AudioStreamPlayer2D = $Fatality
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
 @onready var finishhim_sound: AudioStreamPlayer2D = $FinishHim
 @onready var electric_sound: AudioStreamPlayer2D = $Electric
@@ -208,6 +209,15 @@ func start_electricfly(dir: float):
 	action_locked = false
 	play_anim("idle")
 
+func end_electricfly():
+	electricfly_active = false
+	spawn_protection = false
+	action_locked = false
+	is_attacking = false
+
+	if state != State.DEAD:
+		play_anim("idle")
+
 func spawn_raiden_bullet():
 	var bullet = RAIDEN_ELECTRIC_BULLET.instantiate()
 	get_tree().current_scene.add_child(bullet)
@@ -229,14 +239,7 @@ func _on_sprite_frame_changed():
 				bullet_spawned = true
 				spawn_raiden_bullet()
 
-func end_electricfly():
-	electricfly_active = false
-	spawn_protection = false
-	action_locked = false
-	is_attacking = false
 
-	if state != State.DEAD:
-		play_anim("idle")
 
 func _on_health_changed(h):
 
@@ -549,6 +552,7 @@ func _physics_process(delta):
 	# ---------------- JUMP ----------------
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
+		$Jump.play()
 
 	# ---------------- ATTACKS ----------------
 	if Input.is_action_just_pressed("punch"):
@@ -583,10 +587,24 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("electricburst"):
 		do_action("electricburst")
 		spawn_burst()
+		# PLAY FATALITY SOUND
+		if is_instance_valid(fatality_sound):
+			fatality_sound.play()
+		print("================================")
+		print("===========FATALITY=============")
+		print("================================")
 
 	elif Input.is_action_just_pressed("doublepalmshocker"):
 		play_anim("doublepalmshocker")
 		do_action("doublepalmshocker")
+		print("================================")
+		print("===========FATALITY=============")
+		print("================================")
+
+		# PLAY FATALITY SOUND
+		if is_instance_valid(fatality_sound):
+			fatality_sound.play()
+
 		var bullet = RAIDEN_ELECTRIC_BULLET.instantiate()
 		get_tree().current_scene.add_child(bullet)
 
@@ -602,7 +620,6 @@ func _physics_process(delta):
 	move_and_slide()
 
 func spear_pulled_to_p1():
-	print("START PULL")
 
 	is_pulled = true
 	stunned = true
@@ -614,7 +631,6 @@ func spear_pulled_to_p1():
 	pull_target = get_tree().get_first_node_in_group("Reptile")
 
 func run_pull_logic(delta):
-	print("Running pull logic")
 	if pull_target == null or !is_instance_valid(pull_target):
 		is_pulled = false
 		stunned = false
@@ -881,8 +897,13 @@ func shoot_player():
 	action_locked = true
 
 	play_anim("shoot")
+
+	# PLAY ELECTRIC SOUND FIRST
+	$Electricsound.play()
+
 	if has_node("Hit"):
 		$Hit.play()
+
 	var bullet_scene: PackedScene
 
 	# 🔥 Combo override bullet
@@ -935,6 +956,7 @@ func spawn_force_field():
 
 	play_anim("doublepalmshocker")
 	$Hurt.play()
+	$Fatality.play()
 	var field = ELECTRIC_FORCE_FIELD.instantiate()
 	get_tree().current_scene.add_child(field)
 
@@ -945,6 +967,7 @@ func spawn_force_field():
 
 	action_locked = false
 	is_attacking = false
+
 # ---------------- ACTION ----------------
 func do_action(anim_name: String):
 
@@ -1404,7 +1427,7 @@ func trigger_finish_state():
 
 	state = State.IDLE
 
-	# force them to fall back down
+	# Force them to stop moving
 	velocity.x = 0
 	velocity.y = 0
 
@@ -1415,34 +1438,62 @@ func trigger_finish_state():
 	is_hurting = false
 	is_blocking = false
 
-	# cancel any uppercut/fly state
+	# Cancel any uppercut/fly state
 	set_meta("uppercut_launched", false)
 
+	# Return to idle
 	play_anim("idle")
+
+	# =====================================================
+	# SHOW FINISH HIM
+	# =====================================================
 
 	finish_label.visible = true
 
 	if finish_label.has_method("start_flicker"):
 		finish_label.start_flicker(2.0, 0.05)
 
-	# let gravity work
+	# =====================================================
+	# LET RAiden FALL BACK TO THE FLOOR
+	# =====================================================
+
 	await get_tree().create_timer(0.1).timeout
 
 	while not is_on_floor():
+
 		velocity.y += 5000.0 * get_physics_process_delta_time()
+
 		move_and_slide()
+
 		await get_tree().physics_frame
 
 	velocity = Vector2.ZERO
 
+	# =====================================================
+	# KEEP FINISH HIM ON SCREEN
+	# =====================================================
+
 	await get_tree().create_timer(2.0).timeout
+
+	# =====================================================
+	# HIDE FINISH HIM
+	# =====================================================
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
 
-# =========================================================
-# DEATH
-# =========================================================
+	# =====================================================
+	# WAIT A FEW SECONDS AFTER FINISH HIM
+	# =====================================================
+
+	await get_tree().create_timer(2.0).timeout
+
+	# =====================================================
+	# PLAY FATALITY SOUND
+	# =====================================================
+
+	if is_instance_valid(fatality_sound):
+		fatality_sound.play()
 
 func die():
 
