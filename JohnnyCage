@@ -71,6 +71,9 @@ var lock_timer := 0.0
 var cannonkick_active := false
 var cannonkick_timer := 0.0
 var hurt_cooldown := false
+var fatalkick_active := false
+var fatalkick_speed := 1600.0
+var fatalkick_attack: JohnnyCageAttack = null
 
 # ---------------- MOVEMENT ----------------
 var facing := 1
@@ -99,7 +102,6 @@ const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
 const JOHNNY_CAGE_BULLET = preload("res://Projectiles/JohnnyCageBullet.tscn")
 const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
 const JOHNNY_CAGE_ATTACK = preload("res://Projectiles/JohnnyCageAttack.tscn")
-
 const BLOOD_EFFECT = preload("res://Deaths/GreenBloodEffect.tscn")
 
 # ---------------- DEATH FX ----------------
@@ -123,7 +125,8 @@ const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
 @onready var fatality_sound: AudioStreamPlayer2D = $Fatality
-
+@onready var fatalkick_sound: AudioStreamPlayer2D = $Fatalkick
+@onready var cannonkick_sound: AudioStreamPlayer2D = $Cannonkick
 # ---------------- COMBOS ----------------
 var combo := []
 var combo_timer := 0.0
@@ -133,6 +136,8 @@ var is_running := false
 const PUNCH_COMBO = ["right", "down", "right"]
 const KICK_COMBO = ["right", "down", "down"]
 const FIRE_COMBO = ["down", "up"]
+
+
 
 func apply_stun(_duration := 4.0):
 
@@ -466,6 +471,11 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("kickfatality"):
 		do_action("kickfatality")
 
+	elif Input.is_action_just_pressed("fatalkick"):
+		fatalkick()
+		do_action("fatalkick")
+
+
 	elif Input.is_action_just_pressed("shoot"):
 
 		if shoot_cooldown <= 0:
@@ -647,108 +657,21 @@ func cpu_logic(delta):
 		return
 
 	# =========================================================
-	# STOP ALL ACTIONS AT 1HP
-	# =========================================================
-	if health <= 1:
-
-		health = 0
-		is_attacking = false
-		action_locked = true
-		velocity.x = 0
-		combo.clear()
-
-		# Stop CPU from continuing to attack
-		if "is_cpu" in self:
-			is_cpu = false
-
-		# Make sure health UI shows exactly 1
-		health_changed.emit(health)
-
-		return
-
-	# =========================================================
 	# FINISH HIM
 	# =========================================================
 	if is_finish_state:
-
-		velocity.x = 0.0
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
 		state = State.IDLE
 
 		if not is_hurting:
 			play_anim("idle")
 
-		velocity.y += GRAVITY * delta
-		move_and_slide()
-
 		return
 
 	# =========================================================
-	# ALWAYS FIND PLAYER 1
-	# =========================================================
-	if target == null or not is_instance_valid(target):
-
-		target = get_tree().get_first_node_in_group("player1")
-
-		if target == null or not is_instance_valid(target):
-
-			for node in get_tree().get_nodes_in_group("Fighter"):
-
-				if node == self:
-					continue
-
-				if not is_instance_valid(node):
-					continue
-
-				if node is Node2D and not node.is_cpu:
-					target = node
-					break
-
-	# =========================================================
-	# NO PLAYER FOUND
-	# =========================================================
-	if target == null or not is_instance_valid(target):
-
-		# CPU still walks instead of standing idle
-		state = State.WALK
-		velocity.x = facing * SPEED
-
-		if not is_attacking and not is_hurting:
-			play_anim("walk")
-
-		velocity.y += GRAVITY * delta
-		move_and_slide()
-
-		ai_timer = 0.01
-
-		return
-
-	# =========================================================
-	# GRAVITY
-	# =========================================================
-	velocity.y += GRAVITY * delta
-
-	# =========================================================
-	# UPPERCUT RECOVERY
-	# =========================================================
-	if uppercut_launched:
-
-		velocity.x = 0.0
-		move_and_slide()
-
-		if is_on_floor():
-
-			uppercut_launched = false
-			velocity.y = 0.0
-
-			# FIND PLAYER 1 AGAIN
-			target = get_tree().get_first_node_in_group("player1")
-
-			ai_timer = 0.01
-
-		return
-
-	# =========================================================
-	# HURT RECOVERY
+	# HURT
 	# =========================================================
 	if is_hurting:
 
@@ -762,16 +685,10 @@ func cpu_logic(delta):
 
 		move_and_slide()
 
-		# Still getting knocked backward
 		if abs(knockback_x) > 10.0:
 			return
 
-		# =====================================================
-		# HURT IS FINISHED
-		# =====================================================
-
 		knockback_x = 0.0
-
 		is_hurting = false
 		hurt_locked = false
 		is_attacking = false
@@ -779,17 +696,27 @@ func cpu_logic(delta):
 		action_locked = false
 
 		state = State.IDLE
-
-		current_anim = ""
 		play_anim("idle")
 
-		# =====================================================
-		# IMMEDIATELY FIND PLAYER 1
-		# =====================================================
+		ai_timer = 0.1
+
+		return
+
+	# =========================================================
+	# ACTION LOCK
+	# =========================================================
+	if action_locked:
+		velocity.x = 0
+		return
+
+	# =========================================================
+	# FIND PLAYER 1
+	# =========================================================
+	if target == null or not is_instance_valid(target):
 
 		target = get_tree().get_first_node_in_group("player1")
 
-		# Backup search
+		# Backup: find human Fighter
 		if target == null or not is_instance_valid(target):
 
 			for node in get_tree().get_nodes_in_group("Fighter"):
@@ -804,43 +731,16 @@ func cpu_logic(delta):
 					target = node
 					break
 
-		# =====================================================
-		# DO NOT WAIT
-		# =====================================================
-
-		ai_timer = 0.01
-
-		# Continue AI immediately on next physics frame
-		return
-
 	# =========================================================
-	# ACTION LOCK
-	# =========================================================
-	if action_locked:
-
-		velocity.x = 0.0
-		move_and_slide()
-
-		return
-
-	# =========================================================
-	# TARGET VALIDATION
+	# NO TARGET
 	# =========================================================
 	if target == null or not is_instance_valid(target):
 
-		target = get_tree().get_first_node_in_group("player1")
+		velocity.x = 0
+		state = State.IDLE
+		play_anim("idle")
 
-		if target == null or not is_instance_valid(target):
-
-			velocity.x = 0.0
-			state = State.IDLE
-			play_anim("idle")
-
-			move_and_slide()
-
-			ai_timer = 0.01
-
-			return
+		return
 
 	# =========================================================
 	# DISTANCE TO PLAYER 1
@@ -849,9 +749,9 @@ func cpu_logic(delta):
 	var distance: float = abs(dist)
 	var direction: float = sign(dist)
 
-	# =========================================================
-	# FACE PLAYER 1
-	# =========================================================
+# =========================================================
+# FACE PLAYER 1
+# =========================================================
 	if direction != 0:
 
 		facing = direction
@@ -859,30 +759,34 @@ func cpu_logic(delta):
 		sprite.flip_h = facing > 0
 		$Crispy.flip_h = facing > 0
 
-		$AttackMarker.position = Vector2(0, 0)
-		$JohnnyCageShoot.position = Vector2(63 * facing, -225)
+		$AttackMarker.position = Vector2.ZERO
+		$JohnnyCageShoot.position = Vector2(63 * facing, -211)
 
 	# =========================================================
-	# ATTACK DISTANCE
+	# CPU DISTANCES
 	# =========================================================
 	var attack_range := 110.0
+	var stopping_distance := 90.0
 
 	# =========================================================
-	# ALWAYS CHASE PLAYER 1
+	# WALK TOWARD PLAYER 1
 	# =========================================================
-	velocity.x = direction * SPEED * 1.05
+	if distance > stopping_distance:
 
-	state = State.RUN
+		velocity.x = direction * SPEED
 
-	if not is_attacking and not is_hurting:
-		play_anim("walk")
+		state = State.WALK
+
+		if not is_attacking and not is_hurting:
+			play_anim("walk")
 
 	# =========================================================
 	# AI ATTACK TIMER
 	# =========================================================
 	ai_timer -= delta
 
-	if ai_timer <= 0.0:
+	if ai_timer > 0.0:
+		return
 
 		# =====================================================
 		# ATTACK PLAYER 1
@@ -1040,7 +944,8 @@ func spawn_attack(anim_name: String):
 		"roundhousekick",
 		"nutcracker",
 		"cannonkick",
-		"kickfatality"
+		"kickfatality",
+		"fatalitykick"
 	]:
 		return
 
@@ -1075,6 +980,8 @@ func spawn_attack(anim_name: String):
 			dmg = 1
 		"kickfatality":
 			dmg = 1
+		"fatalitykick":
+			dmg = 1
 
 	if attack.has_method("set_damage"):
 		attack.set_damage(dmg)
@@ -1084,6 +991,50 @@ func spawn_attack(anim_name: String):
 	attack.attack_owner = self
 	attack.attack_name = anim_name
 	attack.attack_type = anim_name
+
+func fatalkick(dir := 0):
+
+	if state == State.DEAD:
+		return
+
+	if dir == 0:
+		dir = facing
+
+	facing = dir
+	sprite.flip_h = facing > 0
+
+	cannonkick_active = true
+	spawn_protection = true
+	action_locked = true
+	is_attacking = true
+
+	state = State.RUN
+	play_anim("cannonkick")
+
+	velocity.x = facing * 1400
+	velocity.y = 0
+
+	# Stop after 0.4 seconds
+	get_tree().create_timer(0.4).timeout.connect(func():
+		cannonkick_active = false
+	)
+
+	# Damage while moving
+	while cannonkick_active:
+		velocity.x = facing * 1400
+		move_and_slide()
+		spawn_attack("cannonkick")
+		await get_tree().process_frame
+
+	spawn_protection = false
+	cannonkick_active = false
+	is_attacking = false
+	action_locked = false
+	fatality_sound.play()
+	cannonkick_sound.play()
+	if state != State.DEAD:
+		state = State.IDLE
+		play_anim("idle")
 
 func cannonkick(dir := 0):
 
@@ -1095,7 +1046,7 @@ func cannonkick(dir := 0):
 
 	facing = dir
 	sprite.flip_h = facing > 0
-
+	cannonkick_sound.play()
 	cannonkick_active = true
 	spawn_protection = true
 	action_locked = true
