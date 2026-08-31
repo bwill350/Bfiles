@@ -27,12 +27,13 @@ LiuKang (CharacterBody2D)
 signal round_death(winner: String)
 signal health_changed(health)
 signal combo_used(combo_name: String)
-const GRAB_ATTACK = preload("res://GrabAttack.tscn")
+
 var grabbed_enemy: CharacterBody2D = null
 var is_grabbing := false
 var grab_timer := 0.0
 var was_uppercut := false
 const GRAB_TIME := 1.0
+
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
 var special_move := false
@@ -102,6 +103,7 @@ const GRAVITY = 5000
 # ---------------- PRELOADS ----------------
 const LIU_KANG_ATTACK = preload("res://Projectiles/LiuKangAttack.tscn")
 const FIREBALL = preload("res://Projectiles/Fireball.tscn")
+const GRAB_ATTACK = preload("res://GrabAttack.tscn")
 
 # ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
@@ -226,17 +228,65 @@ func start_flyingkick():
 	velocity.y = 0
 
 func start_bicyclekick():
+
+	if state == State.DEAD:
+		return
+
+	if action_locked:
+		return
+
+	bicyclekick_active = true
+	spawn_protection = true
+	is_attacking = true
+	action_locked = true
+
 	play_anim("bicyclekick")
 	$Bicyclekick.play()
-	bicyclekick_active = true
-	special_move = true
-	special_move_invincible = true
-	special_move_timer = 10.6
 
-	special_move_y = global_position.y - 100
+	# Stay at the height where the kick started
+	bicyclekick_y = global_position.y - 100
 
-	velocity.x = facing * 1300
+	# Fly straight across the screen
+	velocity = Vector2(facing * 1300, 0)
+
+	# Stop after 1 second
+	get_tree().create_timer(1.0).timeout.connect(func():
+		bicyclekick_active = false
+	)
+
+	while bicyclekick_active:
+		spawn_attack("bicyclekick")
+		await get_tree().create_timer(0.08).timeout
+
+	velocity.x = 0
 	velocity.y = 0
+
+	state = State.IDLE
+	spawn_protection = false
+	is_attacking = false
+	action_locked = false
+	play_anim("idle")
+
+
+func handle_bicyclekick(delta):
+	if not bicyclekick_active:
+		return
+
+	# Fly straight in the direction you're facing
+	velocity.x = facing * 2200.0
+	velocity.y = 0
+
+	# Keep the character moving
+	move_and_slide()
+
+func end_bicyclekick():
+	bicyclekick_active = false
+	spawn_protection = false
+	action_locked = false
+	is_attacking = false
+
+	if state != State.DEAD:
+		play_anim("idle")
 
 func handle_flyingkick(delta):
 	# lock height exactly where it started
@@ -252,19 +302,7 @@ func handle_flyingkick(delta):
 		special_move_invincible = false
 		return
 
-func handle_bicyclekick(delta):
 
-	global_position.y = special_move_y
-
-	velocity.x = facing * 1300
-	velocity.y = 0
-	spawn_attack("bicyclekick")
-	# STOP ON RELEASE
-	if not Input.is_action_pressed("bicyclekick"):
-		bicyclekick_active = false
-		special_move = false
-		special_move_invincible = false
-		return
 
 	move_and_slide()
 
@@ -836,49 +874,67 @@ func cpu_logic(delta):
 	if state == State.DEAD:
 		return
 
-# =========================================================
-# STOP ALL ACTIONS AT 1HP
-# =========================================================
-
-	if health <= 1:
-
-		health = 0
-
-		is_attacking = false
-		action_locked = true
-		velocity.x = 0
-		combo.clear()
-
-		# Stop CPU from continuing to attack
-		if "is_cpu" in self:
-			is_cpu = false
-
-		# Make sure health UI shows exactly 1
-		health_changed.emit(health)
-
-		return
-
 	# =========================================================
 	# FINISH HIM
 	# =========================================================
 	if is_finish_state:
-		velocity.x = 0.0
+		is_attacking = false
+		action_locked = true
+		velocity.x = 0
 		state = State.IDLE
 
 		if not is_hurting:
 			play_anim("idle")
 
-		velocity.y += GRAVITY * delta
-		move_and_slide()
 		return
 
 	# =========================================================
-	# ALWAYS FIND PLAYER 1
+	# HURT
+	# =========================================================
+	if is_hurting:
+
+		velocity.x = knockback_x
+
+		knockback_x = move_toward(
+			knockback_x,
+			0.0,
+			1500.0 * delta
+		)
+
+		move_and_slide()
+
+		if abs(knockback_x) > 10.0:
+			return
+
+		knockback_x = 0.0
+		is_hurting = false
+		hurt_locked = false
+		is_attacking = false
+		is_shooting = false
+		action_locked = false
+
+		state = State.IDLE
+		play_anim("idle")
+
+		ai_timer = 0.1
+
+		return
+
+	# =========================================================
+	# ACTION LOCK
+	# =========================================================
+	if action_locked:
+		velocity.x = 0
+		return
+
+	# =========================================================
+	# FIND PLAYER 1
 	# =========================================================
 	if target == null or not is_instance_valid(target):
 
 		target = get_tree().get_first_node_in_group("player1")
 
+		# Backup: find human Fighter
 		if target == null or not is_instance_valid(target):
 
 			for node in get_tree().get_nodes_in_group("Fighter"):
@@ -894,22 +950,62 @@ func cpu_logic(delta):
 					break
 
 	# =========================================================
-	# NO PLAYER FOUND
+	# NO TARGET
 	# =========================================================
 	if target == null or not is_instance_valid(target):
 
-		# CPU still walks instead of standing idle
+		velocity.x = 0
+		state = State.IDLE
+		play_anim("idle")
+
+		return
+
+	# =========================================================
+	# DISTANCE TO PLAYER 1
+	# =========================================================
+	var dist: float = target.global_position.x - global_position.x
+	var distance: float = abs(dist)
+	var direction: float = sign(dist)
+
+# =========================================================
+# FACE PLAYER 1
+# =========================================================
+	if direction != 0:
+
+		facing = direction
+
+		sprite.flip_h = facing > 0
+		$Crispy.flip_h = facing > 0
+
+		$AttackMarker.position = Vector2.ZERO
+		$LiuKangShoot.position = Vector2(63 * facing, -211)
+
+	# =========================================================
+	# CPU DISTANCES
+	# =========================================================
+	var attack_range := 110.0
+	var stopping_distance := 90.0
+
+	# =========================================================
+	# WALK TOWARD PLAYER 1
+	# =========================================================
+	if distance > stopping_distance:
+
+		velocity.x = direction * SPEED
+
 		state = State.WALK
-		velocity.x = facing * SPEED
 
 		if not is_attacking and not is_hurting:
 			play_anim("walk")
 
-		velocity.y += GRAVITY * delta
-		move_and_slide()
+	# =========================================================
+	# AI ATTACK TIMER
+	# =========================================================
+	ai_timer -= delta
 
-		ai_timer = 0.01
+	if ai_timer > 0.0:
 		return
+
 
 
 	# =========================================================
@@ -1035,15 +1131,6 @@ func cpu_logic(delta):
 			ai_timer = 0.01
 			return
 
-
-	# =========================================================
-	# DISTANCE TO PLAYER 1
-	# =========================================================
-	var dist: float = target.global_position.x - global_position.x
-	var distance: float = abs(dist)
-	var direction: float = sign(dist)
-
-
 	# =========================================================
 	# FACE PLAYER 1
 	# =========================================================
@@ -1056,14 +1143,6 @@ func cpu_logic(delta):
 
 		$AttackMarker.position = Vector2(0, 0)
 		$LiuKangShoot.position = Vector2(63 * facing, -225)
-
-
-	# =========================================================
-	# DISTANCES
-	# =========================================================
-	var attack_range := 110.0
-	var stopping_distance := 90.0
-
 
 	# =========================================================
 	# CHASE PLAYER 1
@@ -1202,6 +1281,7 @@ func do_action(anim_name: String):
 
 	# ---------------- MELEE ATTACKS ----------------
 	if anim_name in [
+		"bicyclekick",
 		"punch",
 		"highpunch",
 		"lowpunch",
@@ -1211,6 +1291,7 @@ func do_action(anim_name: String):
 		"uppercut",
 		"roundhousekick",
 		"jumpkick",
+		"flyingkick",
 		"fatalitycombo",
 		"knee"
 	]:
