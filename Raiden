@@ -55,7 +55,7 @@ signal round_death(winner: String)
 @onready var you_lose = $YouLosed
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, KICK, ROUNDHOUSEKICK, BLOCK, PUNCH, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, KICK, LOWKICK, HIGHKICK, ROUNDHOUSEKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 
 var state: State = State.IDLE
 var speed
