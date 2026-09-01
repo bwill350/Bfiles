@@ -47,7 +47,7 @@ var stunned := false
 @onready var you_lose = $YouLosed
 @onready var fatality_sound: AudioStreamPlayer2D = $Fatality
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 var state: State = State.IDLE
 var is_finish_state := false
 var hurt_cooldown := false
