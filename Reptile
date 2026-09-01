@@ -36,10 +36,11 @@ signal round_death(winner: String)
 @onready var you_win = $YouWin
 @onready var you_lose = $YouLosed
 @onready var fatality_sound: AudioStreamPlayer2D = $Fatality
+
 # =========================================================
 # STATE
 # =========================================================
-enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, LOWKICK, HIGHKICK, BLOCK, PUNCH, DEAD }
 var state: State = State.IDLE
 
 # =========================================================
@@ -90,6 +91,7 @@ var is_pulled := false
 var pull_target: Node2D = null
 var pull_timer := 0.0
 var hurt_cooldown := false
+
 # =========================================================
 # MOVEMENT
 # =========================================================
@@ -101,10 +103,12 @@ var electricfly_y := 0.0
 var electricfly_active := false
 var special_move = true
 var knockback_x := 0.0
+
 # =========================================================
 # COOLDOWNS
 # ========================================================
 var shoot_cooldown: float = 0.0
+
 # =========================================================
 # EXPORTS
 # =========================================================
@@ -115,24 +119,25 @@ var shoot_cooldown: float = 0.0
 @export var jump_velocity := -2200.0
 @export var combo_reset_time := 0.6
 @export var player_controlled := false
+
 # =========================================================
 # PRELOADS
 # =========================================================
 const BULLET_SCENE = preload("res://Projectiles/ReptileBullet.tscn")
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
-const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
 const SPEAR_SCENE = preload("res://Projectiles/ReptileSpear.tscn")
 const REPTILES_ACID = preload("res://Projectiles/Reptilesacid.tscn")
 const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 const BLOOD_EFFECT = preload("res://Deaths/GreenBloodEffect.tscn")
 const REPTILE_BULLET = preload("res://Projectiles/ReptileBullet.tscn")
+
 # =========================================================
 # DEATH FX
 # =========================================================
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
-const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
+
 # =========================================================
 # NODES
 # =========================================================
@@ -564,17 +569,17 @@ func _physics_process(delta):
 
 		do_action("roundhousekick")
 
-	elif Input.is_action_just_pressed("kick"):
+	elif Input.is_action_just_pressed("lowkick"):
 
-		do_action("kick")
+		do_action("lowkick")
 
 	elif Input.is_action_just_pressed("highkick"):
 
 		do_action("highkick")
 
-	elif Input.is_action_just_pressed("lowkick"):
+	elif Input.is_action_just_pressed("slidekick"):
 
-		do_action("lowkick")
+		do_action("slidekick")
 
 	elif Input.is_action_just_pressed("uppercut"):
 
@@ -892,7 +897,7 @@ func cpu_logic(delta):
 
 				elif choice < 60:
 
-					do_action("kick")
+					do_action("slidekick")
 
 				elif choice < 70:
 
@@ -933,7 +938,7 @@ func cpu_logic(delta):
 
 				elif choice < 55:
 
-					do_action("kick")
+					do_action("slidekick")
 
 				elif choice < 65:
 
@@ -970,7 +975,7 @@ func cpu_logic(delta):
 
 				elif choice < 75:
 
-					do_action("kick")
+					do_action("lowkick")
 
 				elif choice < 90:
 
@@ -1275,22 +1280,6 @@ func check_combos():
 		return
 
 	# =====================================================
-	# ELECTRIC
-	# =====================================================
-
-	elif combo == ELECTRIC_COMBO:
-
-		combo_used.emit("electric")
-
-		spawn_fx(ELECTRIC_DEATH)
-
-		special_bullet = ELECTRIC_BULLET
-
-		combo.clear()
-
-		return
-
-	# =====================================================
 	# KICK
 	# =====================================================
 
@@ -1395,11 +1384,11 @@ func start_kick_combo():
 	can_take_damage = false
 
 	await combo_attack([
-		"kick",
+		"lowkick",
 		"knee",
 		"highkick",
 		"roundhousekick",
-		"lowkick",
+		"slidekick",
 		"roundhousekick",
 		"highkick"
 	])
@@ -1526,6 +1515,7 @@ func do_action(anim_name: String):
 		"kick",
 		"highkick",
 		"lowkick",
+		"slidekick",
 		"uppercut",
 		"roundhousekick",
 		"knee",
@@ -1560,6 +1550,7 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"highkick",
 		"lowkick",
+		"slidekick",
 		"uppercut",
 		"roundhousekick",
 		"knee",
@@ -1607,6 +1598,9 @@ func spawn_attack(anim_name: String):
 			dmg = 1
 
 		"knee":
+			dmg = 1
+
+		"slidekick":
 			dmg = 1
 
 		"fatalitycombo":
@@ -1926,8 +1920,6 @@ func trigger_finish_state():
 		finish_label.visible = false
 
 
-
-
 # =========================================================
 # DEATH
 # =========================================================
@@ -2080,7 +2072,7 @@ func die():
 		# WAIT FOR FINAL DEATH / FATALITY
 		# -------------------------------------------------
 
-		await get_tree().create_timer(3.0).timeout
+		await get_tree().create_timer(13.0).timeout
 
 		# -------------------------------------------------
 		# TELL LEVEL1 WHO WON
@@ -2089,10 +2081,14 @@ func die():
 		round_death.emit(winner)
 
 		# -------------------------------------------------
-		# GIVE LEVEL1 TIME TO AWARD FINAL ROUND
+		# WAIT BEFORE CHANGING SCENE
 		# -------------------------------------------------
 
-		await get_tree().create_timer(0.5).timeout
+		print("================================")
+		print("WAITING BEFORE RETURNING TO MAIN MENU")
+		print("================================")
+
+		await get_tree().create_timer(5.0).timeout
 
 		# -------------------------------------------------
 		# GO TO MAIN MENU
@@ -2151,6 +2147,15 @@ func die():
 
 	return
 
+
+#The only timing change is this:
+
+	await get_tree().create_timer(13.0).timeout
+
+
+#That gives you **5 additional seconds after `round_death.emit(winner)` and before `MainMenu.tscn` loads**.
+
+
 func play_anim(anim_name: String):
 
 	if current_anim == anim_name:
@@ -2169,7 +2174,9 @@ func spawn_attack_bullet(anim_name: String):
 
 	if anim_name not in [
 		"punch",
-		"kick",
+		"lowkick",
+		"highkick",
+		"slidekick",
 		"roundhousekick",
 		"uppercut"
 	]:
