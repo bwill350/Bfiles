@@ -26,7 +26,6 @@ Subzero (CharacterBody2D)
 signal round_death(winner: String)
 signal health_changed(health)
 signal combo_used(combo_name: String)
-@onready var character = get_parent()
 var combo := []
 var combo_timer := 0.0
 var spawn_locked := true
@@ -39,13 +38,7 @@ var last_tap_dir := 0
 var run_locked := false
 var uppercut_launched := false
 var stunned := false
-@onready var round1 = $Round1
-@onready var round2 = $Round2
-@onready var round3 = $Round3
-@onready var fight = $Fight
-@onready var you_win = $YouWin
-@onready var you_lose = $YouLosed
-@onready var fatality_sound: AudioStreamPlayer2D = $Fatality
+
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 var state: State = State.IDLE
@@ -62,7 +55,6 @@ var target: Node2D = null
 var ai_timer := 0.0
 var knockback_x := 0.0
 var hit_from_reptileacid := false
-@onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
 # ---------------- COMBAT ----------------
 var kick_combo_active := false
@@ -119,13 +111,44 @@ const ICE_BULLET = preload("res://Projectiles/IceBullet.tscn")
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
 @onready var smoke_marker: Marker2D = $SmokeMarker
+@onready var character = get_parent()
+@onready var round1 = $Round1
+@onready var round2 = $Round2
+@onready var round3 = $Round3
+@onready var fight = $Fight
+@onready var you_win = $YouWin
+@onready var you_lose = $YouLosed
+@onready var fatality_sound: AudioStreamPlayer2D = $Fatality
+@onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
 
 func _unhandled_input(event):
 
-	if event.is_action_pressed("jump"):
-		velocity.y = jump_velocity
+	# =====================================================
+	# CPU MUST NOT RECEIVE PLAYER INPUT
+	# =====================================================
 
-	var inputs = ["up", "down", "left", "right", "shoot", "splat"]
+	if is_cpu:
+		return
+
+	# =====================================================
+	# PLAYER 1 JUMP
+	# =====================================================
+
+	if event.is_action_pressed("jump"):
+		if is_on_floor():
+			velocity.y = jump_velocity
+
+	# =====================================================
+	# COMBO INPUT
+	# =====================================================
+
+	var inputs = [
+		"up",
+		"down",
+		"left",
+		"right",
+		"shoot"
+	]
 
 	for i in inputs:
 		if event.is_action_pressed(i):
@@ -472,8 +495,8 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
 
-	elif Input.is_action_just_pressed("kick"):
-		do_action("kick")
+	elif Input.is_action_just_pressed("slidekick"):
+		do_action("slidekick")
 
 	elif Input.is_action_pressed("highkick"):
 		do_action("highkick")
@@ -839,13 +862,13 @@ func do_action(anim_name: String):
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 
+	# Sub-Zero can enter fatality inputs at any health.
 	combo.append(input)
 
 	combo_timer = 0.0
 
 	check_combos()
 
-# ---------------- ICE COMBO ----------------
 # ---------------- ICE COMBO ----------------
 func ice_combo():
 
@@ -860,35 +883,61 @@ func ice_combo():
 
 	shoot_player()
 
+func player1_is_ready_for_fatality() -> bool:
+
+	var p1 = get_tree().get_first_node_in_group("player1")
+
+	if p1 == null or not is_instance_valid(p1):
+		return false
+
+	if "health" in p1:
+		return p1.health <= 1
+
+	return false
+
 
 # ---------------- CHECK COMBOS ----------------
 func check_combos():
 
-	# =========================================================
+	# =====================================================
 	# ICE DEATH TWO
 	# DOWN -> UP -> DOWN -> UP -> RIGHT
-	# =========================================================
+	# =====================================================
 
 	if combo == ICE_DEATH_TWO_COMBO:
 
+		# Player 1 must be at 1 health.
+		# This works in Round 1 too.
+		if not player1_is_ready_for_fatality():
+
+			print("================================")
+			print("SUB-ZERO FATALITY BLOCKED")
+			print("PLAYER 1 IS NOT AT 1 HEALTH")
+			print("================================")
+
+			combo.clear()
+			combo_timer = 0.0
+			return
+
 		combo_used.emit("ice_death_two")
+
 		print("================================")
-		print("===========FATALITY=============")
+		print("=========== FATALITY ===========")
 		print("================================")
+
 		combo.clear()
 		combo_timer = 0.0
 
 		action_locked = true
 		is_attacking = true
 
-		# Spawn IceDeathTwo
 		spawn_fx(ICE_DEATHTWO)
 
-		# Play Sub-Zero animation
 		play_anim("uppercut")
-		# PLAY FATALITY SOUND
+
 		if is_instance_valid(fatality_sound):
 			fatality_sound.play()
+
 		await sprite.animation_finished
 
 		is_attacking = false
@@ -900,13 +949,13 @@ func check_combos():
 		return
 
 
-	# =========================================================
+	# =====================================================
 	# SPLAT
-	# LEFT -> RIGHT -> LEFT -> RIGHT -> RIGHT
-	# =========================================================
+	# =====================================================
 
 	if combo == SPLAT_COMBO:
 
+		# Splat is NOT a fatality, so no health check.
 		combo_used.emit("splat")
 
 		combo.clear()
@@ -930,31 +979,48 @@ func check_combos():
 		return
 
 
-	# =========================================================
-	# ICE
+	# =====================================================
+	# ICE FATALITY
 	# UP -> DOWN
-	# =========================================================
+	# =====================================================
 
 	if combo == ICE_COMBO:
+
+		# Player 1 must be at 1 health.
+		# NO ROUND CHECK.
+		if not player1_is_ready_for_fatality():
+
+			print("================================")
+			print("SUB-ZERO FATALITY BLOCKED")
+			print("PLAYER 1 IS NOT AT 1 HEALTH")
+			print("================================")
+
+			combo.clear()
+			combo_timer = 0.0
+			return
 
 		combo_used.emit("ice")
 
 		combo.clear()
 		combo_timer = 0.0
+
 		print("================================")
-		print("===========FATALITY=============")
+		print("=========== FATALITY ===========")
 		print("================================")
-		ice_combo()
-		# PLAY FATALITY SOUND
+
+		special_bullet = BULLET_SCENE
+
+		shoot_player()
+
 		if is_instance_valid(fatality_sound):
 			fatality_sound.play()
+
 		return
 
 
-	# =========================================================
+	# =====================================================
 	# PUNCH COMBO
-	# RIGHT -> DOWN -> RIGHT
-	# =========================================================
+	# =====================================================
 
 	if combo == PUNCH_COMBO:
 
@@ -968,10 +1034,9 @@ func check_combos():
 		return
 
 
-	# =========================================================
+	# =====================================================
 	# KICK COMBO
-	# RIGHT -> DOWN -> DOWN
-	# =========================================================
+	# =====================================================
 
 	if combo == KICK_COMBO:
 
@@ -983,6 +1048,8 @@ func check_combos():
 		start_kick_combo()
 
 		return
+
+
 
 func start_punch_combo():
 
@@ -1061,6 +1128,7 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"highkick",
 		"lowkick",
+		"slidekick",
 		"uppercut",
 		"roundhousekick",
 		"knee"
@@ -1088,6 +1156,8 @@ func spawn_attack(anim_name: String):
 		"highkick":
 			dmg = 1
 		"lowkick":
+			dmg = 1
+		"slidekick":
 			dmg = 1
 		"uppercut":
 			dmg = 1
