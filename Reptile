@@ -589,7 +589,7 @@ func _physics_process(delta):
 
 		shoot_acid()
 
-	elif Input.is_action_pressed("knee"):
+	elif Input.is_action_just_pressed("knee"):
 
 		do_action("knee")
 
