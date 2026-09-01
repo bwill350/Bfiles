@@ -46,14 +46,6 @@ signal health_changed(health)
 signal combo_used(combo_name: String)
 signal round_death(winner: String)
 
-@onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
-@onready var round1 = $Round1
-@onready var round2 = $Round2
-@onready var round3 = $Round3
-@onready var fight = $Fight
-@onready var you_win = $YouWin
-@onready var you_lose = $YouLosed
-
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, LOWKICK, HIGHKICK, ROUNDHOUSEKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 
@@ -131,6 +123,13 @@ const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 @onready var shoot_marker: Marker2D = $Raidenshoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
+@onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
+@onready var round1 = $Round1
+@onready var round2 = $Round2
+@onready var round3 = $Round3
+@onready var fight = $Fight
+@onready var you_win = $YouWin
+@onready var you_lose = $YouLosed
 
 # ---------------- COMBOS ----------------
 var combo := []
@@ -141,6 +140,40 @@ const ICE_COMBO = ["up", "down"]
 const ELECTRIC_COMBO = ["up", "down", "right"]
 const PUNCH_COMBO = ["right", "down", "right"]
 const KICK_COMBO = ["right", "down", "down"]
+
+
+func _unhandled_input(event):
+
+	# =====================================================
+	# CPU MUST NOT RECEIVE PLAYER INPUT
+	# =====================================================
+
+	if is_cpu:
+		return
+
+	# =====================================================
+	# PLAYER 1 JUMP
+	# =====================================================
+
+	if event.is_action_pressed("jump"):
+		if is_on_floor():
+			velocity.y = jump_velocity
+
+	# =====================================================
+	# COMBO INPUT
+	# =====================================================
+
+	var inputs = [
+		"up",
+		"down",
+		"left",
+		"right",
+		"shoot"
+	]
+
+	for i in inputs:
+		if event.is_action_pressed(i):
+			register_input(i)
 
 func apply_stun(_duration := 4.0):
 
@@ -370,14 +403,6 @@ func _ready():
 	sprite.flip_h = -facing < 0
 	$Crispy.flip_h = -facing < 0
 
-# ---------------- INPUT ----------------
-func _unhandled_input(event):
-
-	var inputs = ["up", "down", "left", "right", "shoot"]
-
-	for i in inputs:
-		if event.is_action_pressed(i):
-			register_input(i)
 
 # ---------------- REGISTER INPUT ----------------
 func register_input(input: String):
