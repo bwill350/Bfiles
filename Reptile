@@ -40,7 +40,7 @@ signal round_death(winner: String)
 # =========================================================
 # STATE
 # =========================================================
-enum State { IDLE, WALK, RUN, JUMP, LOWKICK, HIGHKICK, BLOCK, PUNCH, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 var state: State = State.IDLE
 
 # =========================================================
