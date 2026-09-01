@@ -389,7 +389,7 @@ func _physics_process(delta):
 
 		$Subzeroshoot.position = Vector2(
 			63 * facing,
-			-211
+			-235
 		)
 
 	# =========================================================
@@ -757,28 +757,36 @@ func cpu_logic(delta):
 
 				var choice: int = randi() % 100
 
-				if choice < 15:
+				if choice < 20:
+
 					do_action("punch")
 
-				elif choice < 30:
+				elif choice < 35:
+
 					do_action("highpunch")
 
 				elif choice < 45:
+
 					do_action("lowpunch")
 
 				elif choice < 60:
-					do_action("kick")
+
+					do_action("slidekick")
 
 				elif choice < 70:
+
 					do_action("highkick")
 
 				elif choice < 80:
+
 					do_action("lowkick")
 
-				elif choice < 90:
+				elif choice < 88:
+
 					do_action("uppercut")
 
-				elif choice < 97:
+				elif choice < 94:
+
 					do_action("roundhousekick")
 
 				else:
@@ -793,25 +801,24 @@ func cpu_logic(delta):
 
 				var choice: int = randi() % 100
 
-				if choice < 20:
+				if choice < 40:
+
 					do_action("punch")
 
-				elif choice < 35:
-					do_action("highpunch")
+				elif choice < 55:
 
-				elif choice < 50:
-					do_action("lowpunch")
+					do_action("slidekick")
 
 				elif choice < 65:
-					do_action("kick")
 
-				elif choice < 75:
 					do_action("highkick")
 
-				elif choice < 85:
+				elif choice < 75:
+
 					do_action("lowkick")
 
-				elif choice < 95:
+				elif choice < 85:
+
 					do_action("uppercut")
 
 				else:
@@ -843,6 +850,7 @@ func do_action(anim_name: String):
 		"kick",
 		"highkick",
 		"lowkick",
+		"slidekick",
 		"uppercut",
 		"roundhousekick",
 		"knee"
@@ -1077,7 +1085,7 @@ func start_kick_combo():
 	can_take_damage = false
 
 	await combo_attack([
-		"kick",
+		"slidekick",
 		"knee",
 		"highkick",
 		"roundhousekick",
