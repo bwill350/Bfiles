@@ -44,7 +44,7 @@ var uppercut_launched := false
 var spear_pull_animation_locked := false
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, KICK, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
