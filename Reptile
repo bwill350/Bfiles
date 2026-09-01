@@ -27,16 +27,6 @@ signal health_changed(health)
 signal combo_used(combo_name: String)
 signal round_death(winner: String)
 
-@onready var character = get_parent()
-
-@onready var round1 = $Round1
-@onready var round2 = $Round2
-@onready var round3 = $Round3
-@onready var fight = $Fight
-@onready var you_win = $YouWin
-@onready var you_lose = $YouLosed
-@onready var fatality_sound: AudioStreamPlayer2D = $Fatality
-
 # =========================================================
 # STATE
 # =========================================================
@@ -151,6 +141,16 @@ const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
 @onready var finish_label: Sprite2D = $HUD/FinishLabel/Sprite2D
+@onready var character = get_parent()
+
+@onready var round1 = $Round1
+@onready var round2 = $Round2
+@onready var round3 = $Round3
+@onready var fight = $Fight
+@onready var you_win = $YouWin
+@onready var you_lose = $YouLosed
+@onready var fatality_sound: AudioStreamPlayer2D = $Fatality
+
 # =========================================================
 # COMBOS
 # =========================================================
@@ -268,8 +268,6 @@ func _ready():
 
 	ai_timer = randf_range(0.2, 0.6)
 
-	if Input.is_action_pressed("jump"):
-		velocity.y = jump_velocity
 
 # =========================================================
 # INPUT
@@ -277,8 +275,24 @@ func _ready():
 
 func _unhandled_input(event):
 
+	# =====================================================
+	# CPU MUST NOT RECEIVE PLAYER INPUT
+	# =====================================================
+
+	if is_cpu:
+		return
+
+	# =====================================================
+	# PLAYER 1 JUMP
+	# =====================================================
+
 	if event.is_action_pressed("jump"):
-		velocity.y = jump_velocity
+		if is_on_floor():
+			velocity.y = jump_velocity
+
+	# =====================================================
+	# COMBO INPUT
+	# =====================================================
 
 	var inputs = [
 		"up",
@@ -289,7 +303,6 @@ func _unhandled_input(event):
 	]
 
 	for i in inputs:
-
 		if event.is_action_pressed(i):
 			register_input(i)
 
@@ -815,25 +828,27 @@ func cpu_logic(delta):
 
 		return
 
-	# =========================================================
-	# DISTANCE TO PLAYER 1
-	# =========================================================
+# =========================================================
+# DISTANCE TO PLAYER 1
+# =========================================================
 	var dist: float = target.global_position.x - global_position.x
 	var distance: float = abs(dist)
 	var direction: float = sign(dist)
 
 # =========================================================
-# FACE PLAYER 1
+# FACE OPPOSITE PLAYER 1
 # =========================================================
 	if direction != 0:
 
+		# CPU faces opposite the direction of Player 1
 		facing = direction
 
+		# Same flip convention used by Sub-Zero's player controls
 		sprite.flip_h = facing > 0
 		$Crispy.flip_h = facing > 0
 
-		$AttackMarker.position = Vector2.ZERO
-		$Reptileshoot.position = Vector2(63 * facing, -211)
+		$AttackMarker.position = Vector2(0, 0)
+		$Reptileshoot.position = Vector2(63 * -facing, -211)
 
 	# =========================================================
 	# CPU DISTANCES
@@ -852,6 +867,14 @@ func cpu_logic(delta):
 
 		if not is_attacking and not is_hurting:
 			play_anim("walk")
+
+	else:
+
+		velocity.x = 0
+
+		if not is_attacking and not is_hurting:
+			state = State.IDLE
+			play_anim("idle")
 
 	# =========================================================
 	# AI ATTACK TIMER
