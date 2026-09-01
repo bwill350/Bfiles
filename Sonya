@@ -29,7 +29,7 @@ signal round_death(winner: String)
 @onready var character = get_parent()
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, KICK, BLOCK, PUNCH, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, KICK, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 var is_spear_pulled := false
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
