@@ -26,7 +26,6 @@ Sonya (CharacterBody2D)
 signal health_changed(health)
 signal combo_used(combo_name: String)
 signal round_death(winner: String)
-@onready var character = get_parent()
 
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
@@ -134,12 +133,39 @@ var combo_timer := 0.0
 @onready var shoot_marker: Marker2D = $SonyaShoot
 @onready var attack_marker: Marker2D = $AttackMarker
 @onready var blood_marker: Marker2D = $BloodMarker
+@onready var character = get_parent()
+
 # ---------------- COMBOS ----------------
 
 
 func _unhandled_input(event):
 
-	var inputs = ["up", "down", "left", "right", "shoot"]
+	# =====================================================
+	# CPU MUST NOT RECEIVE PLAYER INPUT
+	# =====================================================
+
+	if is_cpu:
+		return
+
+	# =====================================================
+	# PLAYER 1 JUMP
+	# =====================================================
+
+	if event.is_action_pressed("jump"):
+		if is_on_floor():
+			velocity.y = jump_velocity
+
+	# =====================================================
+	# COMBO INPUT
+	# =====================================================
+
+	var inputs = [
+		"up",
+		"down",
+		"left",
+		"right",
+		"shoot"
+	]
 
 	for i in inputs:
 		if event.is_action_pressed(i):
@@ -447,9 +473,17 @@ func _physics_process(delta):
 
 		do_action("lowkick")
 
+	elif Input.is_action_just_pressed("slidekick"):
+
+		do_action("slidekick")
+
 	elif Input.is_action_just_pressed("uppercut"):
 
 		do_action("uppercut")
+
+	elif Input.is_action_just_pressed("knee"):
+
+		do_action("knee")
 
 	elif Input.is_action_just_pressed("roundhousekick"):
 
@@ -665,12 +699,35 @@ func cpu_logic(delta):
 				var choice = randi() % 100
 
 				if choice < 20:
+
 					do_action("punch")
-				elif choice < 40:
-					do_action("kick")
-				elif choice < 65:
-					do_action("uppercut")
+
+				elif choice < 35:
+
+					do_action("highpunch")
+
+				elif choice < 45:
+
+					do_action("lowpunch")
+
+				elif choice < 60:
+
+					do_action("slidekick")
+
+				elif choice < 70:
+
+					do_action("highkick")
+
 				elif choice < 80:
+
+					do_action("lowkick")
+
+				elif choice < 88:
+
+					do_action("uppercut")
+
+				elif choice < 94:
+
 					do_action("roundhousekick")
 				else:
 					shoot_player()
@@ -682,10 +739,23 @@ func cpu_logic(delta):
 				var choice = randi() % 100
 
 				if choice < 40:
+
 					do_action("punch")
-				elif choice < 70:
-					do_action("kick")
+
+				elif choice < 55:
+
+					do_action("slidekick")
+
+				elif choice < 65:
+
+					do_action("highkick")
+
+				elif choice < 75:
+
+					do_action("lowkick")
+
 				elif choice < 85:
+
 					do_action("uppercut")
 				else:
 					do_action("roundhousekick")
@@ -771,6 +841,7 @@ func do_action(anim_name: String):
 		"kick",
 		"highkick",
 		"lowkick",
+		"slidekick",
 		"uppercut",
 		"roundhousekick",
 		"knee"
@@ -795,6 +866,7 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"highkick",
 		"lowkick",
+		"slidekick",
 		"uppercut",
 		"roundhousekick",
 		"knee"
@@ -818,9 +890,17 @@ func spawn_attack(anim_name: String):
 	match anim_name:
 		"punch":
 			dmg = 1
+		"lowpunch":
+			dmg = 1
+		"highpunch":
+			dmg = 1
 		"kick":
 			dmg = 1
 		"lowkick":
+			dmg = 1
+		"highkick":
+			dmg = 1
+		"slidekick":
 			dmg = 1
 		"uppercut":
 			dmg = 1
