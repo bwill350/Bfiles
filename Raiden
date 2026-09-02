@@ -47,7 +47,7 @@ signal combo_used(combo_name: String)
 signal round_death(winner: String)
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, KICK, LOWKICK, HIGHKICK, ROUNDHOUSEKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, KICK, LOWKICK, HIGHKICK, SLIDEKICK, ROUNDHOUSEKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 
 var state: State = State.IDLE
 var speed
@@ -609,6 +609,9 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("lowkick"):
 		do_action("lowkick")
 
+	elif Input.is_action_just_pressed("slidekick"):
+		do_action("slidekick")
+
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
 
@@ -874,6 +877,8 @@ func cpu_logic(delta):
 					do_action("highpunch")
 				elif choice < 20:
 					do_action("lowpunch")
+				elif choice < 75:
+					do_action("uppercut")
 				elif choice < 20:
 					do_action("kick")
 				elif choice < 20:
@@ -881,7 +886,7 @@ func cpu_logic(delta):
 				elif choice < 20:
 					do_action("lowkick")
 				elif choice < 65:
-					do_action("uppercut")
+					do_action("slidekick")
 				elif choice < 80:
 					do_action("roundhousekick")
 				elif choice < 85:
@@ -901,6 +906,8 @@ func cpu_logic(delta):
 					do_action("highpunch")
 				elif choice < 40:
 					do_action("lowpunch")
+				elif choice < 50:
+					do_action("uppercut")
 				elif choice < 70:
 					do_action("kick")
 				elif choice < 70:
@@ -908,7 +915,7 @@ func cpu_logic(delta):
 				elif choice < 70:
 					do_action("lowkick")
 				elif choice < 85:
-					do_action("uppercut")
+					do_action("slidekick")
 				elif choice < 95:
 					do_action("electricfly")
 				elif choice < 95:
@@ -1033,6 +1040,7 @@ func do_action(anim_name: String):
 		"knee",
 		"highkick",
 		"lowkick",
+		"slidekick",
 		"jumpkick",
 		"uppercut",
 		"roundhousekick",
@@ -1074,6 +1082,7 @@ func spawn_attack(anim_name: String):
 		"knee",
 		"highkick",
 		"lowkick",
+		"slidekick",
 		"uppercut",
 		"roundhousekick",
 		"electricfly"
@@ -1108,6 +1117,8 @@ func spawn_attack(anim_name: String):
 		"highkick":
 			dmg = 1
 		"lowkick":
+			dmg = 1
+		"slidekick":
 			dmg = 1
 		"uppercut":
 			dmg = 1
@@ -1850,6 +1861,7 @@ func start_kick_combo():
 		"highkick",
 		"roundhousekick",
 		"lowkick",
+		"slidekick",
 		"roundhousekick",
 		"highkick"
 	])
