@@ -870,10 +870,14 @@ func do_action(anim_name: String):
 # ---------------- COMBOS ----------------
 func register_input(input: String):
 
-	# Sub-Zero can enter fatality inputs at any health.
+	# Add direction to combo buffer
 	combo.append(input)
 
 	combo_timer = 0.0
+
+	# Keep only enough inputs for the longest combo
+	if combo.size() > ICE_DEATH_TWO_COMBO.size():
+		combo.pop_front()
 
 	check_combos()
 
@@ -891,139 +895,112 @@ func ice_combo():
 
 	shoot_player()
 
-func player1_is_ready_for_fatality() -> bool:
+func opponent_is_ready_for_fatality() -> bool:
 
-	var p1 = get_tree().get_first_node_in_group("player1")
+	var opponent: Node = null
 
-	if p1 == null or not is_instance_valid(p1):
+	# -------------------------------------------------
+	# SUB-ZERO IS PLAYER 1
+	# Find the CPU opponent
+	# -------------------------------------------------
+
+	if is_in_group("player1"):
+
+		for node in get_tree().get_nodes_in_group("Fighter"):
+
+			if node == self:
+				continue
+
+			if not is_instance_valid(node):
+				continue
+
+			if node.is_cpu:
+				opponent = node
+				break
+
+	# -------------------------------------------------
+	# SUB-ZERO IS CPU
+	# Find Player 1
+	# -------------------------------------------------
+
+	else:
+
+		opponent = get_tree().get_first_node_in_group("player1")
+
+	# -------------------------------------------------
+	# NO OPPONENT
+	# -------------------------------------------------
+
+	if opponent == null or not is_instance_valid(opponent):
+
+		print("FATALITY CHECK: OPPONENT NOT FOUND")
 		return false
 
-	if "health" in p1:
-		return p1.health <= 1
+	# -------------------------------------------------
+	# CHECK OPPONENT HEALTH
+	# -------------------------------------------------
+
+	if "health" in opponent:
+
+		print("FATALITY CHECK: ", opponent.name)
+		print("OPPONENT HEALTH: ", opponent.health)
+
+		return opponent.health <= 1
 
 	return false
-
 
 # ---------------- CHECK COMBOS ----------------
 func check_combos():
 
-	# =====================================================
-	# ICE DEATH TWO
-	# DOWN -> UP -> DOWN -> UP -> RIGHT
-	# =====================================================
+# =====================================================
+# ICE DEATH TWO
+# DOWN -> UP -> DOWN -> UP -> RIGHT
+# =====================================================
 
 	if combo == ICE_DEATH_TWO_COMBO:
 
-		# Player 1 must be at 1 health.
-		# This works in Round 1 too.
-		if not player1_is_ready_for_fatality():
+		print("================================")
+		print("ICE DEATH TWO COMBO HIT")
+		print("================================")
+
+		# Opponent must be at 1 HP
+		if not opponent_is_ready_for_fatality():
 
 			print("================================")
-			print("SUB-ZERO FATALITY BLOCKED")
-			print("PLAYER 1 IS NOT AT 1 HEALTH")
+			print("ICE DEATH TWO BLOCKED")
+			print("OPPONENT IS NOT AT 1 HP")
 			print("================================")
 
 			combo.clear()
 			combo_timer = 0.0
 			return
 
+		# -------------------------------------------------
+		# FATALITY
+		# -------------------------------------------------
+# Spawn the fatality on the OPPOSITE side
 		combo_used.emit("ice_death_two")
 
-		print("================================")
-		print("=========== FATALITY ===========")
-		print("================================")
+		var fx = ICE_DEATHTWO.instantiate()
 
-		combo.clear()
-		combo_timer = 0.0
+		get_tree().current_scene.add_child(fx)
 
-		action_locked = true
-		is_attacking = true
-
-		spawn_fx(ICE_DEATHTWO)
-
-		play_anim("uppercut")
+		fx.global_position = global_position + Vector2(320 * facing, 0)
 
 		if is_instance_valid(fatality_sound):
 			fatality_sound.play()
 
-		await sprite.animation_finished
-
-		is_attacking = false
-		action_locked = false
-
-		if state != State.DEAD and not is_finish_state:
-			play_anim("idle")
-
-		return
-
-
-	# =====================================================
-	# SPLAT
-	# =====================================================
-
-	if combo == SPLAT_COMBO:
-
-		# Splat is NOT a fatality, so no health check.
-		combo_used.emit("splat")
+		print("================================")
+		print("======= ICE DEATH TWO ==========")
+		print("======== FATALITY ==============")
+		print("================================")
 
 		combo.clear()
 		combo_timer = 0.0
 
-		action_locked = true
-		is_attacking = true
-
-		play_anim("splat")
-
-		spawn_fx(SPLAT)
-
-		await sprite.animation_finished
-
-		is_attacking = false
-		action_locked = false
-
-		if state != State.DEAD and not is_finish_state:
-			play_anim("idle")
-
 		return
 
 
-	# =====================================================
-	# ICE FATALITY
-	# UP -> DOWN
-	# =====================================================
-
-	if combo == ICE_COMBO:
-
-		# Player 1 must be at 1 health.
-		# NO ROUND CHECK.
-		if not player1_is_ready_for_fatality():
-
-			print("================================")
-			print("SUB-ZERO FATALITY BLOCKED")
-			print("PLAYER 1 IS NOT AT 1 HEALTH")
-			print("================================")
-
-			combo.clear()
-			combo_timer = 0.0
-			return
-
-		combo_used.emit("ice")
-
-		combo.clear()
-		combo_timer = 0.0
-
-		print("================================")
-		print("=========== FATALITY ===========")
-		print("================================")
-
-		special_bullet = BULLET_SCENE
-
-		shoot_player()
-
-		if is_instance_valid(fatality_sound):
-			fatality_sound.play()
-
-		return
 
 
 	# =====================================================
@@ -1690,30 +1667,42 @@ func die():
 
 	round_death.emit(winner)
 
-func spawn_fx(scene: PackedScene):
-
-	var fx = scene.instantiate()
-
-	# IMPORTANT: set owner BEFORE it can collide
-	fx.owner_character = self
-	fx.damage_done = false
-
-	get_tree().current_scene.call_deferred("add_child", fx)
-	# PLAY FATALITY SOUND
-
-	if target and is_instance_valid(target):
-		fx.global_position = target.global_position + Vector2(60 * facing, 0)
-	else:
-		fx.global_position = global_position + Vector2(80 * facing, 0)
-
-# ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
 
-	if current_anim == anim_name and sprite.is_playing():
+	if current_anim == anim_name:
 		return
 
 	current_anim = anim_name
+
 	sprite.play(anim_name)
+
+func spawn_fx(scene: PackedScene):
+
+	if scene == null:
+		print("SUB-ZERO FX ERROR: scene is null")
+		return
+
+	var fx = scene.instantiate()
+
+	# Set properties BEFORE adding to scene
+	if "owner_character" in fx:
+		fx.owner_character = self
+
+	if "damage_done" in fx:
+		fx.damage_done = false
+
+	get_tree().current_scene.add_child(fx)
+
+	# Find Player 1 for fatality positioning
+	var p1 = get_tree().get_first_node_in_group("player1")
+
+	if p1 != null and is_instance_valid(p1):
+		fx.global_position = p1.global_position + Vector2(60 * facing, 0)
+	else:
+		fx.global_position = global_position + Vector2(80 * facing, 0)
+
+	print("SUB-ZERO SPAWNED FX: ", scene.resource_path)
+	print("FX POSITION: ", fx.global_position)
 
 func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
