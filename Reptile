@@ -486,28 +486,35 @@ func _physics_process(delta):
 		)
 
 	# =====================================================
-	# WALK / RUN
+	# WALK / RUN / JUMP
 	# =====================================================
 
-	if Input.is_action_pressed("run") and input_dir != 0:
+	# JUMP ALWAYS HAS PRIORITY OVER WALK/RUN
+	if not is_on_floor():
 
-		run(input_dir)
+		state = State.JUMP
+
+	# Keep horizontal movement while airborne
+		velocity.x = input_dir * SPEED
 
 	else:
 
-		velocity.x = input_dir * SPEED
+		# ON GROUND
+		if Input.is_action_pressed("run") and input_dir != 0:
 
-		if not is_on_floor():
-
-			state = State.JUMP
+			state = State.RUN
+			velocity.x = input_dir * SPEED * 4.0
 
 		elif input_dir != 0:
 
 			state = State.WALK
+			velocity.x = input_dir * SPEED
 
 		else:
 
 			state = State.IDLE
+			velocity.x = 0
+
 
 	# =====================================================
 	# ANIMATIONS
