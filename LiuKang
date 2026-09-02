@@ -1357,7 +1357,7 @@ func air_launch(x_speed: float, y_speed: float):
 # ---------------- FIREBALL ----------------
 func shoot_fireball():
 
-	if health <= 1:
+	if health <= 0:
 		return
 
 	if is_finish_state:
@@ -1933,15 +1933,14 @@ func die():
 # =========================================================
 
 # ---------------- ANIMATION ----------------
-func play_anim(anim: String):
-	if dragon_invisible:
+func play_anim(anim_name: String):
+
+	if current_anim == anim_name:
 		return
 
-	if current_anim == anim:
-		return
+	current_anim = anim_name
 
-	current_anim = anim
-	sprite.play(anim)
+	sprite.play(anim_name)
 
 # ---------------- COMBOS ----------------
 func register_input(input: String):
@@ -1985,19 +1984,18 @@ func spawn_fx(scene: PackedScene):
 func check_combos():
 
 	# ---------------- FIRE ----------------
-	if combo == FIRE_COMBO: 
+	if combo == FIRE_COMBO:
 
 		combo_used.emit("fire")
 
 		special_bullet = FIRE_BULLET
+
+		combo.clear()
 		print("================================")
 		print("===========FATALITY=============")
 		print("================================")
-		combo.clear()
-		# PLAY FATALITY SOUND
-		if is_instance_valid(fatality_sound):
-			fatality_sound.play()
 		shoot_fireball()
+
 		return
 
 	# ---------------- ELECTRIC ----------------
