@@ -183,6 +183,7 @@ func update_attack_marker():
 func _ready():
 	$AttackMarker.visible = false
 	$Crispy.visible = false
+	$healthzero.visible = false
 	$AttackMarker.position = Vector2(0 * facing, 0)
 
 	add_to_group("Fighter")
@@ -1742,7 +1743,7 @@ func die():
 		return
 
 	# =====================================================
-	# LOCK KANO AS DEAD
+	# LOCK LIU KANG AS DEAD
 	# =====================================================
 
 	state = State.DEAD
@@ -1751,49 +1752,35 @@ func die():
 
 	is_attacking = false
 	is_shooting = false
-	is_hurting = false
 	is_blocking = false
+	is_hurting = false
 
 	action_locked = true
 	hurt_locked = true
+
 	can_take_damage = false
 
-	# =====================================================
-	# STOP ALL KANO ACTIONS
-	# =====================================================
-
 	stunned = false
+	uppercut_launched = false
 
 	is_pulled = false
-	is_spear_pulled = false
-	pull_target = null
 	pull_timer = 0.0
+	pull_target = null
 
 	knockback_x = 0.0
-	uppercut_launched = false
-	hurt_cooldown = false
-
-	cannonball_active = false
-	cannonball_timer = 0.0
-	cannonball_ready = false
-	cannonball_hit_lock = false
-
-	run_locked = false
-	bullet_spawned = false
-
-	special_move = false
-	special_move_timer = 0.0
 
 	# =====================================================
-	# HIDE NORMAL SPRITE
-	# SHOW DEAD / CRISPY SPRITE
+	# STOP CPU
 	# =====================================================
 
-	if has_node("Sprite"):
-		$Sprite.visible = false
+	ai_timer = 999999.0
 
-	if has_node("Crispy"):
-		$Crispy.visible = true
+	# =====================================================
+	# HIDE FINISH HIM
+	# =====================================================
+
+	if is_instance_valid(finish_label):
+		finish_label.visible = false
 
 	# =====================================================
 	# DETERMINE ROUND WINNER
@@ -1807,13 +1794,23 @@ func die():
 		winner = "player1"
 
 	# =====================================================
-	# DETERMINE IF THIS DEATH ENDS THE MATCH
+	# DEBUG
 	# =====================================================
-	#
-	# Level1 has not awarded this round yet.
-	#
-	# If winner already has 1 round win,
-	# this death will be their SECOND win.
+
+	print("================================")
+	print("KANO DIED")
+	print("ROUND: ", Game.current_round)
+	print(
+		"CURRENT SCORE: ",
+		Game.p1_round_wins,
+		" - ",
+		Game.p2_round_wins
+	)
+	print("ROUND WINNER: ", winner)
+	print("================================")
+
+	# =====================================================
+	# DETERMINE IF THIS DEATH ENDS THE MATCH
 	# =====================================================
 
 	var match_will_end := false
@@ -1828,111 +1825,71 @@ func die():
 		if Game.p2_round_wins >= 1:
 			match_will_end = true
 
-	# =====================================================
-	# FINAL MATCH DEATH
-	# =====================================================
-
-	if match_will_end:
-
-		# =================================================
-		# BLOOD EFFECT
-		# =================================================
-
-		var blood = BLOOD_DEATH.instantiate()
-
-		get_tree().current_scene.add_child(blood)
-
-		blood.global_position = global_position
-
-		# =================================================
-		# FINAL DEATH SPRITE
-		# =================================================
-
-		$Sprite.visible = false
-		$Crispy.visible = true
-
-		# =================================================
-		# STOP ALL KANO ACTIONS
-		# =================================================
-
-		velocity = Vector2.ZERO
-
-		is_attacking = false
-		is_shooting = false
-		is_hurting = false
-		is_blocking = false
-
-		action_locked = true
-		hurt_locked = true
-		can_take_damage = false
-
-		stunned = false
-
-		is_pulled = false
-		is_spear_pulled = false
-		pull_target = null
-		pull_timer = 0.0
-
-		cannonball_active = false
-		cannonball_timer = 0.0
-		cannonball_ready = false
-		cannonball_hit_lock = false
-
-		run_locked = true
-		bullet_spawned = false
-
-		uppercut_launched = false
-		hurt_cooldown = false
-
-		knockback_x = 0.0
-
-		# =================================================
-		# MAKE SURE FINISH HIM IS HIDDEN
-		# =================================================
-
-		if is_instance_valid(finish_label):
-			finish_label.visible = false
-
-		# =================================================
-		# WAIT FOR FATALITY / FINAL DEATH
-		# =================================================
-
-		await get_tree().create_timer(3.0).timeout
-
-		# =================================================
-		# TELL LEVEL1 WHO WON
-		# =================================================
-
-		round_death.emit(winner)
-
-		# =================================================
-		# SMALL DELAY
-		# =================================================
-
-		await get_tree().create_timer(0.2).timeout
-
-		# =================================================
-		# FINAL MATCH OVER
-		# GO TO MAIN MENU
-		# =================================================
-
-		get_tree().change_scene_to_file("res://Scenes/MainMenu.tscn")
-
-		return
+	print("MATCH WILL END: ", match_will_end)
 
 	# =====================================================
 	# NORMAL ROUND DEATH
 	# =====================================================
 	#
-	# Match is NOT over.
-	#
-	# Level1 receives round_death and handles:
-	#
-	# - round winner
-	# - score
-	# - next round
-	#
+	# NOT the final match death.
+	# Play healthzero animation.
+	# Level1 handles the round transition.
 	# =====================================================
+
+	if not match_will_end:
+
+		print("================================")
+		print("KANO ROUND DEATH")
+		print("NO FATALITY")
+		print("PLAYING HEALTHZERO")
+		print("================================")
+
+		# Show normal death animation
+		$Crispy.visible = false
+		$Sprite.visible = false
+
+		current_anim = ""
+
+		$Sprite.flip_h = facing < 0
+		$healthzero.flip_h = facing > 0
+		$healthzero.visible = true
+
+		# Hide FINISH HIM
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
+
+		# Give Level1 control
+		round_death.emit(winner)
+
+		return
+
+	# =====================================================
+	# FINAL MATCH DEATH
+	# =====================================================
+
+	print("================================")
+	print("KANO FINAL DEATH")
+	print("FATALITY ALLOWED")
+	print("================================")
+
+	# =====================================================
+	# SHOW CRISPY
+	# =====================================================
+
+	$Sprite.visible = false
+	$Crispy.visible = true
+
+	$Crispy.flip_h = facing > 0
+
+	# =====================================================
+	# BLOOD DEATH EFFECT
+	# =====================================================
+
+	var blood = BLOOD_DEATH.instantiate()
+
+	get_tree().current_scene.add_child(blood)
+
+	blood.global_position = global_position
 
 	# =====================================================
 	# HIDE FINISH HIM
@@ -1942,19 +1899,23 @@ func die():
 		finish_label.visible = false
 
 	# =====================================================
-	# DEAD SPRITE
+	# WAIT FOR FINAL DEATH
 	# =====================================================
 
-	$Sprite.visible = false
-	$Crispy.visible = true
+	await get_tree().create_timer(3.0).timeout
 
 	# =====================================================
-	# TELL LEVEL1
+	# TELL LEVEL1 WHO WON
 	# =====================================================
 
 	round_death.emit(winner)
 
 	return
+
+# =========================================================
+# ANIMATION
+# =========================================================
+
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
