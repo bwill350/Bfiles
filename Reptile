@@ -249,12 +249,12 @@ func _ready():
 
 	$Sprite.visible = true
 	$Crispy.visible = false
-
+	$healthzero.visible = false
 	facing = 1
 
 	sprite.flip_h = facing > 0
 	$Crispy.flip_h = facing < 0
-
+	$healthzero.flip_h = facing < 0
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Reptile")
@@ -889,6 +889,7 @@ func cpu_logic(delta):
 		# Same flip convention used by Sub-Zero's player controls
 		sprite.flip_h = facing > 0
 		$Crispy.flip_h = facing > 0
+		$healthzero.flip_h = facing > 0
 
 		$AttackMarker.position = Vector2(0, 0)
 		$Reptileshoot.position = Vector2(63 * -facing, -211)
@@ -2034,6 +2035,7 @@ func die():
 	special_move_invincible = false
 
 	uppercut_launched = false
+	jumpkick_launched = false
 
 	is_pulled = false
 	pull_timer = 0.0
@@ -2061,11 +2063,8 @@ func die():
 	var winner := ""
 
 	if is_in_group("player1"):
-
 		winner = "cpu"
-
 	else:
-
 		winner = "player1"
 
 	# =====================================================
@@ -2087,12 +2086,6 @@ func die():
 	# =====================================================
 	# DETERMINE IF THIS DEATH ENDS THE MATCH
 	# =====================================================
-	#
-	# Level1 has not awarded this round yet.
-	#
-	# If winner already has 1 round win,
-	# this death will be their SECOND win.
-	# =====================================================
 
 	var match_will_end := false
 
@@ -2107,6 +2100,52 @@ func die():
 			match_will_end = true
 
 	print("MATCH WILL END: ", match_will_end)
+
+	# =====================================================
+	# DEATH VISUAL
+	# =====================================================
+	#
+	# ROUND 1 = HEALTHZERO
+	# ROUND 2+ = CRISPY
+	#
+	# THIS IS DONE ONLY ONCE.
+	# NOTHING BELOW CHANGES THE DEATH SPRITE.
+	# =====================================================
+
+	if Game.current_round == 1:
+
+		# -------------------------------------------------
+		# ROUND 1
+		# PLAY HEALTHZEROa
+		# -------------------------------------------------
+
+		$Crispy.visible = false
+		$Sprite.visible = false
+
+		current_anim = ""
+		$healthzero.visible = true
+
+		print("================================")
+		print("REPTILE ROUND 1 DEATH")
+		print("PLAYING HEALTHZERO")
+		print("================================")
+
+	else:
+
+		# -------------------------------------------------
+		# ROUND 2 / ROUND 3
+		# PLAY CRISPY
+		# -------------------------------------------------
+
+		$Sprite.visible = false
+		$Crispy.visible = true
+
+		$Crispy.flip_h = facing > 0
+
+		print("================================")
+		print("REPTILE ROUND ", Game.current_round, " DEATH")
+		print("PLAYING CRISPY")
+		print("================================")
 
 	# =====================================================
 	# FINAL MATCH DEATH
@@ -2132,22 +2171,6 @@ func die():
 			blood.global_position = global_position
 
 		# -------------------------------------------------
-		# SHOW DEAD SPRITE
-		# -------------------------------------------------
-
-		$Sprite.visible = false
-		$Crispy.visible = true
-
-		$Crispy.flip_h = facing > 0
-
-		# -------------------------------------------------
-		# HIDE FINISH HIM
-		# -------------------------------------------------
-
-		if is_instance_valid(finish_label):
-			finish_label.visible = false
-
-		# -------------------------------------------------
 		# WAIT FOR FINAL DEATH / FATALITY
 		# -------------------------------------------------
 
@@ -2160,11 +2183,11 @@ func die():
 		round_death.emit(winner)
 
 		# -------------------------------------------------
-		# WAIT BEFORE CHANGING SCENE
+		# WAIT 5 MORE SECONDS
 		# -------------------------------------------------
 
 		print("================================")
-		print("WAITING BEFORE RETURNING TO MAIN MENU")
+		print("WAITING 5 SECONDS BEFORE MAIN MENU")
 		print("================================")
 
 		await get_tree().create_timer(5.0).timeout
@@ -2188,12 +2211,9 @@ func die():
 	#
 	# Match is NOT over.
 	#
-	# Level1 receives round_death and handles:
-	#
-	# - round winner
-	# - score
-	# - next round
-	#
+	# IMPORTANT:
+	# DO NOT CHANGE $Sprite OR $Crispy HERE.
+	# The death visual was already selected above.
 	# =====================================================
 
 	print("================================")
@@ -2210,30 +2230,12 @@ func die():
 		finish_label.visible = false
 
 	# =====================================================
-	# DEAD SPRITE
-	# =====================================================
-
-	$Sprite.visible = false
-	$Crispy.visible = true
-
-	$Crispy.flip_h = facing > 0
-
-	# =====================================================
 	# TELL LEVEL1
 	# =====================================================
 
 	round_death.emit(winner)
 
 	return
-
-
-#The only timing change is this:
-
-	await get_tree().create_timer(13.0).timeout
-
-
-#That gives you **5 additional seconds after `round_death.emit(winner)` and before `MainMenu.tscn` loads**.
-
 
 func play_anim(anim_name: String):
 
