@@ -30,7 +30,7 @@ signal round_death(winner: String)
 # =========================================================
 # STATE
 # =========================================================
-enum State { IDLE, WALK, RUN, JUMP, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, LOWKICK, JUMPKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 var state: State = State.IDLE
 
 # =========================================================
@@ -53,7 +53,8 @@ var dead_locked := false
 var attack_owner: Node = null
 var attack_type := ""
 var uppercut_launched := false
-
+var jumpkick_launched := false
+var was_uppercut := false
 # =========================================================
 # CPU
 # =========================================================
@@ -61,7 +62,7 @@ var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
 var stunned := false
-var was_uppercut := false
+
 
 # =========================================================
 # FLAGS
@@ -389,6 +390,37 @@ func _physics_process(delta):
 
 		return
 
+# =====================================================
+# JUMPKICK LAUNCH
+# =====================================================
+
+	if jumpkick_launched:
+
+		# Keep jumpkick hurt animation while airborne
+		if sprite.animation != "wasjumpkick":
+			current_anim = ""
+			sprite.play("wasjumpkick")
+
+		# Do NOT allow normal movement while launched
+		velocity.x = move_toward(
+			velocity.x,
+			0.0,
+			1500.0 * delta
+		)
+
+		move_and_slide()
+
+		# Stop launch when Johnny lands
+		if is_on_floor():
+			jumpkick_launched = false
+			velocity.x = 0
+			velocity.y = 0
+			state = State.IDLE
+			current_anim = ""
+			sprite.play("idle")
+
+		return
+
 	# =====================================================
 	# FINISH HIM
 	# =====================================================
@@ -600,6 +632,10 @@ func _physics_process(delta):
 	elif Input.is_action_just_pressed("slidekick"):
 
 		do_action("slidekick")
+
+	elif Input.is_action_just_pressed("jumpkick"):
+
+		do_action("jumpkick")
 
 	elif Input.is_action_just_pressed("uppercut"):
 
@@ -937,6 +973,10 @@ func cpu_logic(delta):
 
 					do_action("lowkick")
 
+				elif choice < 80:
+
+					do_action("jumpkick")
+
 				elif choice < 88:
 
 					do_action("uppercut")
@@ -977,6 +1017,10 @@ func cpu_logic(delta):
 				elif choice < 75:
 
 					do_action("lowkick")
+
+				elif choice < 75:
+
+					do_action("jumpkick")
 
 				elif choice < 85:
 
@@ -1546,6 +1590,7 @@ func do_action(anim_name: String):
 		"highkick",
 		"lowkick",
 		"slidekick",
+		"jumpkick",
 		"uppercut",
 		"roundhousekick",
 		"knee",
@@ -1581,6 +1626,7 @@ func spawn_attack(anim_name: String):
 		"highkick",
 		"lowkick",
 		"slidekick",
+		"jumpkick",
 		"uppercut",
 		"roundhousekick",
 		"knee",
@@ -1619,6 +1665,9 @@ func spawn_attack(anim_name: String):
 			dmg = 1
 
 		"lowkick":
+			dmg = 1
+
+		"jumpkick":
 			dmg = 1
 
 		"uppercut":
