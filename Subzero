@@ -167,7 +167,7 @@ func _ready():
 	print("SUBZERO READY:", self)
 
 	$Crispy.visible = false
-
+	$healthzero.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Subzero")
@@ -1639,17 +1639,52 @@ func die():
 	print("MATCH WILL END: ", match_will_end)
 
 	# =====================================================
-	# HIDE NORMAL SPRITE
-	# SHOW CRISPY
+	# DEATH VISUAL
+	# =====================================================
+	#
+	# ROUND 1 = HEALTHZERO
+	# ROUND 2 / ROUND 3 = CRISPY
+	#
+	# THIS IS SET ONLY ONCE.
+	# NOTHING BELOW CHANGES THE DEATH SPRITE.
 	# =====================================================
 
-	$Sprite.visible = false
-	$Crispy.visible = true
+	if Game.current_round == 1:
 
-	# IMPORTANT:
-	# Crispy uses the OPPOSITE flip convention
-	# from the normal Sprite.
-	$Crispy.flip_h = facing > 0
+		# -------------------------------------------------
+		# ROUND 1
+		# PLAY HEALTHZERO
+		# -------------------------------------------------
+
+		$Crispy.visible = false
+		$Sprite.visible = false
+		$healthzero.visible = true
+
+		current_anim = ""
+		sprite.play("healthzero")
+
+		print("================================")
+		print("SUB-ZERO ROUND 1 DEATH")
+		print("PLAYING HEALTHZERO")
+		print("================================")
+
+	else:
+
+		# -------------------------------------------------
+		# ROUND 2 / ROUND 3
+		# PLAY CRISPY
+		# -------------------------------------------------
+
+		$Sprite.visible = false
+		$Crispy.visible = true
+
+		# Crispy uses opposite flip direction
+		$Crispy.flip_h = facing > 0
+
+		print("================================")
+		print("SUB-ZERO ROUND ", Game.current_round, " DEATH")
+		print("PLAYING CRISPY")
+		print("================================")
 
 	# =====================================================
 	# FINAL MATCH DEATH
@@ -1666,21 +1701,13 @@ func die():
 		# BLOOD DEATH EFFECT
 		# -------------------------------------------------
 
-		var blood = BLOOD_DEATH.instantiate()
+		if BLOOD_DEATH != null:
 
-		get_tree().current_scene.add_child(blood)
+			var blood = BLOOD_DEATH.instantiate()
 
-		blood.global_position = global_position
+			get_tree().current_scene.add_child(blood)
 
-		# -------------------------------------------------
-		# MAKE SURE CRISPY IS SHOWN
-		# -------------------------------------------------
-
-		$Sprite.visible = false
-		$Crispy.visible = true
-
-		# Crispy uses opposite flip direction
-		$Crispy.flip_h = facing > 0
+			blood.global_position = global_position
 
 		# -------------------------------------------------
 		# HIDE FINISH HIM
@@ -1721,20 +1748,24 @@ func die():
 		finish_label.visible = false
 
 	# =====================================================
-	# KEEP CRISPY FACING CORRECTLY
+	# IMPORTANT
 	# =====================================================
-
-	$Sprite.visible = false
-	$Crispy.visible = true
-
-	# Crispy uses opposite flip convention
-	$Crispy.flip_h = facing > 0
+	#
+	# DO NOT TOUCH $Sprite OR $Crispy HERE.
+	#
+	# The correct death visual was already selected above.
+	#
+	# Round 1 stays on HEALTHZERO.
+	# Round 2+ stays on CRISPY.
+	# =====================================================
 
 	# =====================================================
 	# GIVE LEVEL1 CONTROL
 	# =====================================================
 
 	round_death.emit(winner)
+
+	return
 
 func play_anim(anim_name: String):
 
