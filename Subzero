@@ -1658,6 +1658,7 @@ func die():
 
 		$Crispy.visible = false
 		$Sprite.visible = false
+		$healthzero.flip_h = facing > 0
 		$healthzero.visible = true
 
 		current_anim = ""
