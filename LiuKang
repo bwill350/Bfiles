@@ -35,7 +35,7 @@ var was_uppercut := false
 const GRAB_TIME := 1.0
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, KICK, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, KICK, LOWKICK, JUMPKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 var special_move := false
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
@@ -52,6 +52,7 @@ var run_locked := false
 var jump_requested := false
 var dragon_invisible := false
 var uppercut_launched := false
+var jumpkick_launched := false
 var is_pulled := false
 var pull_timer := 0.0
 var pull_target: Node = null
@@ -411,179 +412,374 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
+	# =====================================================
+	# PULLED / SPEAR / GRAB PULL
+	# =====================================================
+
 	if is_pulled:
 		run_pull_logic(delta)
 		move_and_slide()
 		return
 
-	# ---------------- GLOBAL LOCKS ----------------
+	# =====================================================
+	# GLOBAL LOCKS
+	# =====================================================
+
 	if dragon_active or stunned:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
 
+	# =====================================================
+	# UPPERCUT LAUNCH
+	# =====================================================
 
-# ---------------- UPPERCUT HIT ANIMATION ----------------
-	if was_uppercut:
+	if uppercut_launched:
+
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		state = State.JUMP
+
+		# Keep uppercut hurt animation while airborne
+		if sprite.animation != "wasuppercut":
+			current_anim = ""
+			sprite.play("wasuppercut")
+
+		# Gravity brings Liu Kang back down
 		velocity.y += GRAVITY * delta
-		velocity.x = 0
+
+		# Slowly stop horizontal launch movement
+		velocity.x = move_toward(
+			velocity.x,
+			0.0,
+			1500.0 * delta
+		)
+
 		move_and_slide()
+
+		# =================================================
+		# LANDED AFTER UPPERCUT
+		# =================================================
+
+		if is_on_floor():
+
+			velocity = Vector2.ZERO
+
+			uppercut_launched = false
+			was_uppercut = false
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+
+			is_attacking = false
+			is_shooting = false
+			is_blocking = false
+
+			state = State.IDLE
+
+			current_anim = ""
+			play_anim("idle")
+
 		return
+
+	# =====================================================
+	# JUMPKICK LAUNCH
+	# =====================================================
+
+	if jumpkick_launched:
+
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		state = State.JUMP
+
+		# Keep jumpkick hurt animation while airborne
+		if sprite.animation != "wasjumpkick":
+			current_anim = ""
+			sprite.play("wasjumpkick")
+
+		# Gravity brings Liu Kang back down
+		velocity.y += GRAVITY * delta
+
+		# Slowly stop horizontal launch movement
+		velocity.x = move_toward(
+			velocity.x,
+			0.0,
+			1500.0 * delta
+		)
+
+		move_and_slide()
+
+		# =================================================
+		# LANDED AFTER JUMPKICK
+		# =================================================
+
+		if is_on_floor():
+
+			velocity = Vector2.ZERO
+
+			jumpkick_launched = false
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+
+			is_attacking = false
+			is_shooting = false
+			is_blocking = false
+
+			state = State.IDLE
+
+			current_anim = ""
+			play_anim("idle")
+
+		return
+
+	# =====================================================
+	# FLYING KICK
+	# =====================================================
 
 	if flyingkick_active:
 		handle_flyingkick(delta)
 		move_and_slide()
 		return
 
+	# =====================================================
+	# BICYCLE KICK
+	# =====================================================
+
 	if bicyclekick_active:
 		handle_bicyclekick(delta)
 		move_and_slide()
 		return
 
-	# ---------------- FINISH STATE ----------------
+	# =====================================================
+	# FINISH STATE
+	# =====================================================
+
 	if is_finish_state:
+
 		state = State.IDLE
 		velocity.x = 0
+
 		if not is_hurting:
 			play_anim("idle")
+
 		move_and_slide()
 		return
 
-	# ---------------- GRAVITY (ONLY ONCE) ----------------
+	# =====================================================
+	# GRAVITY
+	# =====================================================
+
 	velocity.y += GRAVITY * delta
 
-	if uppercut_launched:
+	# =====================================================
+	# COOLDOWNS
+	# =====================================================
 
-	# Gravity brings the fighter back down
-		velocity.y += GRAVITY * delta
-
-		move_and_slide()
-
-		if is_on_floor():
-			uppercut_launched = false
-
-	# Gravity brings the fighter back down
-		velocity.y += GRAVITY * delta
-
-		return
-
-	# ---------------- COOLDOWNS ----------------
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
 
 	combo_timer += delta
+
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
-	# ---------------- CPU ----------------
+	# =====================================================
+	# CPU
+	# =====================================================
+
 	if is_cpu:
 		cpu_logic(delta)
 		return
 
+	# =====================================================
+	# ACTION LOCK
+	# =====================================================
+
 	if action_locked:
 		return
 
+	# =====================================================
+	# INPUT
+	# =====================================================
 
-	# ---------------- INPUT ----------------
 	var input_dir = Input.get_axis("left", "right")
 
 	if input_dir != 0:
 		facing = input_dir
 
+	# =====================================================
+	# FACING / POSITIONS
+	# =====================================================
+
 	sprite.flip_h = facing > 0
 	$Crispy.flip_h = facing > 0
-	$AttackMarker.position = Vector2(0 * facing, 0)
-	$LiuKangShoot.position = Vector2(63 * facing, -225)
 
-	# =========================================================
-	# 🟢 MOVEMENT (RUN ADDED HERE)
-	# =========================================================
+	$AttackMarker.position = Vector2(0 * facing, 0)
+
+	$LiuKangShoot.position = Vector2(
+		63 * facing,
+		-225
+	)
+
+	# =====================================================
+	# MOVEMENT / RUN
+	# =====================================================
+
 	if Input.is_action_pressed("run") and input_dir != 0:
-		run(input_dir)   # 🔥 CALLS YOUR NEW RUN FUNCTION
+
+		run(input_dir)
+
 	else:
+
 		velocity.x = input_dir * SPEED
 
 		# ---------------- STATE ----------------
+
 		if not is_on_floor():
+
 			state = State.JUMP
+
 		elif input_dir != 0:
+
 			state = State.WALK
-		elif input_dir != 0:
-			state = State.RUN
+
 		else:
+
 			state = State.IDLE
 
-	# ---------------- ANIMS ----------------
+	# =====================================================
+	# STATE ANIMATIONS
+	# =====================================================
+
 	match state:
 
 		State.JUMP:
+
 			if not is_attacking:
 				play_anim("jump")
 
 		State.WALK:
+
 			if not is_attacking:
 				play_anim("walk")
 
 		State.RUN:
+
 			if not is_attacking:
 				play_anim("run")
 
 		State.IDLE:
+
 			if not is_attacking:
 				play_anim("idle")
+
+	# =====================================================
+	# HURT LOCK
+	# =====================================================
 
 	if is_hurting and hurt_locked:
 		return
 
-	# ---------------- ANIMATIONS ----------------
+	# =====================================================
+	# JUMP / GRAB ANIMATIONS
+	# =====================================================
+
 	match state:
+
 		State.JUMP:
+
 			if is_grabbing:
 				state = State.JUMP
+
 			if not is_on_floor():
 				play_anim("jump")
+
 			if grabbed_enemy and is_instance_valid(grabbed_enemy):
 
-				var grab_offset := Vector2(80 * facing, 0)
+				var grab_offset := Vector2(
+					80 * facing,
+					0
+				)
 
-				# put enemy on opposite side of Liu Kang
-				grabbed_enemy.global_position = global_position + grab_offset
+				# Put enemy on opposite side of Liu Kang
+				grabbed_enemy.global_position = (
+					global_position + grab_offset
+				)
 
-				# face enemy away from Liu
+				# Face enemy away from Liu Kang
 				grabbed_enemy.facing = -facing
-				grabbed_enemy.sprite.flip_h = grabbed_enemy.facing > 0
+				grabbed_enemy.sprite.flip_h = (
+					grabbed_enemy.facing > 0
+				)
 
-				# stop enemy movement
+				# Stop enemy movement
 				grabbed_enemy.velocity = Vector2.ZERO
+
 			elif not is_attacking:
+
 				play_anim("jump")
-	# ---------------- ANIMS ----------------
+
+	# =====================================================
+	# SECONDARY STATE ANIMATIONS
+	# =====================================================
+
 	match state:
 
 		State.JUMP:
+
 			if not is_attacking:
 				play_anim("jump")
 
 		State.WALK:
+
 			if not is_attacking:
 				play_anim("walk")
 
 		State.RUN:
+
 			if not is_attacking:
 				play_anim("run")
 
 		State.IDLE:
+
 			if not is_attacking:
 				play_anim("idle")
+
+	# =====================================================
+	# HURT LOCK
+	# =====================================================
 
 	if is_hurting and hurt_locked:
 		return
 
-	# ---------------- JUMP ----------------
+	# =====================================================
+	# NORMAL JUMP
+	# =====================================================
+
 	if Input.is_action_just_pressed("jump") and is_on_floor():
+
 		velocity.y = jump_velocity
 
+	# =====================================================
+	# GRAB
+	# =====================================================
 
 	if Input.is_action_just_pressed("grab") and is_on_floor():
+
 		is_grabbing = true
 		is_attacking = true
 
@@ -595,61 +791,93 @@ func _physics_process(delta):
 
 		return
 
-	# ---------------- ATTACK INPUT ----------------
+	# =====================================================
+	# ATTACK INPUT
+	# =====================================================
+
 	if Input.is_action_just_pressed("punch"):
+
 		do_action("punch")
 
 	elif Input.is_action_just_pressed("highpunch"):
+
 		do_action("highpunch")
 
 	elif Input.is_action_just_pressed("lowpunch"):
+
 		do_action("lowpunch")
 
 	elif Input.is_action_just_pressed("roundhousekick"):
+
 		do_action("roundhousekick")
 
 	elif Input.is_action_just_pressed("kick"):
+
 		do_action("kick")
 
 	elif Input.is_action_just_pressed("highkick"):
+
 		do_action("highkick")
 
 	elif Input.is_action_pressed("fatalitydragon"):
+
 		do_action("fatalitydragon")
 
 	elif Input.is_action_just_pressed("lowkick"):
+
 		do_action("lowkick")
 
+	elif Input.is_action_just_pressed("jumpkick"):
+
+		do_action("jumpkick")
+
 	elif Input.is_action_just_pressed("uppercut"):
+
 		do_action("uppercut")
 
 	elif Input.is_action_pressed("shoot"):
+
 		shoot_fireball()
 
 	elif Input.is_action_pressed("block"):
+
 		start_block()
 
 	elif Input.is_action_just_pressed("flyingkick"):
+
 		start_flyingkick()
 
 	elif Input.is_action_just_pressed("bicyclekick"):
+
 		start_bicyclekick()
 
 	elif Input.is_action_pressed("invisible"):
+
 		invisible()
 
 	elif Input.is_action_pressed("knee"):
+
 		do_action("knee")
 
 	elif Input.is_action_pressed("visible"):
+
 		sprite.visible = true
 
 	elif Input.is_action_pressed("block"):
+
 		start_block()
+
 	elif Input.is_action_pressed("grab"):
+
 		velocity.y = jump_velocity
+
 	else:
+
 		stop_block()
+
+	# =====================================================
+	# FINAL MOVEMENT
+	# =====================================================
 
 	move_and_slide()
 
@@ -1227,6 +1455,9 @@ func cpu_logic(delta):
 					elif choice < 70:
 						do_action("lowkick")
 
+					elif choice < 70:
+						do_action("jumpkick")
+
 					elif choice < 82:
 						do_action("uppercut")
 
@@ -1263,6 +1494,9 @@ func cpu_logic(delta):
 
 					elif choice < 88:
 						do_action("lowkick")
+
+					elif choice < 88:
+						do_action("jumpkick")
 
 					elif choice < 94:
 						do_action("uppercut")
@@ -1310,6 +1544,7 @@ func do_action(anim_name: String):
 		"kick",
 		"highkick",
 		"lowkick",
+		"jumpkick",
 		"uppercut",
 		"roundhousekick",
 		"jumpkick",
@@ -1660,6 +1895,7 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"highkick",
 		"lowkick",
+		"jumpkick",
 		"uppercut",
 		"roundhousekick",
 		"flyingkick",
@@ -1688,6 +1924,8 @@ func spawn_attack(anim_name: String):
 		"highkick":
 			dmg = 1
 		"lowkick":
+			dmg = 1
+		"jumpkick":
 			dmg = 1
 		"uppercut":
 			dmg = 1
