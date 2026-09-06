@@ -153,6 +153,7 @@ var shoot_cooldown: float = 0.0
 func _ready():
 	$Sprite.modulate = Color(1, 1, 1, 1)
 	$Crispy.visible = false
+	$healthzero.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("LiuKang")
@@ -1960,7 +1961,7 @@ func die():
 		return
 
 	# =====================================================
-	# LOCK REPTILE AS DEAD
+	# LOCK LIU KANG AS DEAD
 	# =====================================================
 
 	state = State.DEAD
@@ -2004,26 +2005,16 @@ func die():
 	# =====================================================
 	# DETERMINE ROUND WINNER
 	# =====================================================
-	#
-	# If Reptile is P1:
-	#     CPU wins.
-	#
-	# Otherwise Reptile is CPU:
-	#     P1 wins.
-	# =====================================================
 
 	var winner := ""
 
 	if is_in_group("player1"):
-
 		winner = "cpu"
-
 	else:
-
 		winner = "player1"
 
 	# =====================================================
-	# PRINT DEBUG
+	# DEBUG
 	# =====================================================
 
 	print("================================")
@@ -2041,15 +2032,6 @@ func die():
 	# =====================================================
 	# DETERMINE IF THIS DEATH ENDS THE MATCH
 	# =====================================================
-	#
-	# IMPORTANT:
-	#
-	# The score has NOT been incremented here yet.
-	# Level1 is responsible for awarding the round.
-	#
-	# If the winner already has 1 win, this death
-	# will give them their second win.
-	# =====================================================
 
 	var match_will_end := false
 
@@ -2066,80 +2048,68 @@ func die():
 	print("MATCH WILL END: ", match_will_end)
 
 	# =====================================================
-	# FINAL MATCH DEATH
+	# NORMAL ROUND DEATH
+	# =====================================================
+	#
+	# NOT the final match death.
+	# Play healthzero animation.
+	# Level1 handles the round transition.
 	# =====================================================
 
-	if match_will_end:
+	if not match_will_end:
 
 		print("================================")
-		print("LIUKANG FINAL DEATH")
-		print("FATALITY ALLOWED")
+		print("LIUKANG ROUND DEATH")
+		print("NO FATALITY")
+		print("PLAYING HEALTHZERO")
 		print("================================")
 
-		# -------------------------------------------------
-		# BLOOD DEATH EFFECT
-		# -------------------------------------------------
-
-		var blood = BLOOD_DEATH.instantiate()
-
-		get_tree().current_scene.add_child(blood)
-
-		blood.global_position = global_position
-
-		# -------------------------------------------------
-		# SHOW DEAD SPRITE
-		# -------------------------------------------------
-
+		# Show normal death animation
+		$Crispy.visible = false
 		$Sprite.visible = false
-		$Crispy.visible = true
 
-		$Crispy.flip_h = facing > 0
+		current_anim = ""
 
-		# -------------------------------------------------
-		# HIDE FINISH HIM
-		# -------------------------------------------------
+		$Sprite.flip_h = facing < 0
+		$healthzero.flip_h = facing > 0
+		$healthzero.visible = true
 
+		# Hide FINISH HIM
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
 
-		# -------------------------------------------------
-		# WAIT FOR FINAL DEATH
-		# -------------------------------------------------
-
-		await get_tree().create_timer(3.0).timeout
-
-		# -------------------------------------------------
-		# TELL LEVEL1
-		# -------------------------------------------------
-
+		# Give Level1 control
 		round_death.emit(winner)
 
 		return
 
 	# =====================================================
-	# NORMAL ROUND DEATH
-	# =====================================================
-	#
-	# This means the match is NOT over.
-	#
-	# Examples:
-	#
-	# Score 0-0
-	# Reptile dies
-	# Winner gets Round 1
-	#
-	# Score 1-0
-	# Reptile dies and CPU wins
-	# Score becomes 1-1
-	#
-	# Level1 handles the score and next round.
+	# FINAL MATCH DEATH
 	# =====================================================
 
 	print("================================")
-	print("LIUKANG ROUND DEATH")
-	print("NO FATALITY")
-	print("LEVEL1 WILL HANDLE NEXT ROUND")
+	print("LIUKANG FINAL DEATH")
+	print("FATALITY ALLOWED")
 	print("================================")
+
+	# =====================================================
+	# SHOW CRISPY
+	# =====================================================
+
+	$Sprite.visible = false
+	$Crispy.visible = true
+
+	$Crispy.flip_h = facing > 0
+
+	# =====================================================
+	# BLOOD DEATH EFFECT
+	# =====================================================
+
+	var blood = BLOOD_DEATH.instantiate()
+
+	get_tree().current_scene.add_child(blood)
+
+	blood.global_position = global_position
 
 	# =====================================================
 	# HIDE FINISH HIM
@@ -2149,22 +2119,18 @@ func die():
 		finish_label.visible = false
 
 	# =====================================================
-	# DEAD SPRITE
+	# WAIT FOR FINAL DEATH
 	# =====================================================
 
-	$Sprite.visible = false
-	$Crispy.visible = true
-
-	$Crispy.flip_h = facing > 0
+	await get_tree().create_timer(3.0).timeout
 
 	# =====================================================
-	# GIVE LEVEL1 CONTROL
+	# TELL LEVEL1 WHO WON
 	# =====================================================
 
 	round_death.emit(winner)
 
 	return
-
 
 # =========================================================
 # ANIMATION
