@@ -228,7 +228,7 @@ func run(input_dir: float):
 func _ready():
 	$Sprite.visible = true
 	$Crispy.visible = false
-
+	$healthzero.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Sonya")
@@ -1279,7 +1279,6 @@ func trigger_finish_state():
 # =========================================================
 # DEATH
 # =========================================================
-
 func die():
 
 	# =====================================================
@@ -1336,22 +1335,12 @@ func die():
 	# =====================================================
 	# DETERMINE ROUND WINNER
 	# =====================================================
-	#
-	# If Sonya is P1:
-	#     CPU wins.
-	#
-	# Otherwise:
-	#     P1 wins.
-	# =====================================================
 
 	var winner := ""
 
 	if is_in_group("player1"):
-
 		winner = "cpu"
-
 	else:
-
 		winner = "player1"
 
 	# =====================================================
@@ -1373,12 +1362,6 @@ func die():
 	# =====================================================
 	# DETERMINE IF THIS DEATH ENDS THE MATCH
 	# =====================================================
-	#
-	# Level1 has not awarded this round yet.
-	#
-	# If the winner already has one round win,
-	# this death will give them their second win.
-	# =====================================================
 
 	var match_will_end := false
 
@@ -1395,7 +1378,58 @@ func die():
 	print("MATCH WILL END: ", match_will_end)
 
 	# =====================================================
-	# HIDE NORMAL SPRITE / SHOW DEAD SPRITE
+	# NORMAL ROUND DEATH
+	# =====================================================
+	#
+	# NOT the final match death.
+	# Play healthzero animation.
+	# Level1 handles the round transition.
+	# =====================================================
+
+	if not match_will_end:
+
+		print("================================")
+		print("SONYA ROUND DEATH")
+		print("NO FATALITY")
+		print("PLAYING HEALTHZERO")
+		print("================================")
+
+		# Hide Crispy
+		$Crispy.visible = false
+
+		# Show normal sprite
+		$Sprite.visible = false
+
+		# Reset animation tracking
+		current_anim = ""
+
+		# Face the correct direction
+		$Sprite.flip_h = facing < 0
+
+		# Play normal death animation
+		$healthzero.flip_h = facing > 0
+		$healthzero.visible = true
+
+		# Make sure FINISH HIM is hidden
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
+
+		# Give Level1 control
+		round_death.emit(winner)
+
+		return
+
+	# =====================================================
+	# FINAL MATCH DEATH
+	# =====================================================
+
+	print("================================")
+	print("SONYA FINAL DEATH")
+	print("FATALITY ALLOWED")
+	print("================================")
+
+	# =====================================================
+	# SHOW CRISPY
 	# =====================================================
 
 	$Sprite.visible = false
@@ -1404,76 +1438,14 @@ func die():
 	$Crispy.flip_h = facing > 0
 
 	# =====================================================
-	# FINAL MATCH DEATH
+	# BLOOD DEATH EFFECT
 	# =====================================================
 
-	if match_will_end:
+	var blood = BLOOD_DEATH.instantiate()
 
-		print("================================")
-		print("SONYA FINAL DEATH")
-		print("FATALITY ALLOWED")
-		print("================================")
+	get_tree().current_scene.add_child(blood)
 
-		# -------------------------------------------------
-		# BLOOD DEATH EFFECT
-		# -------------------------------------------------
-
-		var blood = BLOOD_DEATH.instantiate()
-
-		get_tree().current_scene.add_child(blood)
-
-		blood.global_position = global_position
-
-		# -------------------------------------------------
-		# MAKE SURE DEAD SPRITE IS SHOWN
-		# -------------------------------------------------
-
-		$Sprite.visible = false
-		$Crispy.visible = true
-
-		$Crispy.flip_h = facing > 0
-
-		# -------------------------------------------------
-		# HIDE FINISH HIM
-		# -------------------------------------------------
-
-		if is_instance_valid(finish_label):
-			finish_label.visible = false
-
-		# -------------------------------------------------
-		# WAIT FOR FINAL DEATH / FATALITY
-		# -------------------------------------------------
-
-		await get_tree().create_timer(3.0).timeout
-
-		# -------------------------------------------------
-		# TELL LEVEL1 WHO WON
-		# -------------------------------------------------
-
-		round_death.emit(winner)
-
-		return
-
-	# =====================================================
-	# NORMAL ROUND DEATH
-	# =====================================================
-	#
-	# Match is NOT over.
-	#
-	# Level1 handles:
-	#   - awarding the round
-	#   - updating the score
-	#   - starting Round 2
-	#   - resetting fighters
-	#   - resetting health bars
-	#   - showing Round 2
-	# =====================================================
-
-	print("================================")
-	print("SONYA ROUND DEATH")
-	print("NO FATALITY")
-	print("LEVEL1 WILL HANDLE NEXT ROUND")
-	print("================================")
+	blood.global_position = global_position
 
 	# =====================================================
 	# HIDE FINISH HIM
@@ -1483,7 +1455,13 @@ func die():
 		finish_label.visible = false
 
 	# =====================================================
-	# GIVE LEVEL1 CONTROL
+	# WAIT FOR FINAL DEATH / FATALITY
+	# =====================================================
+
+	await get_tree().create_timer(3.0).timeout
+
+	# =====================================================
+	# TELL LEVEL1 WHO WON
 	# =====================================================
 
 	round_death.emit(winner)
