@@ -41,9 +41,11 @@ var bullet_spawned := false
 var attack_owner: Node = null
 var attack_type := ""
 var uppercut_launched := false
+var jumpkick_launched := false
+var was_uppercut := false
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
@@ -340,8 +342,6 @@ func fatalknife():
 
 # ---------------- PHYSICS ----------------
 func _physics_process(delta):
-	# ---------------- GRAVITY ----------------
-	velocity.y += GRAVITY * delta
 
 	if state == State.DEAD:
 		return
@@ -389,6 +389,84 @@ func _physics_process(delta):
 
 		if is_on_floor():
 			uppercut_launched = false
+
+		return
+
+	# =====================================================
+	# UPPERCUT LAUNCH
+	# =====================================================
+
+	if uppercut_launched:
+
+		# Keep uppercut hurt animation while airborne
+		if sprite.animation != "wasuppercut":
+			current_anim = ""
+			sprite.play("wasuppercut")
+
+		# Do NOT allow normal movement while launched
+		velocity.x = move_toward(
+			velocity.x,
+			0.0,
+			1500.0 * delta
+		)
+
+		move_and_slide()
+
+		# =================================================
+		# LANDED AFTER UPPERCUT
+		# =================================================
+
+		if is_on_floor():
+
+			velocity.x = 0
+			velocity.y = 0
+
+			uppercut_launched = false
+			was_uppercut = false
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+
+			is_attacking = false
+			is_shooting = false
+			is_blocking = false
+
+			state = State.IDLE
+
+			current_anim = ""
+			play_anim("idle")
+
+		return
+
+# =====================================================
+# JUMPKICK LAUNCH
+# =====================================================
+
+	if jumpkick_launched:
+
+		# Keep jumpkick hurt animation while airborne
+		if sprite.animation != "wasjumpkick":
+			current_anim = ""
+			sprite.play("wasjumpkick")
+
+		# Do NOT allow normal movement while launched
+		velocity.x = move_toward(
+			velocity.x,
+			0.0,
+			1500.0 * delta
+		)
+
+		move_and_slide()
+
+		# Stop launch when Johnny lands
+		if is_on_floor():
+			jumpkick_launched = false
+			velocity.x = 0
+			velocity.y = 0
+			state = State.IDLE
+			current_anim = ""
+			sprite.play("idle")
 
 		return
 
@@ -506,6 +584,9 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("lowkick"):
 		do_action("lowkick")
+
+	elif Input.is_action_just_pressed("jumpkick"):
+		do_action("jumpkick")
 
 	elif Input.is_action_just_pressed("roundhousekick"):
 		do_action("roundhousekick")
@@ -832,6 +913,9 @@ func cpu_logic(delta):
 					elif choice < 90:
 						do_action("lowkick")
 
+					elif choice < 90:
+						do_action("jumpkick")
+
 					elif choice < 96:
 						do_action("uppercut")
 
@@ -1076,6 +1160,7 @@ func do_action(anim_name: String):
 		"lowpunch",
 		"highkick",
 		"lowkick",
+		"jumpkick",
 		"knee",
 		"uppercut",
 		"roundhousekick",
@@ -1110,6 +1195,7 @@ func spawn_attack(anim_name: String):
 		"kick",
 		"highkick",
 		"lowkick",
+		"jumpkick",
 		"knee",
 		"uppercut",
 		"roundhousekick",
@@ -1155,6 +1241,8 @@ func spawn_attack(anim_name: String):
 		"highkick":
 			dmg = 1
 		"lowkick":
+			dmg = 1
+		"jumpkick":
 			dmg = 1
 		"uppercut":
 			dmg = 1
