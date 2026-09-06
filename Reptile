@@ -2123,6 +2123,7 @@ func die():
 		$Sprite.visible = false
 
 		current_anim = ""
+		$healthzero.flip_h = facing > 0
 		$healthzero.visible = true
 
 		print("================================")
