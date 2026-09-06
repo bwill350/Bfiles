@@ -37,10 +37,11 @@ var last_tap_time := 0.0
 var last_tap_dir := 0
 var run_locked := false
 var uppercut_launched := false
+var jumpkick_launched := false
 var stunned := false
 
 # ---------------- STATE ----------------
-enum State { IDLE, WALK, RUN, JUMP, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
 var state: State = State.IDLE
 var is_finish_state := false
 var hurt_cooldown := false
@@ -274,28 +275,81 @@ func _physics_process(delta):
 
 	velocity.y += GRAVITY * delta
 
-	# =========================================================
+	# =====================================================
 	# UPPERCUT LAUNCH
-	# =========================================================
+	# =====================================================
 
-	if was_uppercut:
+	if uppercut_launched:
+
+		# Keep uppercut hurt animation while airborne
+		if sprite.animation != "wasuppercut":
+			current_anim = ""
+			sprite.play("wasuppercut")
+
+		# Do NOT allow normal movement while launched
+		velocity.x = move_toward(
+			velocity.x,
+			0.0,
+			1500.0 * delta
+		)
 
 		move_and_slide()
 
+		# =================================================
+		# LANDED AFTER UPPERCUT
+		# =================================================
+
 		if is_on_floor():
 
+			velocity.x = 0
 			velocity.y = 0
+
+			uppercut_launched = false
 			was_uppercut = false
 
-			if state != State.DEAD:
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
 
-				is_hurting = false
-				hurt_locked = false
-				action_locked = false
-				is_attacking = false
+			is_attacking = false
+			is_shooting = false
+			is_blocking = false
 
-				state = State.IDLE
-				play_anim("idle")
+			state = State.IDLE
+
+			current_anim = ""
+			play_anim("idle")
+
+		return
+
+# =====================================================
+# JUMPKICK LAUNCH
+# =====================================================
+
+	if jumpkick_launched:
+
+		# Keep jumpkick hurt animation while airborne
+		if sprite.animation != "wasjumpkick":
+			current_anim = ""
+			sprite.play("wasjumpkick")
+
+		# Do NOT allow normal movement while launched
+		velocity.x = move_toward(
+			velocity.x,
+			0.0,
+			1500.0 * delta
+		)
+
+		move_and_slide()
+
+		# Stop launch when Johnny lands
+		if is_on_floor():
+			jumpkick_launched = false
+			velocity.x = 0
+			velocity.y = 0
+			state = State.IDLE
+			current_anim = ""
+			sprite.play("idle")
 
 		return
 
@@ -503,6 +557,9 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("lowkick"):
 		do_action("lowkick")
+
+	elif Input.is_action_just_pressed("jumpkick"):
+		do_action("jumpkick")
 
 	elif Input.is_action_just_pressed("uppercut"):
 		do_action("uppercut")
@@ -781,6 +838,10 @@ func cpu_logic(delta):
 
 					do_action("lowkick")
 
+				elif choice < 80:
+
+					do_action("jumpkick")
+
 				elif choice < 88:
 
 					do_action("uppercut")
@@ -817,6 +878,10 @@ func cpu_logic(delta):
 
 					do_action("lowkick")
 
+				elif choice < 75:
+
+					do_action("jumpkick")
+
 				elif choice < 85:
 
 					do_action("uppercut")
@@ -851,6 +916,7 @@ func do_action(anim_name: String):
 		"highkick",
 		"lowkick",
 		"slidekick",
+		"jumpkick",
 		"uppercut",
 		"roundhousekick",
 		"knee"
@@ -1114,6 +1180,7 @@ func spawn_attack(anim_name: String):
 		"highkick",
 		"lowkick",
 		"slidekick",
+		"jumpkick",
 		"uppercut",
 		"roundhousekick",
 		"knee"
@@ -1143,6 +1210,8 @@ func spawn_attack(anim_name: String):
 		"lowkick":
 			dmg = 1
 		"slidekick":
+			dmg = 1
+		"jumpkick":
 			dmg = 1
 		"uppercut":
 			dmg = 1
@@ -1704,10 +1773,8 @@ func spawn_fx(scene: PackedScene):
 	print("SUB-ZERO SPAWNED FX: ", scene.resource_path)
 	print("FX POSITION: ", fx.global_position)
 
-func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
-	print("Subzero hit by:", area.name)
-	print(area.get_groups())
+func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
 	if area == null or not is_instance_valid(area):
 		return
@@ -1720,6 +1787,9 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
 	if hurt_cooldown:
 		return
+
+	print("SUB-ZERO HIT BY: ", area.name)
+	print("GROUPS: ", area.get_groups())
 
 	# =====================================================
 	# ONLY ACCEPT REAL ATTACKS
@@ -1742,45 +1812,67 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	hurt_cooldown = true
 
 	# =====================================================
-	# DETECT UPPERCUT
+	# DETECT SPECIAL ATTACK
 	# =====================================================
 
 	var got_uppercut := false
+	var got_jumpkick := false
 
 	if area.get("attack_name") != null:
+
 		if area.attack_name == "uppercut":
 			got_uppercut = true
 
-	# =====================================================
-	# APPLY KNOCKBACK
-	# =====================================================
-
-	knockback_x = -facing * 100
+		elif area.attack_name == "jumpkick":
+			got_jumpkick = true
 
 	# =====================================================
-	# UPPERCUT REACTION
+	# GET ATTACKER DIRECTION
+	# =====================================================
+
+	var launch_dir := facing
+
+	if area.get("attack_owner") != null:
+
+		var attacker = area.attack_owner
+
+		if is_instance_valid(attacker):
+
+			if "facing" in attacker:
+				launch_dir = attacker.facing
+
+	# =====================================================
+	# UPPERCUT LAUNCH
 	# =====================================================
 
 	if got_uppercut:
 
+		uppercut_launched = true
+		jumpkick_launched = false
 		was_uppercut = true
 
-		# Stop normal actions
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
+
 		is_attacking = false
 		is_shooting = false
 		is_blocking = false
-		action_locked = true
-		hurt_locked = true
-		is_hurting = true
 
 		state = State.JUMP
 
-		# Launch Sub-Zero upward
-		velocity.y = jump_velocity
+		# ---------------------------------------------
+		# Launch Sub-Zero
+		# ---------------------------------------------
 
-		# Make sure normal animation system cannot immediately
-		# replace wasuppercut
-		current_anim = "wasuppercut"
+		velocity.x = launch_dir * 400.0
+		velocity.y = -800.0
+
+		# ---------------------------------------------
+		# Uppercut reaction
+		# ---------------------------------------------
+
+		current_anim = ""
 		sprite.play("wasuppercut")
 
 		if is_instance_valid(hurt_sound):
@@ -1788,34 +1880,68 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 
 		take_damage(1)
 
-		await sprite.animation_finished
+		# Physics handles the landing
+		return
 
-		# Wait until Sub-Zero comes back down
-		while not is_on_floor() and state != State.DEAD:
-			await get_tree().physics_frame
+	# =====================================================
+	# JUMPKICK LAUNCH
+	# =====================================================
 
-		if state != State.DEAD:
+	if got_jumpkick:
 
-			was_uppercut = false
-			is_hurting = false
-			hurt_locked = false
-			action_locked = false
-			is_attacking = false
+		jumpkick_launched = true
+		uppercut_launched = false
+		was_uppercut = false
 
-			state = State.IDLE
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
 
-			play_anim("idle")
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
 
-		await get_tree().create_timer(0.2).timeout
-		hurt_cooldown = false
+		state = State.JUMP
 
+		# ---------------------------------------------
+		# Launch Sub-Zero BACKWARD
+		# ---------------------------------------------
+
+		velocity.x = launch_dir * 900.0
+		velocity.y = -350.0
+
+		# ---------------------------------------------
+		# Jumpkick reaction
+		# ---------------------------------------------
+
+		current_anim = ""
+		sprite.play("wasjumpkick")
+
+		if is_instance_valid(hurt_sound):
+			hurt_sound.play()
+
+		take_damage(1)
+
+		# Physics handles the landing
 		return
 
 	# =====================================================
 	# NORMAL HIT
 	# =====================================================
 
-	current_anim = "hurt"
+	is_hurting = true
+	hurt_locked = true
+	action_locked = true
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
+	# Normal knockback
+	knockback_x = -facing * 100.0
+	velocity.x = knockback_x
+
+	current_anim = ""
 	sprite.play("hurt")
 
 	if is_instance_valid(hurt_sound):
@@ -1824,5 +1950,18 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 	take_damage(1)
 
 	await get_tree().create_timer(0.2).timeout
+
+	if state != State.DEAD:
+
+		is_hurting = false
+		hurt_locked = false
+		action_locked = false
+
+		state = State.IDLE
+
+		velocity.x = 0
+
+		current_anim = ""
+		play_anim("idle")
 
 	hurt_cooldown = false
