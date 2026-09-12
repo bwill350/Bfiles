@@ -49,6 +49,7 @@ var is_pulled := false
 var pull_timer := 0.0
 var pull_target: Node = null
 var was_uppercut := false
+var was_jumpkick := false
 
 # ---------------- CPU ----------------
 var is_cpu := false
@@ -83,7 +84,7 @@ const SMOKE_EFFECT = preload("res://Projectiles/SmokeEffect.tscn")
 const GRAVITY = 5000
 
 # ---------------- EXPORTS ----------------
-@export var SPEED = 300.0
+@export var SPEED = 400.0
 @export var CLIMB_SPEED = 250.0
 @export var max_health: int = 10
 @export var jump_velocity = -2200.0
@@ -192,11 +193,23 @@ func emit_health():
 	health_changed.emit(health)
 
 func run(input_dir: float):
+
 	if input_dir == 0:
 		return
 
+	# NEVER change to RUN while airborne
+	if not is_on_floor():
+
+		state = State.JUMP
+		velocity.x = input_dir * SPEED * 4
+
+		if not is_attacking:
+			play_anim("jump")
+
+		return
+
 	state = State.RUN
-	velocity.x = input_dir * SPEED * 4  # faster than walk
+	velocity.x = input_dir * SPEED * 4
 
 	if not is_attacking:
 		play_anim("run")
@@ -261,19 +274,26 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+
 	# =========================================================
 	# STUN
 	# =========================================================
 
 	if stunned:
 		velocity = Vector2.ZERO
+		move_and_slide()
 		return
+
 
 	# =========================================================
 	# GRAVITY
 	# =========================================================
 
-	velocity.y += GRAVITY * delta
+	if not is_on_floor():
+		velocity.y += GRAVITY * delta
+	elif velocity.y > 0:
+		velocity.y = 0
+
 
 	# =====================================================
 	# UPPERCUT LAUNCH
@@ -322,9 +342,10 @@ func _physics_process(delta):
 
 		return
 
-# =====================================================
-# JUMPKICK LAUNCH
-# =====================================================
+
+	# =====================================================
+	# JUMPKICK LAUNCH
+	# =====================================================
 
 	if jumpkick_launched:
 
@@ -337,47 +358,57 @@ func _physics_process(delta):
 		velocity.x = move_toward(
 			velocity.x,
 			0.0,
-			1500.0 * delta
+			1900.0 * delta
 		)
 
 		move_and_slide()
 
-		# Stop launch when Johnny lands
+		# =================================================
+		# LANDED AFTER JUMPKICK
+		# =================================================
+
 		if is_on_floor():
-			jumpkick_launched = false
+
 			velocity.x = 0
 			velocity.y = 0
+
+			jumpkick_launched = false
+			was_jumpkick = false
+
+			is_hurting = false
+			hurt_locked = false
+			action_locked = false
+
+			is_attacking = false
+			is_shooting = false
+			is_blocking = false
+
 			state = State.IDLE
+
 			current_anim = ""
-			sprite.play("idle")
+			play_anim("idle")
 
 		return
 
-	# =========================================================
-	# NORMAL GROUND GRAVITY
-	# =========================================================
-
-	if is_on_floor():
-
-		velocity.y = 0
 
 	# =========================================================
 	# DEATH / FINISH
 	# =========================================================
-
-	if state == State.DEAD:
-		return
 
 	if is_finish_state:
 
 		state = State.IDLE
 		velocity.x = 0
 
+		if is_on_floor():
+			velocity.y = 0
+
 		if not is_hurting:
 			play_anim("idle")
 
 		move_and_slide()
 		return
+
 
 	# =========================================================
 	# COOLDOWNS
@@ -393,6 +424,7 @@ func _physics_process(delta):
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
+
 	# =========================================================
 	# CPU
 	# =========================================================
@@ -405,12 +437,14 @@ func _physics_process(delta):
 
 		return
 
+
 	# =========================================================
 	# PLAYER CONTROL
 	# =========================================================
 
 	if action_locked:
 		return
+
 
 	var input_dir := Input.get_axis(
 		"left",
@@ -419,14 +453,9 @@ func _physics_process(delta):
 
 	var climb_pressed := Input.is_action_pressed("climb")
 
+
 	# =========================================================
 	# FACING
-	# =========================================================
-	#
-	# IMPORTANT:
-	# Only change facing when LEFT or RIGHT is actually pressed.
-	#
-	# This works while airborne too.
 	# =========================================================
 
 	if input_dir != 0:
@@ -446,12 +475,9 @@ func _physics_process(delta):
 			-235
 		)
 
+
 	# =========================================================
 	# PLAYER JUMP
-	# =========================================================
-	#
-	# Check jump BEFORE movement state so pressing
-	# LEFT/RIGHT in the air does not cancel jump.
 	# =========================================================
 
 	if (
@@ -463,13 +489,9 @@ func _physics_process(delta):
 		state = State.JUMP
 		$Jump.play()
 
+
 	# =========================================================
 	# AIRBORNE
-	# =========================================================
-	#
-	# Once Sub-Zero is in the air, ALWAYS keep JUMP state.
-	# Left/right can change facing and horizontal movement,
-	# but cannot change the animation to walk/run/idle.
 	# =========================================================
 
 	if not is_on_floor():
@@ -477,6 +499,7 @@ func _physics_process(delta):
 		velocity.x = input_dir * SPEED
 
 		state = State.JUMP
+
 
 	# =========================================================
 	# GROUND MOVEMENT
@@ -499,6 +522,7 @@ func _physics_process(delta):
 			else:
 
 				state = State.IDLE
+
 
 	# =========================================================
 	# ANIMATIONS
@@ -526,6 +550,7 @@ func _physics_process(delta):
 			if not is_attacking:
 				play_anim("idle")
 
+
 	# =========================================================
 	# HURT LOCK
 	# =========================================================
@@ -533,57 +558,73 @@ func _physics_process(delta):
 	if is_hurting and hurt_locked:
 		return
 
+
 	# =========================================================
 	# ATTACKS
 	# =========================================================
 
 	if Input.is_action_just_pressed("punch"):
+
 		do_action("punch")
 
 	if Input.is_action_just_pressed("highpunch"):
+
 		do_action("highpunch")
 
 	if Input.is_action_just_pressed("lowpunch"):
+
 		do_action("lowpunch")
 
 	elif Input.is_action_just_pressed("roundhousekick"):
+
 		do_action("roundhousekick")
 
 	elif Input.is_action_just_pressed("slidekick"):
+
 		do_action("slidekick")
 
 	elif Input.is_action_pressed("highkick"):
+
 		do_action("highkick")
 
 	elif Input.is_action_just_pressed("lowkick"):
+
 		do_action("lowkick")
 
 	elif Input.is_action_just_pressed("jumpkick"):
+
 		do_action("jumpkick")
 
 	elif Input.is_action_just_pressed("uppercut"):
+
 		do_action("uppercut")
 
 	elif Input.is_action_just_pressed("knee"):
+
 		do_action("knee")
 
 	elif Input.is_action_just_pressed("splat"):
+
 		do_action("splat")
 
 	elif Input.is_action_just_pressed("shoot"):
+
 		shoot_player()
 
 	elif Input.is_action_pressed("block"):
+
 		start_block()
 
 	else:
+
 		stop_block()
+
 
 	# =========================================================
 	# MOVE
 	# =========================================================
 
-	move_and_slide() 
+	move_and_slide()
 
 func spear_pulled_to_p1():
 
@@ -648,6 +689,10 @@ func cpu_logic(delta):
 	# DEAD
 	# =========================================================
 	if state == State.DEAD:
+		velocity.x = 0
+		is_attacking = false
+		is_shooting = false
+		action_locked = true
 		return
 
 	# =========================================================
@@ -655,6 +700,7 @@ func cpu_logic(delta):
 	# =========================================================
 	if is_finish_state:
 		is_attacking = false
+		is_shooting = false
 		action_locked = true
 		velocity.x = 0
 		state = State.IDLE
@@ -736,33 +782,53 @@ func cpu_logic(delta):
 
 		return
 
-# =========================================================
-# DISTANCE TO PLAYER 1
-# =========================================================
+	# =========================================================
+	# TARGET HEALTH 0
+	# =========================================================
+	if target.get("health") != null and target.health <= 0:
+
+		velocity.x = 0
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+		action_locked = true
+
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
+
+		return
+
+	# =========================================================
+	# DISTANCE TO PLAYER 1
+	# =========================================================
 	var dist: float = target.global_position.x - global_position.x
 	var distance: float = abs(dist)
 	var direction: float = sign(dist)
 
-# =========================================================
-# FACE OPPOSITE PLAYER 1
-# =========================================================
+	# =========================================================
+	# FACE PLAYER 1
+	# =========================================================
 	if direction != 0:
 
-		# CPU faces opposite the direction of Player 1
 		facing = direction
 
-		# Same flip convention used by Sub-Zero's player controls
 		sprite.flip_h = facing > 0
 		$Crispy.flip_h = facing > 0
 
 		$AttackMarker.position = Vector2(0, 0)
-		$Subzeroshoot.position = Vector2(63 * -facing, -211)
+
+		$Subzeroshoot.position = Vector2(
+			63 * -facing,
+			-211
+		)
 
 	# =========================================================
 	# CPU DISTANCES
 	# =========================================================
 	var attack_range := 110.0
-	var stopping_distance := 90.0
+	var stopping_distance := 70.0
 
 	# =========================================================
 	# WALK TOWARD PLAYER 1
@@ -785,11 +851,50 @@ func cpu_logic(delta):
 			play_anim("idle")
 
 	# =========================================================
+	# CHECK TARGET HEALTH AGAIN
+	# =========================================================
+	if target.get("health") != null and target.health <= 0:
+
+		velocity.x = 0
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+		action_locked = true
+
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
+
+		return
+
+	# =========================================================
 	# AI ATTACK TIMER
 	# =========================================================
 	ai_timer -= delta
 
 	if ai_timer > 0.0:
+		return
+
+	# =========================================================
+	# FINAL TARGET CHECK
+	# =========================================================
+	if not is_instance_valid(target):
+		return
+
+	if target.get("health") != null and target.health <= 0:
+
+		velocity.x = 0
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+		action_locked = true
+
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
+
 		return
 
 	# =========================================================
@@ -802,6 +907,8 @@ func cpu_logic(delta):
 		and not action_locked
 		and not is_attacking
 	):
+
+		velocity.x = 0
 
 		match Game.difficulty:
 
@@ -838,7 +945,7 @@ func cpu_logic(delta):
 
 					do_action("lowkick")
 
-				elif choice < 80:
+				elif choice < 85:
 
 					do_action("jumpkick")
 
@@ -851,6 +958,7 @@ func cpu_logic(delta):
 					do_action("roundhousekick")
 
 				else:
+
 					shoot_player()
 
 			# =================================================
@@ -878,7 +986,7 @@ func cpu_logic(delta):
 
 					do_action("lowkick")
 
-				elif choice < 75:
+				elif choice < 80:
 
 					do_action("jumpkick")
 
@@ -887,6 +995,7 @@ func cpu_logic(delta):
 					do_action("uppercut")
 
 				else:
+
 					shoot_player()
 
 # ---------------- ACTION ----------------
@@ -1940,7 +2049,7 @@ func _on_subzero_hurt_box_area_entered(area: Area2D) -> void:
 		# ---------------------------------------------
 
 		velocity.x = launch_dir * 900.0
-		velocity.y = -350.0
+
 
 		# ---------------------------------------------
 		# Jumpkick reaction
