@@ -32,6 +32,7 @@ var grabbed_enemy: CharacterBody2D = null
 var is_grabbing := false
 var grab_timer := 0.0
 var was_uppercut := false
+var was_jumpkick := false
 const GRAB_TIME := 1.0
 
 # ---------------- STATE ----------------
@@ -395,16 +396,25 @@ func handle_double_tap_run(input_dir: float, delta: float) -> bool:
 	return false
 
 func run(input_dir: float):
+
 	if input_dir == 0:
 		return
 
-	if state == State.DEAD:
+	# NEVER change to RUN while airborne
+	if not is_on_floor():
+
+		state = State.JUMP
+		velocity.x = input_dir * SPEED * 3
+
+		if not is_attacking:
+			play_anim("jump")
+
 		return
 
 	state = State.RUN
-	velocity.x = input_dir * SPEED * 4  # fast dash run
+	velocity.x = input_dir * SPEED * 3
 
-	if not is_attacking and not is_hurting:
+	if not is_attacking:
 		play_anim("run")
 
 # ---------------- PHYSICS ----------------
@@ -454,7 +464,7 @@ func _physics_process(delta):
 
 		# Gravity brings Liu Kang back down
 		velocity.y += GRAVITY * delta
-
+		velocity.x += 1500 * delta
 		# Slowly stop horizontal launch movement
 		velocity.x = move_toward(
 			velocity.x,
@@ -490,6 +500,7 @@ func _physics_process(delta):
 
 		return
 
+
 	# =====================================================
 	# JUMPKICK LAUNCH
 	# =====================================================
@@ -518,7 +529,7 @@ func _physics_process(delta):
 		velocity.x = move_toward(
 			velocity.x,
 			0.0,
-			1500.0 * delta
+			2800.0 * delta
 		)
 
 		move_and_slide()
@@ -532,6 +543,7 @@ func _physics_process(delta):
 			velocity = Vector2.ZERO
 
 			jumpkick_launched = false
+			was_jumpkick = false
 
 			is_hurting = false
 			hurt_locked = false
@@ -548,6 +560,7 @@ func _physics_process(delta):
 
 		return
 
+
 	# =====================================================
 	# FLYING KICK
 	# =====================================================
@@ -557,6 +570,7 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+
 	# =====================================================
 	# BICYCLE KICK
 	# =====================================================
@@ -565,6 +579,7 @@ func _physics_process(delta):
 		handle_bicyclekick(delta)
 		move_and_slide()
 		return
+
 
 	# =====================================================
 	# FINISH STATE
@@ -581,11 +596,16 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
+
 	# =====================================================
 	# GRAVITY
 	# =====================================================
 
-	velocity.y += GRAVITY * delta
+	if not is_on_floor():
+		velocity.y += GRAVITY * delta
+	elif velocity.y > 0:
+		velocity.y = 0
+
 
 	# =====================================================
 	# COOLDOWNS
@@ -598,20 +618,25 @@ func _physics_process(delta):
 	if combo_timer > combo_reset_time:
 		combo.clear()
 
+
 	# =====================================================
 	# CPU
 	# =====================================================
 
 	if is_cpu:
 		cpu_logic(delta)
+		move_and_slide()
 		return
+
 
 	# =====================================================
 	# ACTION LOCK
 	# =====================================================
 
 	if action_locked:
+		move_and_slide()
 		return
+
 
 	# =====================================================
 	# INPUT
@@ -622,6 +647,7 @@ func _physics_process(delta):
 	if input_dir != 0:
 		facing = input_dir
 
+
 	# =====================================================
 	# FACING / POSITIONS
 	# =====================================================
@@ -629,12 +655,16 @@ func _physics_process(delta):
 	sprite.flip_h = facing > 0
 	$Crispy.flip_h = facing > 0
 
-	$AttackMarker.position = Vector2(0 * facing, 0)
+	$AttackMarker.position = Vector2(
+		0 * facing,
+		0
+	)
 
 	$LiuKangShoot.position = Vector2(
 		63 * facing,
 		-225
 	)
+
 
 	# =====================================================
 	# MOVEMENT / RUN
@@ -662,6 +692,7 @@ func _physics_process(delta):
 
 			state = State.IDLE
 
+
 	# =====================================================
 	# STATE ANIMATIONS
 	# =====================================================
@@ -688,12 +719,15 @@ func _physics_process(delta):
 			if not is_attacking:
 				play_anim("idle")
 
+
 	# =====================================================
 	# HURT LOCK
 	# =====================================================
 
 	if is_hurting and hurt_locked:
+		move_and_slide()
 		return
+
 
 	# =====================================================
 	# JUMP / GRAB ANIMATIONS
@@ -734,6 +768,7 @@ func _physics_process(delta):
 
 				play_anim("jump")
 
+
 	# =====================================================
 	# SECONDARY STATE ANIMATIONS
 	# =====================================================
@@ -760,12 +795,14 @@ func _physics_process(delta):
 			if not is_attacking:
 				play_anim("idle")
 
+
 	# =====================================================
 	# HURT LOCK
 	# =====================================================
 
 	if is_hurting and hurt_locked:
 		return
+
 
 	# =====================================================
 	# NORMAL JUMP
@@ -774,6 +811,7 @@ func _physics_process(delta):
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 
 		velocity.y = jump_velocity
+
 
 	# =====================================================
 	# GRAB
@@ -1123,21 +1161,31 @@ func cpu_logic(delta):
 	# DEAD
 	# =========================================================
 	if state == State.DEAD:
+
+		velocity.x = 0.0
+		is_attacking = false
+		is_shooting = false
+		action_locked = true
+
 		return
+
 
 	# =========================================================
 	# FINISH HIM
 	# =========================================================
 	if is_finish_state:
+
 		is_attacking = false
+		is_shooting = false
 		action_locked = true
-		velocity.x = 0
+		velocity.x = 0.0
 		state = State.IDLE
 
 		if not is_hurting:
 			play_anim("idle")
 
 		return
+
 
 	# =========================================================
 	# HURT
@@ -1171,12 +1219,16 @@ func cpu_logic(delta):
 
 		return
 
+
 	# =========================================================
 	# ACTION LOCK
 	# =========================================================
 	if action_locked:
-		velocity.x = 0
+
+		velocity.x = 0.0
+
 		return
+
 
 	# =========================================================
 	# FIND PLAYER 1
@@ -1200,16 +1252,42 @@ func cpu_logic(delta):
 					target = node
 					break
 
+
 	# =========================================================
 	# NO TARGET
 	# =========================================================
 	if target == null or not is_instance_valid(target):
 
-		velocity.x = 0
+		velocity.x = 0.0
 		state = State.IDLE
-		play_anim("idle")
+		action_locked = true
+
+		if not is_attacking:
+			play_anim("idle")
 
 		return
+
+
+	# =========================================================
+	# TARGET HEALTH 0
+	# =========================================================
+	if target.get("health") != null and target.health <= 0:
+
+		velocity.x = 0.0
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		action_locked = true
+
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
+
+		return
+
 
 	# =========================================================
 	# DISTANCE TO PLAYER 1
@@ -1218,24 +1296,33 @@ func cpu_logic(delta):
 	var distance: float = abs(dist)
 	var direction: float = sign(dist)
 
-# =========================================================
-# FACE PLAYER 1
-# =========================================================
+
+	# =========================================================
+	# FACE PLAYER 1
+	# =========================================================
 	if direction != 0:
 
 		facing = direction
 
 		sprite.flip_h = facing > 0
-		$Crispy.flip_h = facing > 0
 
-		$AttackMarker.position = Vector2.ZERO
-		$LiuKangShoot.position = Vector2(63 * facing, -211)
+		if has_node("Crispy"):
+			$Crispy.flip_h = facing > 0
+
+		$AttackMarker.position = Vector2(0, 0)
+
+		$LiuKangShoot.position = Vector2(
+			63 * facing,
+			-211
+		)
+
 
 	# =========================================================
 	# CPU DISTANCES
 	# =========================================================
 	var attack_range := 110.0
-	var stopping_distance := 90.0
+	var stopping_distance := 70.0
+
 
 	# =========================================================
 	# WALK TOWARD PLAYER 1
@@ -1249,6 +1336,36 @@ func cpu_logic(delta):
 		if not is_attacking and not is_hurting:
 			play_anim("walk")
 
+	else:
+
+		velocity.x = 0.0
+
+		if not is_attacking and not is_hurting:
+			state = State.IDLE
+			play_anim("idle")
+
+
+	# =========================================================
+	# CHECK TARGET HEALTH AGAIN
+	# =========================================================
+	if target.get("health") != null and target.health <= 0:
+
+		velocity.x = 0.0
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		action_locked = true
+
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
+
+		return
+
+
 	# =========================================================
 	# AI ATTACK TIMER
 	# =========================================================
@@ -1258,252 +1375,139 @@ func cpu_logic(delta):
 		return
 
 
-
 	# =========================================================
-	# GRAVITY
+	# FINAL TARGET CHECK
 	# =========================================================
-	velocity.y += GRAVITY * delta
-
-
-	# =========================================================
-	# UPPERCUT RECOVERY
-	# =========================================================
-	if uppercut_launched:
-
-		velocity.x = 0.0
-		move_and_slide()
-
-		if is_on_floor():
-
-			uppercut_launched = false
-			velocity.y = 0.0
-
-			# FIND PLAYER 1 AGAIN
-			target = get_tree().get_first_node_in_group("player1")
-
-			ai_timer = 0.01
-
+	if not is_instance_valid(target):
 		return
 
+	if target.get("health") != null and target.health <= 0:
 
-	# =========================================================
-	# HURT RECOVERY
-	# =========================================================
-	if is_hurting:
+		velocity.x = 0.0
 
-		velocity.x = knockback_x
-
-		knockback_x = move_toward(
-			knockback_x,
-			0.0,
-			1500.0 * delta
-		)
-
-		move_and_slide()
-
-		# Still getting knocked backward
-		if abs(knockback_x) > 10.0:
-			return
-
-		# =====================================================
-		# HURT IS FINISHED
-		# =====================================================
-
-		knockback_x = 0.0
-
-		is_hurting = false
-		hurt_locked = false
 		is_attacking = false
 		is_shooting = false
-		action_locked = false
+		is_blocking = false
+
+		action_locked = true
 
 		state = State.IDLE
 
-		current_anim = ""
-		play_anim("idle")
-
-		# =====================================================
-		# IMMEDIATELY FIND PLAYER 1
-		# =====================================================
-
-		target = get_tree().get_first_node_in_group("player1")
-
-		# Backup search
-		if target == null or not is_instance_valid(target):
-
-			for node in get_tree().get_nodes_in_group("Fighter"):
-
-				if node == self:
-					continue
-
-				if not is_instance_valid(node):
-					continue
-
-				if node is Node2D and not node.is_cpu:
-					target = node
-					break
-
-		# =====================================================
-		# DO NOT WAIT
-		# =====================================================
-
-		ai_timer = 0.01
-
-		# Continue AI immediately on next physics frame
-		return
-
-
-	# =========================================================
-	# ACTION LOCK
-	# =========================================================
-	if action_locked:
-
-		velocity.x = 0.0
-		move_and_slide()
-
-		return
-
-
-	# =========================================================
-	# TARGET VALIDATION
-	# =========================================================
-	if target == null or not is_instance_valid(target):
-
-		target = get_tree().get_first_node_in_group("player1")
-
-		if target == null or not is_instance_valid(target):
-
-			velocity.x = 0.0
-			state = State.IDLE
+		if not is_hurting:
 			play_anim("idle")
 
-			move_and_slide()
-
-			ai_timer = 0.01
-			return
-
-	# =========================================================
-	# FACE PLAYER 1
-	# =========================================================
-	if direction != 0:
-
-		facing = direction
-
-		sprite.flip_h = facing > 0
-		$Crispy.flip_h = facing > 0
-
-		$AttackMarker.position = Vector2(0, 0)
-		$LiuKangShoot.position = Vector2(63 * facing, -225)
-
-	# =========================================================
-	# CHASE PLAYER 1
-	# =========================================================
-	if distance > stopping_distance:
-
-		velocity.x = direction * SPEED * 1.05
-
-		state = State.RUN
-
-		if not is_attacking and not is_hurting:
-			play_anim("walk")
+		return
 
 
 	# =========================================================
-	# AI ATTACK TIMER
+	# ATTACK ONLY WHEN CLOSE
 	# =========================================================
-	ai_timer -= delta
+	if (
+		distance <= attack_range
+		and not is_hurting
+		and not is_finish_state
+		and not action_locked
+		and not is_attacking
+	):
+
+		velocity.x = 0.0
+
+		match Game.difficulty:
+
+			# =================================================
+			# HARD
+			# =================================================
+			"Hard":
+
+				ai_timer = randf_range(0.05, 0.15)
+
+				var choice: int = randi() % 100
+
+				if choice < 15:
+
+					do_action("punch")
+
+				elif choice < 25:
+
+					do_action("highpunch")
+
+				elif choice < 35:
+
+					do_action("lowpunch")
+
+				elif choice < 50:
+
+					do_action("kick")
+
+				elif choice < 60:
+
+					do_action("highkick")
+
+				elif choice < 70:
+
+					do_action("lowkick")
+
+				elif choice < 80:
+
+					do_action("jumpkick")
+
+				elif choice < 88:
+
+					do_action("uppercut")
+
+				elif choice < 95:
+
+					do_action("roundhousekick")
+
+				else:
+
+					do_action("knee")
 
 
-	if ai_timer <= 0.0:
+			# =================================================
+			# EASY
+			# =================================================
+			"Easy":
 
-		# =====================================================
-		# ATTACK PLAYER 1
-		# =====================================================
-		if (
-			distance <= attack_range
-			and not is_hurting
-			and not is_finish_state
-			and not action_locked
-			and not is_attacking
-		):
+				ai_timer = randf_range(0.5, 0.9)
 
-			match Game.difficulty:
+				var choice: int = randi() % 100
 
-				# =================================================
-				# HARD
-				# =================================================
-				"Hard":
+				if choice < 35:
 
-					ai_timer = randf_range(0.08, 0.18)
+					do_action("punch")
 
-					var choice := randi() % 100
+				elif choice < 45:
 
-					if choice < 15:
-						do_action("punch")
+					do_action("highpunch")
 
-					elif choice < 25:
-						do_action("highpunch")
+				elif choice < 55:
 
-					elif choice < 35:
-						do_action("lowpunch")
+					do_action("lowpunch")
 
-					elif choice < 50:
-						do_action("kick")
+				elif choice < 70:
 
-					elif choice < 60:
-						do_action("highkick")
+					do_action("kick")
 
-					elif choice < 70:
-						do_action("lowkick")
+				elif choice < 80:
 
-					elif choice < 70:
-						do_action("jumpkick")
+					do_action("highkick")
 
-					elif choice < 82:
-						do_action("uppercut")
+				elif choice < 88:
 
-					elif choice < 92:
-						do_action("roundhousekick")
+					do_action("lowkick")
 
-					else:
-						do_action("knee")
+				elif choice < 94:
 
+					do_action("jumpkick")
 
-				# =================================================
-				# EASY
-				# =================================================
-				"Easy":
+				elif choice < 98:
 
-					ai_timer = randf_range(0.35, 0.65)
+					do_action("uppercut")
 
-					var choice := randi() % 100
+				else:
 
-					if choice < 35:
-						do_action("punch")
-
-					elif choice < 45:
-						do_action("highpunch")
-
-					elif choice < 55:
-						do_action("lowpunch")
-
-					elif choice < 70:
-						do_action("kick")
-
-					elif choice < 80:
-						do_action("highkick")
-
-					elif choice < 88:
-						do_action("lowkick")
-
-					elif choice < 88:
-						do_action("jumpkick")
-
-					elif choice < 94:
-						do_action("uppercut")
-
-					else:
-						shoot_fireball()
+					shoot_fireball()
 
 
 	# =========================================================
