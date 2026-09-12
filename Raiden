@@ -776,7 +776,7 @@ func _physics_process(delta):
 
 	elif Input.is_action_just_pressed("electricfly"):
 
-		$Hurt.play()
+		$Electricfly.play()
 
 		do_action("electricfly")
 
@@ -1236,9 +1236,6 @@ func shoot_player():
 	# PLAY ELECTRIC SOUND FIRST
 	$Electricsound.play()
 
-	if has_node("Hit"):
-		$Hit.play()
-
 	var bullet_scene: PackedScene
 
 	# 🔥 Combo override bullet
@@ -1290,7 +1287,7 @@ func spawn_force_field():
 	is_attacking = true
 
 	play_anim("doublepalmshocker")
-	$Hurt.play()
+	$Hit.play()
 	$Fatality.play()
 	var field = ELECTRIC_FORCE_FIELD.instantiate()
 	get_tree().current_scene.add_child(field)
@@ -1671,7 +1668,6 @@ func take_damage(amount: int):
 # =========================================================
 # FINISH HIM
 # =========================================================
-
 func trigger_finish_state():
 
 	if is_finish_state:
@@ -1681,45 +1677,59 @@ func trigger_finish_state():
 
 	state = State.IDLE
 
-	# Force them to stop moving
-	velocity.x = 0
-	velocity.y = 0
+	velocity = Vector2.ZERO
 
-	action_locked = true
+	action_locked = false
 	hurt_locked = false
 	is_attacking = false
 	is_shooting = false
 	is_hurting = false
 	is_blocking = false
 
-	# Cancel any uppercut/fly state
-	set_meta("uppercut_launched", false)
+	stunned = false
+	electricfly_active = false
+	uppercut_launched = false
+	jumpkick_launched = false
 
-	# Return to idle
-	play_anim("idle")
+	# IMPORTANT:
+	# Finish Him must still allow the fatality attack to damage Raiden.
+	can_take_damage = true
+	hurt_cooldown = false
+	spawn_protection = false
+
+	current_anim = ""
+
+	if is_instance_valid(sprite):
+		sprite.visible = true
+		sprite.play("idle")
 
 	# =====================================================
 	# SHOW FINISH HIM
 	# =====================================================
 
-	finish_label.visible = true
+	if is_instance_valid(finish_label):
 
-	if finish_label.has_method("start_flicker"):
-		finish_label.start_flicker(2.0, 0.05)
+		finish_label.visible = true
+
+		if finish_label.has_method("start_flicker"):
+			finish_label.start_flicker(2.0, 0.05)
 
 	# =====================================================
-	# LET RAiden FALL BACK TO THE FLOOR
+	# LET RAiden FALL TO THE FLOOR
 	# =====================================================
 
 	await get_tree().create_timer(0.1).timeout
 
-	while not is_on_floor():
+	while state != State.DEAD and not is_on_floor():
 
-		velocity.y += 5000.0 * get_physics_process_delta_time()
+		velocity.y += GRAVITY * get_physics_process_delta_time()
 
 		move_and_slide()
 
 		await get_tree().physics_frame
+
+	if state == State.DEAD:
+		return
 
 	velocity = Vector2.ZERO
 
@@ -1729,25 +1739,11 @@ func trigger_finish_state():
 
 	await get_tree().create_timer(2.0).timeout
 
-	# =====================================================
-	# HIDE FINISH HIM
-	# =====================================================
+	if state == State.DEAD:
+		return
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
-
-	# =====================================================
-	# WAIT A FEW SECONDS AFTER FINISH HIM
-	# =====================================================
-
-	await get_tree().create_timer(2.0).timeout
-
-	# =====================================================
-	# PLAY FATALITY SOUND
-	# =====================================================
-
-	if is_instance_valid(fatality_sound):
-		fatality_sound.play()
 
 func die():
 
@@ -2074,15 +2070,11 @@ func combo_attack(attacks: Array):
 	if not is_hurting:
 		play_anim("idle")
 
-
 func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 
 	# =====================================================
 	# BASIC CHECKS
 	# =====================================================
-
-	if hurt_cooldown:
-		return
 
 	if area == null or not is_instance_valid(area):
 		return
@@ -2095,21 +2087,6 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 
 	# Ignore hurt boxes
 	if area.is_in_group("HurtBox"):
-		return
-
-	# =====================================================
-	# ELECTRIC FLY DAMAGE
-	# =====================================================
-
-	if electricfly_active:
-
-		if area.has_method("take_damage"):
-			area.take_damage(1)
-
-		elif area.get_parent() and area.get_parent().has_method("take_damage"):
-			area.get_parent().take_damage(1)
-
-		end_electricfly()
 		return
 
 	# =====================================================
@@ -2137,18 +2114,24 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 	# DAMAGE COOLDOWN
 	# =====================================================
 
+	if hurt_cooldown:
+		return
+
+	if not can_take_damage:
+		return
+
 	hurt_cooldown = true
 
 	# =====================================================
 	# UPPERCUT CHECK
 	# =====================================================
 
-	var was_uppercut := false
+	var was_hit_by_uppercut := false
 
 	if area.get("attack_name") != null:
 
 		if area.attack_name == "uppercut":
-			was_uppercut = true
+			was_hit_by_uppercut = true
 
 	# =====================================================
 	# KNOCKBACK
@@ -2158,24 +2141,57 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 
 	# =====================================================
 	# APPLY DAMAGE
-	#
-	# take_damage() now controls:
-	# - hurt state
-	# - hurt animation
-	# - hit sound
-	# - blood
-	# - HP
-	# - Finish Him
-	# - death
 	# =====================================================
 
 	take_damage(1)
 
 	# =====================================================
-	# DEAD CHECK
+	# IMPORTANT:
+	# DEATH MUST BE CHECKED BEFORE ANY HURT RECOVERY
 	# =====================================================
 
-	if state == State.DEAD:
+	if health <= 0 or state == State.DEAD:
+
+		hurt_cooldown = false
+		return
+
+	# =====================================================
+	# FINISH HIM
+	# =====================================================
+
+	if is_finish_state:
+
+		hurt_cooldown = false
+		return
+
+	# =====================================================
+	# UPPERCUT
+	# =====================================================
+
+	if was_hit_by_uppercut and health > 1:
+
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
+
+		current_anim = ""
+		sprite.play("wasuppercut")
+
+		await sprite.animation_finished
+
+	# =====================================================
+	# NORMAL HURT
+	# =====================================================
+
+	elif health > 1:
+
+		await get_tree().create_timer(0.25).timeout
+
+	# =====================================================
+	# CHECK DEATH AGAIN
+	# =====================================================
+
+	if health <= 0 or state == State.DEAD:
 
 		hurt_cooldown = false
 		return
@@ -2190,57 +2206,7 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 		return
 
 	# =====================================================
-	# UPPERCUT
-	#
-	# If the attack was an uppercut, use the
-	# wasuppercut animation instead of normal hurt.
-	# =====================================================
-
-	if was_uppercut and health > 1:
-
-		is_hurting = true
-		hurt_locked = true
-		action_locked = true
-
-		current_anim = ""
-		sprite.play("wasuppercut")
-
-		# Wait for uppercut animation
-		await sprite.animation_finished
-
-	# =====================================================
-	# NORMAL HURT
-	#
-	# take_damage() already started "hurt".
-	# Wait for the normal hurt duration.
-	# =====================================================
-
-	elif health > 1:
-
-		await get_tree().create_timer(0.25).timeout
-
-	# =====================================================
-	# DEAD CHECK AFTER WAIT
-	# =====================================================
-
-	if state == State.DEAD:
-
-		hurt_cooldown = false
-		return
-
-	# =====================================================
-	# FINISH HIM CHECK AFTER WAIT
-	# =====================================================
-
-	if is_finish_state:
-
-		hurt_cooldown = false
-		return
-
-	# =====================================================
 	# 1 HP
-	#
-	# Raiden must ALWAYS return to idle at 1 HP.
 	# =====================================================
 
 	if health <= 1:
@@ -2274,7 +2240,7 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 		return
 
 	# =====================================================
-	# RETURN TO IDLE AFTER NORMAL HURT
+	# NORMAL HURT RECOVERY
 	# =====================================================
 
 	is_hurting = false
@@ -2292,7 +2258,6 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 	current_anim = ""
 
 	if is_instance_valid(sprite):
-
 		sprite.visible = true
 		sprite.play("idle")
 
@@ -2302,4 +2267,5 @@ func _on_raiden_hurt_box_area_entered(area: Area2D) -> void:
 
 	await get_tree().create_timer(0.2).timeout
 
-	hurt_cooldown = false
+	if is_instance_valid(self):
+		hurt_cooldown = false
