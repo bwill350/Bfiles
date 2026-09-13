@@ -12,18 +12,37 @@ var damage := 1
 var attack_owner: Node = null
 var attack_name := ""
 var attack_type := ""
+var cam: Camera2D = null
 
 func _ready():
+
+	add_to_group("JohnnyCageAttack")
+
 	await get_tree().process_frame
+
+	cam = get_viewport().get_camera_2d()
 
 	area_entered.connect(_on_area_entered)
 
 	enable_hitbox()
 
-	await get_tree().create_timer(active_time).timeout
+	var attack_active_time := active_time
+
+	if attack_name == "fatalkick":
+		attack_active_time = 0.6
+
+	await get_tree().create_timer(attack_active_time).timeout
+
+	if not is_inside_tree():
+		return
+
 	disable_hitbox()
 
 	await get_tree().create_timer(lifetime).timeout
+
+	if not is_inside_tree():
+		return
+
 	queue_free()
 
 
@@ -69,6 +88,12 @@ func _on_area_entered(area):
 	has_hit = true
 
 	# =========================
+	# CAMERA SHAKE
+	# =========================
+	if cam and cam.has_method("shake"):
+		cam.shake(18, 0.20)
+
+# =========================
 	# UPPERCUT LAUNCH
 	# =========================
 	if attack_name == "uppercut":
@@ -80,36 +105,66 @@ func _on_area_entered(area):
 			if attack_owner != null:
 				dir = attack_owner.facing
 
-			target.velocity.x = dir * 400
-			target.velocity.y = -600
+			target.velocity.x = dir * 1000
+			target.velocity.y = -1800
 
 			if "uppercut_launched" in target:
 				target.uppercut_launched = true
 
+			if target.has_method("play_anim"):
+				target.play_anim("wasuppercut")
+
+	# =========================
+	# JUMPKICK LAUNCH
+	# =========================
+	elif attack_name == "jumpkick":
+
+		if "velocity" in target:
+
+			var dir = 1
+
+			if attack_owner != null:
+				dir = attack_owner.facing
+
+			target.velocity.x = dir * 2800
+			target.velocity.y = -200
+
+			if "jumpkick_launched" in target:
+				target.jumpkick_launched = true
+
+			if target.has_method("play_anim"):
+				target.play_anim("wasjumpkick")
+
+	# =========================
+	# DAMAGE
+	# =========================
 	target.take_damage(damage)
 
-
 	# =========================
-	# CAMERA SHAKE
+	# CAMERA SHAKE BY ATTACK
 	# =========================
-	var cam := get_viewport().get_camera_2d()
+	var cam2 := get_viewport().get_camera_2d()
 
-	if cam:
+	if cam2:
+
 		match attack_name:
 
 			"uppercut":
-				cam.shake(16, 0.18)
+				cam2.shake(16, 0.18)
+
+			"jumpkick":
+				cam2.shake(14, 0.15)
 
 			"roundhousekick":
-				cam.shake(12, 0.15)
+				cam2.shake(12, 0.15)
 
 			"kick", "highkick", "lowkick":
-				cam.shake(8, 0.10)
+				cam2.shake(8, 0.10)
 
 			"punch", "highpunch", "lowpunch":
-				cam.shake(6, 0.08)
+				cam2.shake(6, 0.08)
 
 			_:
-				cam.shake(10, 0.12)
+				cam2.shake(10, 0.12)
 
-	target.take_damage(damage)
+
