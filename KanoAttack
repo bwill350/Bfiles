@@ -9,9 +9,13 @@ class_name KanoAttack
 var active := false
 var has_hit := false
 var damage := 1
+
 var attack_owner: Node = null
 var attack_name := ""
 var attack_type := ""
+
+var cam: Camera2D = null
+
 
 func _ready():
 
@@ -19,24 +23,33 @@ func _ready():
 
 	await get_tree().process_frame
 
-	area_entered.connect(_on_area_entered)
+	# Get camera
+	cam = get_viewport().get_camera_2d()
+
+	# Connect hit detection
+	if not area_entered.is_connected(_on_area_entered):
+		area_entered.connect(_on_area_entered)
 
 	enable_hitbox()
 
 	await get_tree().create_timer(active_time).timeout
 
-	if !is_inside_tree():
+	if not is_inside_tree():
 		return
 
 	disable_hitbox()
 
 	await get_tree().create_timer(lifetime).timeout
 
-	if !is_inside_tree():
+	if not is_inside_tree():
 		return
 
 	queue_free()
 
+
+# =========================================================
+# ENABLE HITBOX
+# =========================================================
 
 func enable_hitbox():
 
@@ -45,6 +58,10 @@ func enable_hitbox():
 	collision.disabled = false
 
 
+# =========================================================
+# DISABLE HITBOX
+# =========================================================
+
 func disable_hitbox():
 
 	active = false
@@ -52,7 +69,11 @@ func disable_hitbox():
 	collision.disabled = true
 
 
-func _on_area_entered(area):
+# =========================================================
+# HIT DETECTION
+# =========================================================
+
+func _on_area_entered(area: Area2D):
 
 	if not active:
 		return
@@ -60,17 +81,20 @@ func _on_area_entered(area):
 	if has_hit:
 		return
 
-	if area == null:
+	if area == null or not is_instance_valid(area):
 		return
 
+	# The Area2D that was hit should belong to the Fighter.
 	var target = area.get_parent()
 
+	if target == null or not is_instance_valid(target):
+		return
+
+	# Never hit the attacker
 	if attack_owner != null and target == attack_owner:
 		return
 
-	if target == null:
-		return
-
+	# Only fighters can be damaged
 	if not target.is_in_group("Fighter"):
 		return
 
@@ -79,7 +103,8 @@ func _on_area_entered(area):
 
 	has_hit = true
 
-	# =========================
+
+# =========================
 	# UPPERCUT LAUNCH
 	# =========================
 	if attack_name == "uppercut":
@@ -91,36 +116,66 @@ func _on_area_entered(area):
 			if attack_owner != null:
 				dir = attack_owner.facing
 
-			target.velocity.x = dir * 400
-			target.velocity.y = -600
+			target.velocity.x = dir * 1000
+			target.velocity.y = -1800
 
 			if "uppercut_launched" in target:
 				target.uppercut_launched = true
 
+			if target.has_method("play_anim"):
+				target.play_anim("wasuppercut")
+
+	# =========================
+	# JUMPKICK LAUNCH
+	# =========================
+	elif attack_name == "jumpkick":
+
+		if "velocity" in target:
+
+			var dir = 1
+
+			if attack_owner != null:
+				dir = attack_owner.facing
+
+			target.velocity.x = dir * 2800
+			target.velocity.y = -200
+
+			if "jumpkick_launched" in target:
+				target.jumpkick_launched = true
+
+			if target.has_method("play_anim"):
+				target.play_anim("wasjumpkick")
+
+	# =========================
+	# DAMAGE
+	# =========================
 	target.take_damage(damage)
 
 
-	# =========================
+	# =====================================================
 	# CAMERA SHAKE
-	# =========================
-	var cam := get_viewport().get_camera_2d()
+	# =====================================================
 
-	if cam:
+	var cam2 := get_viewport().get_camera_2d()
+
+	if cam2:
+
 		match attack_name:
 
 			"uppercut":
-				cam.shake(16, 0.18)
+				cam2.shake(16, 0.18)
+
+			"jumpkick":
+				cam2.shake(14, 0.15)
 
 			"roundhousekick":
-				cam.shake(12, 0.15)
+				cam2.shake(12, 0.15)
 
 			"kick", "highkick", "lowkick":
-				cam.shake(8, 0.10)
+				cam2.shake(8, 0.10)
 
 			"punch", "highpunch", "lowpunch":
-				cam.shake(6, 0.08)
+				cam2.shake(6, 0.08)
 
 			_:
-				cam.shake(10, 0.12)
-
-	target.take_damage(damage)
+				cam2.shake(10, 0.12)
