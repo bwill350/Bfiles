@@ -79,7 +79,7 @@ func _on_area_entered(area):
 
 	has_hit = true
 
-	# =========================
+# =========================
 	# UPPERCUT LAUNCH
 	# =========================
 	if attack_name == "uppercut":
@@ -91,14 +91,40 @@ func _on_area_entered(area):
 			if attack_owner != null:
 				dir = attack_owner.facing
 
-			target.velocity.x = dir * 400
-			target.velocity.y = -600
+			target.velocity.x = dir * 1200
+			target.velocity.y = -1900
 
 			if "uppercut_launched" in target:
 				target.uppercut_launched = true
 
-	target.take_damage(damage)
+			if target.has_method("play_anim"):
+				target.play_anim("wasuppercut")
 
+	# =========================
+	# JUMPKICK LAUNCH
+	# =========================
+	elif attack_name == "jumpkick":
+
+		if "velocity" in target:
+
+			var dir = 1
+
+			if attack_owner != null:
+				dir = attack_owner.facing
+
+			target.velocity.x = dir * 2800
+			target.velocity.y = -200
+
+			if "jumpkick_launched" in target:
+				target.jumpkick_launched = true
+
+			if target.has_method("play_anim"):
+				target.play_anim("wasjumpkick")
+
+	# =========================
+	# DAMAGE
+	# =========================
+	target.take_damage(damage)
 
 	# =========================
 	# CAMERA SHAKE
