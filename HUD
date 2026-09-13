@@ -91,13 +91,19 @@ extends CanvasLayer
 
 # =========================================================
 # ROUND WIN INDICATORS
+#
+# HUD
+# ├── Sprite2D5 = Player 1 Round 1
+# ├── Sprite2D6 = Player 1 Round 2
+# ├── Sprite2D7 = CPU Round 1
+# └── Sprite2D8 = CPU Round 2
 # =========================================================
 
-@onready var p1_round1_sprite = get_node_or_null("../Sprite2D5")
-@onready var p1_round2_sprite = get_node_or_null("../Sprite2D6")
+@onready var p1_round1_sprite = get_node_or_null("Sprite2D5")
+@onready var p1_round2_sprite = get_node_or_null("Sprite2D6")
 
-@onready var p2_round1_sprite = get_node_or_null("../Sprite2D7")
-@onready var p2_round2_sprite = get_node_or_null("../Sprite2D8")
+@onready var p2_round1_sprite = get_node_or_null("Sprite2D7")
+@onready var p2_round2_sprite = get_node_or_null("Sprite2D8")
 
 
 # =========================================================
@@ -128,6 +134,9 @@ func _ready():
 
 	_find_fighters()
 
+	# Make sure the sprites match the current Game values.
+	update_round_wins()
+
 
 # =========================================================
 # HIDE ROUND WIN SPRITES
@@ -154,32 +163,40 @@ func hide_round_win_sprites():
 
 func update_round_wins():
 
+	# Start by hiding all four.
 	hide_round_win_sprites()
 
-	# ---------------------------------------------------------
-	# PLAYER 1
-	# ---------------------------------------------------------
 
+	# =====================================================
+	# PLAYER 1 ROUND WINS
+	# =====================================================
+
+	# Player 1 wins Round 1
 	if Game.p1_round_wins >= 1:
 
 		if p1_round1_sprite != null:
 			p1_round1_sprite.visible = true
 
+
+	# Player 1 wins Round 2
 	if Game.p1_round_wins >= 2:
 
 		if p1_round2_sprite != null:
 			p1_round2_sprite.visible = true
 
 
-	# ---------------------------------------------------------
-	# PLAYER 2 / CPU
-	# ---------------------------------------------------------
+	# =====================================================
+	# CPU / PLAYER 2 ROUND WINS
+	# =====================================================
 
+	# CPU wins Round 1
 	if Game.p2_round_wins >= 1:
 
 		if p2_round1_sprite != null:
 			p2_round1_sprite.visible = true
 
+
+	# CPU wins Round 2
 	if Game.p2_round_wins >= 2:
 
 		if p2_round2_sprite != null:
@@ -219,6 +236,11 @@ func _find_fighters():
 	sonya = get_tree().get_first_node_in_group("Sonya")
 	kano = get_tree().get_first_node_in_group("Kano")
 	johnny_cage = get_tree().get_first_node_in_group("JohnnyCage")
+
+
+	# =====================================================
+	# CHARACTER LABELS
+	# =====================================================
 
 	if duke_label != null:
 		duke_label.text = Game.p1_character
