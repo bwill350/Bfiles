@@ -1,7 +1,17 @@
 extends Node2D
 
+
+# =========================================================
+# SPAWN POSITIONS
+# =========================================================
+
 const P1_SPAWN := Vector2(603, 496)
 const P2_SPAWN := Vector2(1890, 496)
+
+
+# =========================================================
+# CHARACTER SCENES
+# =========================================================
 
 const LIU_KANG = preload("res://Scenes/Boss/LiuKang.tscn")
 const REPTILE = preload("res://Scenes/Boss/Reptile.tscn")
@@ -11,8 +21,18 @@ const SONYA = preload("res://Scenes/Boss/Sonya.tscn")
 const KANO = preload("res://Scenes/Boss/Kano.tscn")
 const JOHNNYCAGE = preload("res://Scenes/Boss/JohnnyCage.tscn")
 
+
+# =========================================================
+# FIGHTERS
+# =========================================================
+
 var p1
 var p2
+
+
+# =========================================================
+# ROUND STATE
+# =========================================================
 
 var round_starting := false
 var round_active := false
@@ -25,43 +45,38 @@ var round_resolving := false
 
 func _ready():
 
-	# ---------------------------------------------------------
-	# HIDE ROUND UI
-	# ---------------------------------------------------------
-
-	if $HUD/Round1 != null:
-		$HUD/Round1.visible = false
-
-	if $HUD/Round2 != null:
-		$HUD/Round2.visible = false
-
-	if $HUD/Fight != null:
-		$HUD/Fight.visible = false
-
-	if $HUD/Round3 != null:
-		$HUD/Round3.visible = false
-
-	# ---------------------------------------------------------
-	# START NEW MATCH
-	# ---------------------------------------------------------
-
 	Game.current_round = 1
 	Game.p1_round_wins = 0
 	Game.p2_round_wins = 0
 	Game.match_over = false
 
+	round_starting = false
+	round_active = false
 	round_resolving = false
 
-	# ---------------------------------------------------------
+
+	# =====================================================
+	# HIDE ROUND UI
+	# =====================================================
+
+	$HUD/Round1.visible = false
+	$HUD/Round2.visible = false
+	$HUD/Round3.visible = false
+	$HUD/Fight.visible = false
+	$HUD/Fatality.visible = false
+
+
+	# =====================================================
 	# RESET ROUND WIN SPRITES
-	# ---------------------------------------------------------
+	# =====================================================
 
 	if $HUD.has_method("hide_round_win_sprites"):
 		$HUD.hide_round_win_sprites()
 
-	# ---------------------------------------------------------
+
+	# =====================================================
 	# START ROUND 1
-	# ---------------------------------------------------------
+	# =====================================================
 
 	await start_round(1)
 
@@ -80,8 +95,10 @@ func start_round(round_number: int):
 
 	round_starting = true
 	round_active = false
+	round_resolving = false
 
 	Game.current_round = round_number
+
 
 	print("================================")
 	print("STARTING ROUND: ", Game.current_round)
@@ -89,146 +106,168 @@ func start_round(round_number: int):
 	print("P2 WINS: ", Game.p2_round_wins)
 	print("================================")
 
-	# ---------------------------------------------------------
+
+	# =====================================================
 	# REMOVE OLD FIGHTERS
-	# ---------------------------------------------------------
+	# =====================================================
 
 	await remove_current_fighters()
 
-	# ---------------------------------------------------------
+
+	# =====================================================
 	# RESET HEALTH
-	# ---------------------------------------------------------
+	# =====================================================
 
 	reset_health_bars()
 
-	# ---------------------------------------------------------
-	# HIDE ROUND UI
-	# ---------------------------------------------------------
 
-	if $HUD/Round1 != null:
-		$HUD/Round1.visible = false
+	# =====================================================
+	# HIDE ALL ROUND UI
+	# =====================================================
 
-	if $HUD/Round2 != null:
-		$HUD/Round2.visible = false
+	$HUD/Round1.visible = false
+	$HUD/Round2.visible = false
+	$HUD/Round3.visible = false
+	$HUD/Fight.visible = false
+	$HUD/Fatality.visible = false
 
-	if $HUD/Round3 != null:
-		$HUD/Round3.visible = false
 
-	if $HUD/Fight != null:
-		$HUD/Fight.visible = false
-
-	# ---------------------------------------------------------
-	# SPAWN NEW FIGHTERS
-	# ---------------------------------------------------------
+	# =====================================================
+	# SPAWN FIGHTERS
+	# =====================================================
 
 	spawn_players()
 
 	setup()
 	assign_targets()
 
-	# ---------------------------------------------------------
-	# WAIT FOR FIGHTERS
-	# ---------------------------------------------------------
-
 	await get_tree().process_frame
 
-	# ---------------------------------------------------------
-	# RESET HEALTH AGAIN
-	# ---------------------------------------------------------
+
+	# =====================================================
+	# RESET HEALTH AFTER SPAWN
+	# =====================================================
 
 	reset_health_bars()
 
-	# ---------------------------------------------------------
-	# UPDATE ROUND WIN HUD
-	# ---------------------------------------------------------
+
+	# =====================================================
+	# UPDATE ROUND WIN INDICATORS
+	# =====================================================
 
 	if $HUD.has_method("update_round_wins"):
 		$HUD.update_round_wins()
 
-	# ---------------------------------------------------------
+
+	# =====================================================
 	# SPAWN PROTECTION
-	# ---------------------------------------------------------
+	# =====================================================
 
 	set_spawn_protection(true)
 
-	# ---------------------------------------------------------
-	# SHOW CORRECT ROUND
-	# ---------------------------------------------------------
+
+	# =====================================================
+	# SHOW ROUND 1
+	# =====================================================
 
 	if round_number == 1:
 
 		print("SHOWING ROUND 1")
 
-		if $HUD/Round1 != null:
-			$HUD/Round1.visible = true
+		$HUD/Round1.visible = true
+
+		if has_node("Round1"):
+			$Round1.play()
+
+
+	# =====================================================
+	# SHOW ROUND 2
+	# =====================================================
 
 	elif round_number == 2:
 
 		print("SHOWING ROUND 2")
 
-		if $HUD/Round2 != null:
-			$HUD/Round2.visible = true
+		$HUD/Round2.visible = true
+
+		if has_node("Round2"):
+			$Round2.play()
+
+
+	# =====================================================
+	# SHOW ROUND 3
+	# =====================================================
 
 	elif round_number == 3:
 
 		print("SHOWING ROUND 3")
 
-		if $HUD/Round3 != null:
-			$HUD/Round3.visible = true
+		$HUD/Round3.visible = true
 
-	# ---------------------------------------------------------
+		if has_node("Round3"):
+			$Round3.play()
+
+
+	# =====================================================
 	# KEEP ROUND IMAGE ON SCREEN
-	# ---------------------------------------------------------
+	# =====================================================
 
 	await get_tree().create_timer(2.0).timeout
 
-	# ---------------------------------------------------------
+
+	# =====================================================
 	# HIDE ROUND IMAGE
-	# ---------------------------------------------------------
+	# =====================================================
 
-	if $HUD/Round1 != null:
-		$HUD/Round1.visible = false
+	$HUD/Round1.visible = false
+	$HUD/Round2.visible = false
+	$HUD/Round3.visible = false
 
-	if $HUD/Round2 != null:
-		$HUD/Round2.visible = false
 
-	if $HUD/Round3 != null:
-		$HUD/Round3.visible = false
-
-	# ---------------------------------------------------------
-	# SHORT DELAY
-	# ---------------------------------------------------------
+	# =====================================================
+	# SHORT DELAY BEFORE FIGHT
+	# =====================================================
 
 	await get_tree().create_timer(0.3).timeout
 
-	# ---------------------------------------------------------
+
+	# =====================================================
 	# SHOW FIGHT
-	# ---------------------------------------------------------
+	# =====================================================
 
-	if $HUD/Fight != null:
+	$HUD/Fight.visible = true
 
-		$HUD/Fight.visible = true
+	print("FIGHT!")
 
-		print("FIGHT!")
+
+	if has_node("Fight"):
+		$Fight.play()
+
+
+	# =====================================================
+	# KEEP FIGHT ON SCREEN
+	# =====================================================
 
 	await get_tree().create_timer(1.0).timeout
 
-	# ---------------------------------------------------------
+
+	# =====================================================
 	# HIDE FIGHT
-	# ---------------------------------------------------------
+	# =====================================================
 
-	if $HUD/Fight != null:
-		$HUD/Fight.visible = false
+	$HUD/Fight.visible = false
 
-	# ---------------------------------------------------------
+
+	# =====================================================
 	# REMOVE SPAWN PROTECTION
-	# ---------------------------------------------------------
+	# =====================================================
 
 	set_spawn_protection(false)
 
-	# ---------------------------------------------------------
+
+	# =====================================================
 	# ROUND ACTIVE
-	# ---------------------------------------------------------
+	# =====================================================
 
 	round_active = true
 	round_starting = false
@@ -237,36 +276,53 @@ func start_round(round_number: int):
 
 
 # =========================================================
-# ROUND DEATH SIGNAL
+# FATALITY
 # =========================================================
-#
-# Fighters call:
-#
-# round_death.emit("player1")
-# round_death.emit("cpu")
-#
-# This handles all 3 rounds.
+
+func _on_fatality():
+
+	# =====================================================
+	# SHOW FATALITY
+	# =====================================================
+
+	$HUD/Fatality.visible = true
+
+	print("FATALITY!")
+
+
+	# =====================================================
+	# PLAY FATALITY SOUND
+	# =====================================================
+
+	if has_node("Fatality"):
+		$Fatality.play()
+
+
+	# =====================================================
+	# KEEP FATALITY ON SCREEN
+	# =====================================================
+
+	await get_tree().create_timer(2.0).timeout
+
+
+	# =====================================================
+	# HIDE FATALITY
+	# =====================================================
+
+	$HUD/Fatality.visible = false
+
+
+# =========================================================
+# ROUND DEATH
 # =========================================================
 
 func _on_round_death(winner: String):
 
-	# ---------------------------------------------------------
-	# PREVENT DOUBLE ROUND WIN
-	# ---------------------------------------------------------
-
 	if round_resolving:
 		return
 
-	# ---------------------------------------------------------
-	# MATCH ALREADY OVER
-	# ---------------------------------------------------------
-
 	if Game.match_over:
 		return
-
-	# ---------------------------------------------------------
-	# ROUND IS CURRENTLY STARTING
-	# ---------------------------------------------------------
 
 	if round_starting:
 		return
@@ -274,43 +330,46 @@ func _on_round_death(winner: String):
 	round_resolving = true
 	round_active = false
 
+
 	print("================================")
 	print("ROUND ", Game.current_round, " HAS ENDED")
 	print("WINNER: ", winner)
 	print("================================")
 
-	# ---------------------------------------------------------
-	# GIVE ROUND WIN
-	# ---------------------------------------------------------
 
-	if winner == "player1":
+	# =====================================================
+	# AWARD ONE ROUND WIN
+	# =====================================================
 
-		Game.add_p1_round_win()
+	match winner:
 
-	elif winner == "cpu":
+		"player1":
+			Game.add_p1_round_win()
 
-		Game.add_p2_round_win()
+		"cpu":
+			Game.add_p2_round_win()
 
-	else:
+		_:
+			print("ERROR: UNKNOWN ROUND WINNER: ", winner)
+			round_resolving = false
+			return
 
-		print("ERROR: UNKNOWN ROUND WINNER: ", winner)
 
-		round_resolving = false
-		return
-
-	# ---------------------------------------------------------
+	# =====================================================
 	# UPDATE ROUND WIN SPRITES
-	# ---------------------------------------------------------
+	# =====================================================
 
 	if $HUD.has_method("update_round_wins"):
 		$HUD.update_round_wins()
 
+
 	print("P1 ROUND WINS: ", Game.p1_round_wins)
 	print("P2 ROUND WINS: ", Game.p2_round_wins)
 
-	# ---------------------------------------------------------
-	# CHECK P1 MATCH WIN
-	# ---------------------------------------------------------
+
+	# =====================================================
+	# P1 WON MATCH
+	# =====================================================
 
 	if Game.has_p1_won_match():
 
@@ -318,7 +377,8 @@ func _on_round_death(winner: String):
 
 		print("================================")
 		print("PLAYER 1 HAS WON THE MATCH")
-		print("FINAL SCORE: ",
+		print(
+			"FINAL SCORE: ",
 			Game.p1_round_wins,
 			" - ",
 			Game.p2_round_wins
@@ -331,9 +391,10 @@ func _on_round_death(winner: String):
 		round_resolving = false
 		return
 
-	# ---------------------------------------------------------
-	# CHECK P2 / CPU MATCH WIN
-	# ---------------------------------------------------------
+
+	# =====================================================
+	# P2 WON MATCH
+	# =====================================================
 
 	if Game.has_p2_won_match():
 
@@ -341,7 +402,8 @@ func _on_round_death(winner: String):
 
 		print("================================")
 		print("PLAYER 2 / CPU HAS WON THE MATCH")
-		print("FINAL SCORE: ",
+		print(
+			"FINAL SCORE: ",
 			Game.p1_round_wins,
 			" - ",
 			Game.p2_round_wins
@@ -354,25 +416,34 @@ func _on_round_death(winner: String):
 		round_resolving = false
 		return
 
-	# ---------------------------------------------------------
-	# NOBODY HAS 2 WINS
-	#
-	# THEREFORE ANOTHER ROUND MUST START.
-	# ---------------------------------------------------------
+
+	# =====================================================
+	# WAIT BEFORE NEXT ROUND
+	# =====================================================
 
 	await get_tree().create_timer(3.0).timeout
 
-	# ---------------------------------------------------------
-	# ONE ROUND HAS BEEN PLAYED
-	#
-	# START ROUND 2
-	# ---------------------------------------------------------
 
-	if Game.p1_round_wins + Game.p2_round_wins == 1:
+	# =====================================================
+	# DETERMINE NEXT ROUND
+	# =====================================================
+
+	var total_round_wins := (
+		Game.p1_round_wins +
+		Game.p2_round_wins
+	)
+
+
+	# =====================================================
+	# START ROUND 2
+	# =====================================================
+
+	if total_round_wins == 1:
 
 		print("================================")
 		print("STARTING ROUND 2")
-		print("SCORE: ",
+		print(
+			"SCORE: ",
 			Game.p1_round_wins,
 			" - ",
 			Game.p2_round_wins
@@ -385,15 +456,12 @@ func _on_round_death(winner: String):
 
 		return
 
-	# ---------------------------------------------------------
-	# TWO ROUNDS HAVE BEEN PLAYED
-	#
-	# Since nobody has 2 wins, score MUST be 1-1.
-	#
-	# START ROUND 3.
-	# ---------------------------------------------------------
 
-	if Game.p1_round_wins + Game.p2_round_wins == 2:
+	# =====================================================
+	# START ROUND 3
+	# =====================================================
+
+	if total_round_wins == 2:
 
 		print("================================")
 		print("1 - 1 TIE")
@@ -406,181 +474,26 @@ func _on_round_death(winner: String):
 
 		return
 
+
 	round_resolving = false
 
 
 # =========================================================
-# P1 WINS ROUND
-# =========================================================
-#
-# Backup function if another part of the game calls this
-# directly instead of using round_death.
+# BACKUP P1 ROUND FUNCTION
 # =========================================================
 
 func player1_won_round():
 
-	if round_resolving:
-		return
-
-	if Game.match_over:
-		return
-
-	if round_starting:
-		return
-
-	round_resolving = true
-	round_active = false
-
-	Game.add_p1_round_win()
-
-	if $HUD.has_method("update_round_wins"):
-		$HUD.update_round_wins()
-
-	print("================================")
-	print("P1 WON ROUND ", Game.current_round)
-	print("SCORE: ",
-		Game.p1_round_wins,
-		" - ",
-		Game.p2_round_wins
-	)
-	print("================================")
-
-	# ---------------------------------------------------------
-	# P1 HAS 2 WINS
-	# MATCH OVER
-	# ---------------------------------------------------------
-
-	if Game.has_p1_won_match():
-
-		Game.match_over = true
-
-		print("PLAYER 1 HAS WON THE MATCH")
-
-		if $HUD.has_method("show_you_win"):
-			$HUD.show_you_win()
-
-		round_resolving = false
-		return
-
-	# ---------------------------------------------------------
-	# WAIT BEFORE NEXT ROUND
-	# ---------------------------------------------------------
-
-	await get_tree().create_timer(3.0).timeout
-
-	# ---------------------------------------------------------
-	# SCORE 1-1 = ROUND 3
-	# ---------------------------------------------------------
-
-	if Game.p1_round_wins + Game.p2_round_wins == 2:
-
-		print("================================")
-		print("1 - 1 TIE")
-		print("STARTING ROUND 3")
-		print("================================")
-
-		round_resolving = false
-
-		await start_round(3)
-
-		return
-
-	# ---------------------------------------------------------
-	# OTHERWISE START ROUND 2
-	# ---------------------------------------------------------
-
-	print("STARTING ROUND 2")
-
-	round_resolving = false
-
-	await start_round(2)
+	_on_round_death("player1")
 
 
 # =========================================================
-# P2 / CPU WINS ROUND
-# =========================================================
-#
-# Backup function if another part of the game calls this
-# directly instead of using round_death.
+# BACKUP P2 ROUND FUNCTION
 # =========================================================
 
 func player2_won_round():
 
-	if round_resolving:
-		return
-
-	if Game.match_over:
-		return
-
-	if round_starting:
-		return
-
-	round_resolving = true
-	round_active = false
-
-	Game.add_p2_round_win()
-
-	if $HUD.has_method("update_round_wins"):
-		$HUD.update_round_wins()
-
-	print("================================")
-	print("P2 / CPU WON ROUND ", Game.current_round)
-	print("SCORE: ",
-		Game.p1_round_wins,
-		" - ",
-		Game.p2_round_wins
-	)
-	print("================================")
-
-	# ---------------------------------------------------------
-	# CPU HAS 2 WINS
-	# MATCH OVER
-	# ---------------------------------------------------------
-
-	if Game.has_p2_won_match():
-
-		Game.match_over = true
-
-		print("P2 / CPU HAS WON THE MATCH")
-
-		if $HUD.has_method("show_you_lose"):
-			$HUD.show_you_lose()
-
-		round_resolving = false
-		return
-
-	# ---------------------------------------------------------
-	# WAIT BEFORE NEXT ROUND
-	# ---------------------------------------------------------
-
-	await get_tree().create_timer(3.0).timeout
-
-	# ---------------------------------------------------------
-	# SCORE 1-1 = ROUND 3
-	# ---------------------------------------------------------
-
-	if Game.p1_round_wins + Game.p2_round_wins == 2:
-
-		print("================================")
-		print("1 - 1 TIE")
-		print("STARTING ROUND 3")
-		print("================================")
-
-		round_resolving = false
-
-		await start_round(3)
-
-		return
-
-	# ---------------------------------------------------------
-	# OTHERWISE START ROUND 2
-	# ---------------------------------------------------------
-
-	print("STARTING ROUND 2")
-
-	round_resolving = false
-
-	await start_round(2)
+	_on_round_death("cpu")
 
 
 # =========================================================
@@ -591,10 +504,6 @@ func remove_current_fighters():
 
 	round_active = false
 
-	# ---------------------------------------------------------
-	# REMOVE P1
-	# ---------------------------------------------------------
-
 	if is_instance_valid(p1):
 
 		p1.set_process(false)
@@ -603,9 +512,6 @@ func remove_current_fighters():
 		p1.queue_free()
 		p1 = null
 
-	# ---------------------------------------------------------
-	# REMOVE P2
-	# ---------------------------------------------------------
 
 	if is_instance_valid(p2):
 
@@ -615,9 +521,6 @@ func remove_current_fighters():
 		p2.queue_free()
 		p2 = null
 
-	# ---------------------------------------------------------
-	# WAIT FOR QUEUE FREE
-	# ---------------------------------------------------------
 
 	await get_tree().process_frame
 
@@ -627,10 +530,6 @@ func remove_current_fighters():
 # =========================================================
 
 func reset_health_bars():
-
-	# ---------------------------------------------------------
-	# P1 HEALTH
-	# ---------------------------------------------------------
 
 	if $HUD/DukeHealthBar != null:
 		$HUD/DukeHealthBar.value = $HUD/DukeHealthBar.max_value
@@ -653,116 +552,22 @@ func reset_health_bars():
 	if $HUD/JohnnyCageHealthBar != null:
 		$HUD/JohnnyCageHealthBar.value = $HUD/JohnnyCageHealthBar.max_value
 
-	# ---------------------------------------------------------
-	# P2 HEALTH
-	# ---------------------------------------------------------
-
 	if $HUD/ReptileHealthBar != null:
 		$HUD/ReptileHealthBar.value = $HUD/ReptileHealthBar.max_value
 
-	# ---------------------------------------------------------
-	# ONLY ACTIVE SEGMENTS
-	# ---------------------------------------------------------
 
-	if $HUD/Seg1 != null:
-		$HUD/Seg1.visible = true
+	# =====================================================
+	# RESET SEGMENTS
+	# =====================================================
 
-	if $HUD/Seg2 != null:
-		$HUD/Seg2.visible = true
-
-	if $HUD/Seg3 != null:
-		$HUD/Seg3.visible = true
-
-	if $HUD/Seg4 != null:
-		$HUD/Seg4.visible = true
-
-	if $HUD/Seg5 != null:
-		$HUD/Seg5.visible = true
-
-	if $HUD/Seg6 != null:
-		$HUD/Seg6.visible = true
-
-	if $HUD/Seg7 != null:
-		$HUD/Seg7.visible = true
-
-	if $HUD/Seg8 != null:
-		$HUD/Seg8.visible = true
-
-	# ---------------------------------------------------------
-	# DO NOT SHOW SEG9-SEG32
-	# ---------------------------------------------------------
-
-	if $HUD/Seg9 != null:
-		$HUD/Seg9.visible = false
-
-	if $HUD/Seg10 != null:
-		$HUD/Seg10.visible = false
-
-	if $HUD/Seg11 != null:
-		$HUD/Seg11.visible = false
-
-	if $HUD/Seg12 != null:
-		$HUD/Seg12.visible = false
-
-	if $HUD/Seg13 != null:
-		$HUD/Seg13.visible = false
-
-	if $HUD/Seg14 != null:
-		$HUD/Seg14.visible = false
-
-	if $HUD/Seg15 != null:
-		$HUD/Seg15.visible = false
-
-	if $HUD/Seg16 != null:
-		$HUD/Seg16.visible = false
-
-	if $HUD/Seg17 != null:
-		$HUD/Seg17.visible = false
-
-	if $HUD/Seg18 != null:
-		$HUD/Seg18.visible = false
-
-	if $HUD/Seg19 != null:
-		$HUD/Seg19.visible = false
-
-	if $HUD/Seg20 != null:
-		$HUD/Seg20.visible = false
-
-	if $HUD/Seg21 != null:
-		$HUD/Seg21.visible = false
-
-	if $HUD/Seg22 != null:
-		$HUD/Seg22.visible = false
-
-	if $HUD/Seg23 != null:
-		$HUD/Seg23.visible = false
-
-	if $HUD/Seg24 != null:
-		$HUD/Seg24.visible = false
-
-	if $HUD/Seg25 != null:
-		$HUD/Seg25.visible = false
-
-	if $HUD/Seg26 != null:
-		$HUD/Seg26.visible = false
-
-	if $HUD/Seg27 != null:
-		$HUD/Seg27.visible = false
-
-	if $HUD/Seg28 != null:
-		$HUD/Seg28.visible = false
-
-	if $HUD/Seg29 != null:
-		$HUD/Seg29.visible = false
-
-	if $HUD/Seg30 != null:
-		$HUD/Seg30.visible = false
-
-	if $HUD/Seg31 != null:
-		$HUD/Seg31.visible = false
-
-	if $HUD/Seg32 != null:
-		$HUD/Seg32.visible = false
+	$HUD/Seg1.visible = true
+	$HUD/Seg2.visible = true
+	$HUD/Seg3.visible = true
+	$HUD/Seg4.visible = true
+	$HUD/Seg5.visible = true
+	$HUD/Seg6.visible = true
+	$HUD/Seg7.visible = true
+	$HUD/Seg8.visible = true
 
 
 # =========================================================
@@ -830,17 +635,10 @@ func update_p1_segments(health, max_hp):
 
 	var percent = float(health) / float(max_hp)
 
-	if $HUD/Seg5 != null:
-		$HUD/Seg5.visible = percent > 0.00
-
-	if $HUD/Seg6 != null:
-		$HUD/Seg6.visible = percent > 0.01
-
-	if $HUD/Seg7 != null:
-		$HUD/Seg7.visible = percent > 0.02
-
-	if $HUD/Seg8 != null:
-		$HUD/Seg8.visible = percent > 0.03
+	$HUD/Seg5.visible = percent > 0.00
+	$HUD/Seg6.visible = percent > 0.01
+	$HUD/Seg7.visible = percent > 0.02
+	$HUD/Seg8.visible = percent > 0.03
 
 
 # =========================================================
@@ -854,17 +652,10 @@ func update_p2_segments(health, max_hp):
 
 	var percent = float(health) / float(max_hp)
 
-	if $HUD/Seg1 != null:
-		$HUD/Seg1.visible = percent > 0.00
-
-	if $HUD/Seg2 != null:
-		$HUD/Seg2.visible = percent > 0.01
-
-	if $HUD/Seg3 != null:
-		$HUD/Seg3.visible = percent > 0.02
-
-	if $HUD/Seg4 != null:
-		$HUD/Seg4.visible = percent > 0.03
+	$HUD/Seg1.visible = percent > 0.00
+	$HUD/Seg2.visible = percent > 0.01
+	$HUD/Seg3.visible = percent > 0.02
+	$HUD/Seg4.visible = percent > 0.03
 
 
 # =========================================================
@@ -902,11 +693,17 @@ func spawn_p1():
 			"JohnnyCage":
 				p1 = JOHNNYCAGE.instantiate()
 
+
 	if p1:
 
 		p1.position = P1_SPAWN
 
 		add_child(p1)
+
+
+		# =====================================================
+		# HEALTH
+		# =====================================================
 
 		if p1.has_signal("health_changed"):
 
@@ -918,9 +715,10 @@ func spawn_p1():
 					_on_p1_health_changed
 				)
 
-		# -----------------------------------------------------
-		# CONNECT ROUND DEATH
-		# -----------------------------------------------------
+
+		# =====================================================
+		# ROUND DEATH
+		# =====================================================
 
 		if p1.has_signal("round_death"):
 
@@ -930,6 +728,21 @@ func spawn_p1():
 
 				p1.round_death.connect(
 					_on_round_death
+				)
+
+
+		# =====================================================
+		# FATALITY
+		# =====================================================
+
+		if p1.has_signal("fatality"):
+
+			if not p1.fatality.is_connected(
+				_on_fatality
+			):
+
+				p1.fatality.connect(
+					_on_fatality
 				)
 
 
@@ -968,11 +781,17 @@ func spawn_p2():
 			"JohnnyCage":
 				p2 = JOHNNYCAGE.instantiate()
 
+
 	if p2:
 
 		p2.position = P2_SPAWN
 
 		add_child(p2)
+
+
+		# =====================================================
+		# HEALTH
+		# =====================================================
 
 		if p2.has_signal("health_changed"):
 
@@ -984,9 +803,10 @@ func spawn_p2():
 					_on_p2_health_changed
 				)
 
-		# -----------------------------------------------------
-		# CONNECT ROUND DEATH
-		# -----------------------------------------------------
+
+		# =====================================================
+		# ROUND DEATH
+		# =====================================================
 
 		if p2.has_signal("round_death"):
 
@@ -996,6 +816,21 @@ func spawn_p2():
 
 				p2.round_death.connect(
 					_on_round_death
+				)
+
+
+		# =====================================================
+		# FATALITY
+		# =====================================================
+
+		if p2.has_signal("fatality"):
+
+			if not p2.fatality.is_connected(
+				_on_fatality
+			):
+
+				p2.fatality.connect(
+					_on_fatality
 				)
 
 
@@ -1023,6 +858,7 @@ func assign_targets():
 		p1.target = p2
 		p2.target = p1
 
+
 	if Game.vs_cpu and p2:
 
 		p2.is_cpu = true
@@ -1035,9 +871,7 @@ func assign_targets():
 func set_spawn_protection(enabled: bool):
 
 	if is_instance_valid(p1):
-
 		p1.spawn_protection = enabled
 
 	if is_instance_valid(p2):
-
 		p2.spawn_protection = enabled
