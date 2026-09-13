@@ -935,7 +935,6 @@ func shoot_acid():
 # =========================================================
 # CPU
 # =========================================================
-
 func cpu_logic(delta):
 
 	# =========================================================
@@ -1065,6 +1064,50 @@ func cpu_logic(delta):
 
 
 	# =========================================================
+	# TARGET IS DEAD / HEALTH IS 0
+	# =========================================================
+
+	if "health" in target and target.health <= 0:
+
+		velocity.x = 0.0
+
+		is_attacking = false
+		is_shooting = false
+
+		action_locked = true
+
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
+
+		return
+
+
+	# =========================================================
+	# TARGET IS DEAD STATE
+	# =========================================================
+
+	if "state" in target:
+
+		if target.state == target.State.DEAD:
+
+			velocity.x = 0.0
+
+			is_attacking = false
+			is_shooting = false
+
+			action_locked = true
+
+			state = State.IDLE
+
+			if not is_hurting:
+				play_anim("idle")
+
+			return
+
+
+	# =========================================================
 	# ACTION LOCK
 	# =========================================================
 
@@ -1081,7 +1124,7 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# DISTANCE TO PLAYER
+	# DISTANCE TO PLAYER 1
 	# =========================================================
 
 	var dist: float = (
@@ -1094,7 +1137,7 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# FACE PLAYER
+	# FACE PLAYER 1
 	# =========================================================
 
 	if direction != 0:
@@ -1106,8 +1149,11 @@ func cpu_logic(delta):
 		if has_node("Crispy"):
 			$Crispy.flip_h = facing > 0
 
+		if has_node("healthzero"):
+			$healthzero.flip_h = facing > 0
+
 		$AttackMarker.position = Vector2(
-			0 * facing,
+			0,
 			0
 		)
 
@@ -1118,180 +1164,245 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# EASY AI
+	# CPU DISTANCES
+	# SAME AS REPTILE
 	# =========================================================
 
-	if Game.difficulty == "Easy":
-
-		var easy_stopping_distance := 100.0
-		var easy_attack_range := 110.0
+	var attack_range := 110.0
+	var stopping_distance := 100.0
 
 
-		# -----------------------------------------------------
-		# MOVE TOWARD PLAYER
-		# -----------------------------------------------------
+	# =========================================================
+	# STOP AT PLAYER 1
+	# =========================================================
 
-		if distance > easy_stopping_distance:
+	if distance <= stopping_distance:
 
-			velocity.x = direction * SPEED * 1.05
+		velocity.x = 0.0
 
-			state = State.WALK
+		state = State.IDLE
 
-			if not is_attacking:
-				play_anim("walk")
+		if not is_attacking and not is_hurting:
+			play_anim("idle")
 
-		else:
+	else:
 
-			velocity.x = 0.0
+		velocity.x = direction * SPEED
 
-			if not is_attacking:
+		state = State.WALK
 
-				state = State.IDLE
-				play_anim("idle")
+		if not is_attacking and not is_hurting:
+			play_anim("walk")
 
 
-		# -----------------------------------------------------
-		# EASY ATTACK TIMER
-		# -----------------------------------------------------
+	# =========================================================
+	# CHECK TARGET AGAIN BEFORE ATTACKING
+	# =========================================================
 
-		ai_timer -= delta
+	if "health" in target and target.health <= 0:
 
-		if ai_timer <= 0.0:
+		velocity.x = 0.0
+
+		is_attacking = false
+		is_shooting = false
+		action_locked = true
+
+		state = State.IDLE
+
+		play_anim("idle")
+
+		return
+
+
+	# =========================================================
+	# AI ATTACK TIMER
+	# =========================================================
+
+	ai_timer -= delta
+
+	if ai_timer > 0.0:
+		return
+
+
+	# =========================================================
+	# TARGET VALIDITY CHECK
+	# =========================================================
+
+	if not is_instance_valid(target):
+
+		velocity.x = 0.0
+
+		is_attacking = false
+		is_shooting = false
+		action_locked = true
+
+		state = State.IDLE
+
+		play_anim("idle")
+
+		return
+
+
+	# =========================================================
+	# TARGET HEALTH CHECK
+	# =========================================================
+
+	if "health" in target and target.health <= 0:
+
+		velocity.x = 0.0
+
+		is_attacking = false
+		is_shooting = false
+		action_locked = true
+
+		state = State.IDLE
+
+		play_anim("idle")
+
+		return
+
+
+	# =========================================================
+	# ATTACK ONLY WHEN CLOSE
+	# =========================================================
+
+	if (
+		distance <= attack_range
+		and not is_hurting
+		and not is_finish_state
+		and not action_locked
+		and not is_attacking
+	):
+
+		# Stop Johnny completely before attacking
+		velocity.x = 0.0
+
+
+		# =====================================================
+		# DIFFICULTY
+		# =====================================================
+
+		match Game.difficulty:
+
 
 			# =================================================
-			# ATTACK PLAYER 1
+			# HARD
 			# =================================================
 
-			if (
-				distance <= attack_range
-				and distance <= easy_attack_range
-				and not is_hurting
-				and not is_finish_state
-				and not action_locked
-				and not is_attacking
-			):
+			"Hard":
 
-				match Game.difficulty:
+				ai_timer = randf_range(
+					0.05,
+					0.15
+				)
 
-					# =================================================
-					# HARD
-					# =================================================
+				var choice = randi() % 100
 
-					"Hard":
+				if choice < 20:
 
-						ai_timer = randf_range(
-							0.05,
-							0.15
-						)
+					do_action("punch")
 
-						var choice = randi() % 100
+				elif choice < 35:
 
-						if choice < 20:
+					do_action("highpunch")
 
-							do_action("punch")
+				elif choice < 45:
 
-						elif choice < 20:
+					do_action("lowpunch")
 
-							do_action("highpunch")
+				elif choice < 60:
 
-						elif choice < 20:
+					do_action("kick")
 
-							do_action("lowpunch")
+				elif choice < 70:
 
-						elif choice < 40:
+					do_action("lowkick")
 
-							do_action("kick")
+				elif choice < 80:
 
-						elif choice < 40:
+					do_action("jumpkick")
 
-							do_action("lowkick")
+				elif choice < 85:
 
-						elif choice < 40:
+					do_action("highkick")
 
-							do_action("jumpkick")
+				elif choice < 90:
 
-						elif choice < 40:
+					do_action("uppercut")
 
-							do_action("highkick")
+				elif choice < 94:
 
-						elif choice < 65:
+					do_action("roundhousekick")
 
-							do_action("uppercut")
+				elif choice < 97:
 
-						elif choice < 80:
+					do_action("cannonkick")
 
-							do_action("roundhousekick")
+				elif choice < 99:
 
-						elif choice < 90:
+					do_action("nutcracker")
 
-							do_action("cannonkick")
+				else:
 
-						elif choice < 95:
-
-							do_action("nutcracker")
-
-						else:
-
-							shoot_player()
+					shoot_player()
 
 
-					# =================================================
-					# EASY
-					# =================================================
+			# =================================================
+			# EASY
+			# =================================================
 
-					"Easy":
+			"Easy":
 
-						ai_timer = randf_range(
-							0.5,
-							0.9
-						)
+				ai_timer = randf_range(
+					0.5,
+					0.9
+				)
 
-						var choice = randi() % 100
+				var choice = randi() % 100
 
-						if choice < 40:
+				if choice < 40:
 
-							do_action("punch")
+					do_action("punch")
 
-						elif choice < 45:
+				elif choice < 45:
 
-							do_action("highpunch")
+					do_action("highpunch")
 
-						elif choice < 50:
+				elif choice < 50:
 
-							do_action("lowpunch")
+					do_action("lowpunch")
 
-						elif choice < 70:
+				elif choice < 70:
 
-							do_action("kick")
+					do_action("kick")
 
-						elif choice < 70:
+				elif choice < 75:
 
-							do_action("highkick")
+					do_action("highkick")
 
-						elif choice < 70:
+				elif choice < 80:
 
-							do_action("lowkick")
+					do_action("lowkick")
 
-						elif choice < 70:
+				elif choice < 85:
 
-							do_action("jumpkick")
+					do_action("jumpkick")
 
-						elif choice < 85:
+				elif choice < 90:
 
-							do_action("uppercut")
+					do_action("uppercut")
 
-						elif choice < 90:
+				elif choice < 95:
 
-							do_action("cannonkick")
+					do_action("cannonkick")
 
-						elif choice < 95:
+				elif choice < 98:
 
-							do_action("nutcracker")
+					do_action("nutcracker")
 
-						else:
+				else:
 
-							do_action("roundhousekick")
-
+					do_action("roundhousekick")
 
 # =========================================================
 # ACTION
