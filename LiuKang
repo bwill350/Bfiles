@@ -404,7 +404,7 @@ func run(input_dir: float):
 	if not is_on_floor():
 
 		state = State.JUMP
-		velocity.x = input_dir * SPEED * 3
+		velocity.x = input_dir * SPEED
 
 		if not is_attacking:
 			play_anim("jump")
@@ -1160,36 +1160,15 @@ func cpu_logic(delta):
 	# =========================================================
 	# DEAD
 	# =========================================================
+
 	if state == State.DEAD:
-
-		velocity.x = 0.0
-		is_attacking = false
-		is_shooting = false
-		action_locked = true
-
 		return
 
 
 	# =========================================================
-	# FINISH HIM
+	# HURT RECOVERY
 	# =========================================================
-	if is_finish_state:
 
-		is_attacking = false
-		is_shooting = false
-		action_locked = true
-		velocity.x = 0.0
-		state = State.IDLE
-
-		if not is_hurting:
-			play_anim("idle")
-
-		return
-
-
-	# =========================================================
-	# HURT
-	# =========================================================
 	if is_hurting:
 
 		velocity.x = knockback_x
@@ -1200,12 +1179,11 @@ func cpu_logic(delta):
 			1500.0 * delta
 		)
 
-		move_and_slide()
-
 		if abs(knockback_x) > 10.0:
 			return
 
 		knockback_x = 0.0
+
 		is_hurting = false
 		hurt_locked = false
 		is_attacking = false
@@ -1213,19 +1191,58 @@ func cpu_logic(delta):
 		action_locked = false
 
 		state = State.IDLE
+		current_anim = ""
+
 		play_anim("idle")
 
-		ai_timer = 0.1
+		target = null
+
+		for node in get_tree().get_nodes_in_group("Fighter"):
+
+			if node == self:
+				continue
+
+			if not is_instance_valid(node):
+				continue
+
+			if node is Node2D and not node.is_cpu:
+
+				target = node
+				break
+
+		if Game.difficulty == "Easy":
+
+			ai_timer = randf_range(
+				0.6,
+				1.2
+			)
+
+		else:
+
+			ai_timer = randf_range(
+				0.15,
+				0.35
+			)
 
 		return
 
 
 	# =========================================================
-	# ACTION LOCK
+	# FINISH HIM
 	# =========================================================
-	if action_locked:
+
+	if is_finish_state:
+
+		is_attacking = false
+		is_shooting = false
+		action_locked = true
 
 		velocity.x = 0.0
+
+		state = State.IDLE
+
+		if not is_hurting:
+			play_anim("idle")
 
 		return
 
@@ -1233,34 +1250,33 @@ func cpu_logic(delta):
 	# =========================================================
 	# FIND PLAYER 1
 	# =========================================================
+
 	if target == null or not is_instance_valid(target):
 
-		target = get_tree().get_first_node_in_group("player1")
+		target = null
 
-		# Backup: find human Fighter
-		if target == null or not is_instance_valid(target):
+		for node in get_tree().get_nodes_in_group("Fighter"):
 
-			for node in get_tree().get_nodes_in_group("Fighter"):
+			if node == self:
+				continue
 
-				if node == self:
-					continue
+			if not is_instance_valid(node):
+				continue
 
-				if not is_instance_valid(node):
-					continue
+			if node is Node2D and not node.is_cpu:
 
-				if node is Node2D and not node.is_cpu:
-					target = node
-					break
+				target = node
+				break
 
 
 	# =========================================================
 	# NO TARGET
 	# =========================================================
+
 	if target == null or not is_instance_valid(target):
 
 		velocity.x = 0.0
 		state = State.IDLE
-		action_locked = true
 
 		if not is_attacking:
 			play_anim("idle")
@@ -1271,7 +1287,8 @@ func cpu_logic(delta):
 	# =========================================================
 	# TARGET HEALTH 0
 	# =========================================================
-	if target.get("health") != null and target.health <= 0:
+
+	if "health" in target and target.health <= 0:
 
 		velocity.x = 0.0
 
@@ -1290,9 +1307,54 @@ func cpu_logic(delta):
 
 
 	# =========================================================
+	# TARGET DEAD STATE
+	# =========================================================
+
+	if "state" in target:
+
+		if target.state == target.State.DEAD:
+
+			velocity.x = 0.0
+
+			is_attacking = false
+			is_shooting = false
+			is_blocking = false
+
+			action_locked = true
+
+			state = State.IDLE
+
+			if not is_hurting:
+				play_anim("idle")
+
+			return
+
+
+	# =========================================================
+	# ACTION LOCK
+	# =========================================================
+
+	if action_locked:
+
+		velocity.x = 0.0
+
+		if not is_attacking and not is_hurting:
+
+			state = State.IDLE
+			play_anim("idle")
+
+		return
+
+
+	# =========================================================
 	# DISTANCE TO PLAYER 1
 	# =========================================================
-	var dist: float = target.global_position.x - global_position.x
+
+	var dist: float = (
+		target.global_position.x -
+		global_position.x
+	)
+
 	var distance: float = abs(dist)
 	var direction: float = sign(dist)
 
@@ -1300,6 +1362,7 @@ func cpu_logic(delta):
 	# =========================================================
 	# FACE PLAYER 1
 	# =========================================================
+
 	if direction != 0:
 
 		facing = direction
@@ -1309,7 +1372,13 @@ func cpu_logic(delta):
 		if has_node("Crispy"):
 			$Crispy.flip_h = facing > 0
 
-		$AttackMarker.position = Vector2(0, 0)
+		if has_node("healthzero"):
+			$healthzero.flip_h = facing > 0
+
+		$AttackMarker.position = Vector2(
+			0,
+			0
+		)
 
 		$LiuKangShoot.position = Vector2(
 			63 * facing,
@@ -1319,15 +1388,27 @@ func cpu_logic(delta):
 
 	# =========================================================
 	# CPU DISTANCES
+	# SAME AS REPTILE
 	# =========================================================
+
 	var attack_range := 110.0
-	var stopping_distance := 70.0
+	var stopping_distance := 100.0
 
 
 	# =========================================================
-	# WALK TOWARD PLAYER 1
+	# STOP AT PLAYER 1
 	# =========================================================
-	if distance > stopping_distance:
+
+	if distance <= stopping_distance:
+
+		velocity.x = 0.0
+
+		state = State.IDLE
+
+		if not is_attacking and not is_hurting:
+			play_anim("idle")
+
+	else:
 
 		velocity.x = direction * SPEED
 
@@ -1336,32 +1417,23 @@ func cpu_logic(delta):
 		if not is_attacking and not is_hurting:
 			play_anim("walk")
 
-	else:
-
-		velocity.x = 0.0
-
-		if not is_attacking and not is_hurting:
-			state = State.IDLE
-			play_anim("idle")
-
 
 	# =========================================================
-	# CHECK TARGET HEALTH AGAIN
+	# CHECK TARGET AGAIN BEFORE ATTACKING
 	# =========================================================
-	if target.get("health") != null and target.health <= 0:
+
+	if "health" in target and target.health <= 0:
 
 		velocity.x = 0.0
 
 		is_attacking = false
 		is_shooting = false
 		is_blocking = false
-
 		action_locked = true
 
 		state = State.IDLE
 
-		if not is_hurting:
-			play_anim("idle")
+		play_anim("idle")
 
 		return
 
@@ -1369,6 +1441,7 @@ func cpu_logic(delta):
 	# =========================================================
 	# AI ATTACK TIMER
 	# =========================================================
+
 	ai_timer -= delta
 
 	if ai_timer > 0.0:
@@ -1376,25 +1449,41 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# FINAL TARGET CHECK
+	# TARGET VALIDITY CHECK
 	# =========================================================
-	if not is_instance_valid(target):
-		return
 
-	if target.get("health") != null and target.health <= 0:
+	if not is_instance_valid(target):
 
 		velocity.x = 0.0
 
 		is_attacking = false
 		is_shooting = false
 		is_blocking = false
-
 		action_locked = true
 
 		state = State.IDLE
 
-		if not is_hurting:
-			play_anim("idle")
+		play_anim("idle")
+
+		return
+
+
+	# =========================================================
+	# TARGET HEALTH CHECK
+	# =========================================================
+
+	if "health" in target and target.health <= 0:
+
+		velocity.x = 0.0
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+		action_locked = true
+
+		state = State.IDLE
+
+		play_anim("idle")
 
 		return
 
@@ -1402,6 +1491,7 @@ func cpu_logic(delta):
 	# =========================================================
 	# ATTACK ONLY WHEN CLOSE
 	# =========================================================
+
 	if (
 		distance <= attack_range
 		and not is_hurting
@@ -1410,16 +1500,27 @@ func cpu_logic(delta):
 		and not is_attacking
 	):
 
+		# Stop Liu Kang completely before attacking
 		velocity.x = 0.0
 
+
+		# =====================================================
+		# DIFFICULTY
+		# =====================================================
+
 		match Game.difficulty:
+
 
 			# =================================================
 			# HARD
 			# =================================================
+
 			"Hard":
 
-				ai_timer = randf_range(0.05, 0.15)
+				ai_timer = randf_range(
+					0.05,
+					0.15
+				)
 
 				var choice: int = randi() % 100
 
@@ -1466,14 +1567,19 @@ func cpu_logic(delta):
 
 			# =================================================
 			# EASY
+			# SAME BEHAVIOR AS REPTILE
 			# =================================================
+
 			"Easy":
 
-				ai_timer = randf_range(0.5, 0.9)
+				ai_timer = randf_range(
+					0.5,
+					0.9
+				)
 
 				var choice: int = randi() % 100
 
-				if choice < 35:
+				if choice < 40:
 
 					do_action("punch")
 
@@ -1481,7 +1587,7 @@ func cpu_logic(delta):
 
 					do_action("highpunch")
 
-				elif choice < 55:
+				elif choice < 50:
 
 					do_action("lowpunch")
 
@@ -1489,21 +1595,25 @@ func cpu_logic(delta):
 
 					do_action("kick")
 
-				elif choice < 80:
+				elif choice < 75:
 
 					do_action("highkick")
 
-				elif choice < 88:
+				elif choice < 80:
 
 					do_action("lowkick")
 
-				elif choice < 94:
+				elif choice < 85:
 
 					do_action("jumpkick")
 
-				elif choice < 98:
+				elif choice < 90:
 
 					do_action("uppercut")
+
+				elif choice < 95:
+
+					do_action("roundhousekick")
 
 				else:
 
@@ -1582,7 +1692,10 @@ func do_action(anim_name: String):
 
 	# CPU immediately gets another opportunity
 	if is_cpu:
-		ai_timer = 0.05
+		if Game.difficulty == "Easy":
+			ai_timer = randf_range(0.5, 0.9)
+	else:
+		ai_timer = randf_range(0.05, 0.15)
 
 func air_launch(x_speed: float, y_speed: float):
 	state = State.JUMP
