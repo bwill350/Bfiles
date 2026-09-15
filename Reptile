@@ -792,6 +792,10 @@ func invisible():
 # CPU LOGIC
 # =========================================================
 
+# =========================================================
+# CPU LOGIC
+# =========================================================
+
 func cpu_logic(delta):
 
 	# =========================================================
@@ -834,6 +838,10 @@ func cpu_logic(delta):
 
 		target = null
 
+		# =====================================================
+		# FIND PLAYER 1 AGAIN
+		# =====================================================
+
 		for node in get_tree().get_nodes_in_group("Fighter"):
 
 			if node == self:
@@ -846,6 +854,10 @@ func cpu_logic(delta):
 
 				target = node
 				break
+
+		# =====================================================
+		# HURT RECOVERY AI DELAY
+		# =====================================================
 
 		if Game.difficulty == "Easy":
 
@@ -899,6 +911,10 @@ func cpu_logic(delta):
 			if not is_instance_valid(node):
 				continue
 
+			# =================================================
+			# ONLY FIND PLAYER 1
+			# =================================================
+
 			if node is Node2D and not node.is_cpu:
 
 				target = node
@@ -921,7 +937,7 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# TARGET IS DEAD / HEALTH IS 0
+	# TARGET HEALTH CHECK
 	# =========================================================
 
 	if "health" in target and target.health <= 0:
@@ -942,7 +958,7 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# TARGET IS DEAD STATE
+	# TARGET DEAD STATE
 	# =========================================================
 
 	if "state" in target:
@@ -1022,7 +1038,6 @@ func cpu_logic(delta):
 
 	# =========================================================
 	# CPU DISTANCES
-	# SAME AS REPTILE
 	# =========================================================
 
 	var attack_range := 110.0
@@ -1030,7 +1045,7 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# STOP AT PLAYER 1
+	# MOVE TOWARD PLAYER 1
 	# =========================================================
 
 	if distance <= stopping_distance:
@@ -1053,45 +1068,13 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# CHECK TARGET AGAIN BEFORE ATTACKING
-	# =========================================================
-
-	if "health" in target and target.health <= 0:
-
-		velocity.x = 0.0
-
-		is_attacking = false
-		is_shooting = false
-		action_locked = true
-
-		state = State.IDLE
-
-		play_anim("idle")
-
-		return
-
-
-	# =========================================================
-	# AI ATTACK TIMER
-	# =========================================================
-
-	ai_timer -= delta
-
-	if ai_timer > 0.0:
-		return
-
-
-	# =========================================================
-	# TARGET VALIDITY CHECK
+	# CHECK TARGET AGAIN
 	# =========================================================
 
 	if not is_instance_valid(target):
 
+		target = null
 		velocity.x = 0.0
-
-		is_attacking = false
-		is_shooting = false
-		action_locked = true
 
 		state = State.IDLE
 
@@ -1120,6 +1103,16 @@ func cpu_logic(delta):
 
 
 	# =========================================================
+	# AI ATTACK TIMER
+	# =========================================================
+
+	ai_timer -= delta
+
+	if ai_timer > 0.0:
+		return
+
+
+	# =========================================================
 	# ATTACK ONLY WHEN CLOSE
 	# =========================================================
 
@@ -1131,135 +1124,139 @@ func cpu_logic(delta):
 		and not is_attacking
 	):
 
-		# Stop Johnny completely before attacking
 		velocity.x = 0.0
 
 
 		# =====================================================
-		# DIFFICULTY
+		# HARD
 		# =====================================================
 
-		match Game.difficulty:
+		if Game.difficulty == "Hard":
+
+			ai_timer = randf_range(
+				0.05,
+				0.15
+			)
+
+			var choice = randi() % 100
 
 
-			# =================================================
-			# HARD
-			# =================================================
+			# -------------------------------------------------
+			# GROUND ATTACKS
+			# -------------------------------------------------
 
-			"Hard":
+			if choice < 20:
 
-				ai_timer = randf_range(
-					0.05,
-					0.15
-				)
+				do_action("punch")
 
-				var choice = randi() % 100
+			elif choice < 35:
 
-				if choice < 20:
+				do_action("highpunch")
 
-					do_action("punch")
+			elif choice < 45:
 
-				elif choice < 35:
+				do_action("lowpunch")
 
-					do_action("highpunch")
+			elif choice < 60:
 
-				elif choice < 45:
+				do_action("kick")
 
-					do_action("lowpunch")
+			elif choice < 70:
 
-				elif choice < 60:
+				do_action("lowkick")
 
-					do_action("kick")
+			elif choice < 75:
 
-				elif choice < 70:
+				do_action("highkick")
 
-					do_action("lowkick")
+			elif choice < 80:
 
-				elif choice < 80:
+				do_action("uppercut")
 
-					do_action("jumpkick")
+			elif choice < 85:
 
-				elif choice < 85:
+				do_action("roundhousekick")
 
-					do_action("highkick")
+			elif choice < 90:
 
-				elif choice < 90:
+				do_action("cannonkick")
 
-					do_action("uppercut")
+			elif choice < 94:
 
-				elif choice < 94:
+				do_action("nutcracker")
 
-					do_action("roundhousekick")
+			elif choice < 97:
 
-				elif choice < 97:
+				shoot_player()
 
-					do_action("cannonkick")
+			else:
 
-				elif choice < 99:
-
-					do_action("nutcracker")
-
-				else:
-
-					shoot_player()
+				do_action("knee")
 
 
-			# =================================================
-			# EASY
-			# =================================================
+		# =====================================================
+		# EASY
+		# =====================================================
 
-			"Easy":
+		else:
 
-				ai_timer = randf_range(
-					0.5,
-					0.9
-				)
+			ai_timer = randf_range(
+				0.5,
+				0.9
+			)
 
-				var choice = randi() % 100
+			var choice = randi() % 100
 
-				if choice < 40:
 
-					do_action("punch")
+			# -------------------------------------------------
+			# EASY GROUND ATTACKS
+			# -------------------------------------------------
 
-				elif choice < 45:
+			if choice < 40:
 
-					do_action("highpunch")
+				do_action("punch")
 
-				elif choice < 50:
+			elif choice < 45:
 
-					do_action("lowpunch")
+				do_action("highpunch")
 
-				elif choice < 70:
+			elif choice < 50:
 
-					do_action("kick")
+				do_action("lowpunch")
 
-				elif choice < 75:
+			elif choice < 70:
 
-					do_action("highkick")
+				do_action("kick")
 
-				elif choice < 80:
+			elif choice < 75:
 
-					do_action("lowkick")
+				do_action("highkick")
 
-				elif choice < 85:
+			elif choice < 80:
 
-					do_action("jumpkick")
+				do_action("lowkick")
 
-				elif choice < 90:
+			elif choice < 85:
 
-					do_action("uppercut")
+				do_action("uppercut")
 
-				elif choice < 95:
+			elif choice < 90:
 
-					do_action("cannonkick")
+				do_action("roundhousekick")
 
-				elif choice < 98:
+			elif choice < 95:
 
-					do_action("nutcracker")
+				do_action("cannonkick")
 
-				else:
+			elif choice < 98:
 
-					do_action("roundhousekick")
+				do_action("nutcracker")
+
+			else:
+
+				do_action("knee")
+
+
 
 
 # =========================================================
