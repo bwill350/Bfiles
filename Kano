@@ -1860,6 +1860,7 @@ func die():
 		$Crispy.visible = true
 		$Crispy.flip_h = facing > 0
 
+	await get_tree().create_timer(0.15).timeout
 
 	# =====================================================
 	# BLOOD
