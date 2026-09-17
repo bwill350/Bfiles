@@ -176,7 +176,7 @@ func _ready():
 	$Crispy.visible = false
 	$healthzero.visible = false
 	$AttackMarker.position = Vector2(0 * facing, 0)
-
+	$fatalkick.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Kano")
@@ -1706,7 +1706,7 @@ func combo_attack(attacks: Array):
 		play_anim("idle")
 
 
-# ---------------- DEATH ----------------
+# ---------------- DEATH ---------------
 func die():
 
 	if state == State.DEAD:
@@ -1723,22 +1723,26 @@ func die():
 
 	action_locked = true
 	hurt_locked = true
-
 	can_take_damage = false
 
 	stunned = false
 	uppercut_launched = false
+	jumpkick_launched = false
 
 	is_pulled = false
 	pull_timer = 0.0
 	pull_target = null
 
 	knockback_x = 0.0
-
 	ai_timer = 999999.0
 
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
+
+
+	# =====================================================
+	# WINNER
+	# =====================================================
 
 	var winner := ""
 
@@ -1747,17 +1751,10 @@ func die():
 	else:
 		winner = "player1"
 
-	print("================================")
-	print("KANO DIED")
-	print("ROUND: ", Game.current_round)
-	print(
-		"CURRENT SCORE: ",
-		Game.p1_round_wins,
-		" - ",
-		Game.p2_round_wins
-	)
-	print("ROUND WINNER: ", winner)
-	print("================================")
+
+	# =====================================================
+	# CHECK IF MATCH ENDS
+	# =====================================================
 
 	var match_will_end := false
 
@@ -1771,24 +1768,47 @@ func die():
 		if Game.p2_round_wins >= 1:
 			match_will_end = true
 
-	print("MATCH WILL END: ", match_will_end)
+
+	# =====================================================
+	# GET ATTACK THAT KILLED KANO
+	# =====================================================
+
+	var incoming_attack := ""
+
+	if has_meta("last_attack_name"):
+
+		incoming_attack = str(
+			get_meta("last_attack_name")
+		).strip_edges().to_lower()
+
+		remove_meta("last_attack_name")
+
+
+	print("================================")
+	print("KANO DEATH")
+	print("LAST ATTACK = [", incoming_attack, "]")
+	print("MATCH END = ", match_will_end)
+	print("================================")
+
+
+	# =====================================================
+	# NORMAL ROUND DEATH
+	# =====================================================
 
 	if not match_will_end:
 
-		print("================================")
-		print("KANO ROUND DEATH")
-		print("NO FATALITY")
-		print("PLAYING HEALTHZERO")
-		print("================================")
-
-		$Crispy.visible = false
 		$Sprite.visible = false
+		$Crispy.visible = false
+		$healthzero.visible = true
+
+		if is_instance_valid($fatalkick):
+
+			$fatalkick.stop()
+			$fatalkick.visible = false
 
 		current_anim = ""
 
-		$Sprite.flip_h = facing < 0
 		$healthzero.flip_h = facing > 0
-		$healthzero.visible = true
 
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
@@ -1797,15 +1817,53 @@ func die():
 
 		return
 
-	print("================================")
-	print("KANO FINAL DEATH")
-	print("FATALITY ALLOWED")
-	print("================================")
+
+	# =====================================================
+	# HIDE NORMAL KANO
+	# =====================================================
 
 	$Sprite.visible = false
-	$Crispy.visible = true
+	$Crispy.visible = false
+	$healthzero.visible = false
 
-	$Crispy.flip_h = facing > 0
+	if is_instance_valid($fatalkick):
+
+		$fatalkick.stop()
+		$fatalkick.visible = false
+
+
+	current_anim = ""
+
+
+	# =====================================================
+	# JOHNNY CAGE FATAL KICK
+	# =====================================================
+
+	if incoming_attack == "fatalkick":
+
+		print("================================")
+		print("JOHNNY CAGE FATAL KICK")
+		print("KANO FATAL KICK ANIMATION START")
+		print("================================")
+
+		$fatalkick.visible = true
+		$fatalkick.flip_h = facing > 0
+
+		$fatalkick.stop()
+		$fatalkick.frame = 0
+		$fatalkick.play("fatalkick")
+
+	else:
+
+		print("KANO NORMAL CRISPY DEATH")
+
+		$Crispy.visible = true
+		$Crispy.flip_h = facing > 0
+
+
+	# =====================================================
+	# BLOOD
+	# =====================================================
 
 	var blood = BLOOD_DEATH.instantiate()
 
@@ -1813,15 +1871,39 @@ func die():
 
 	blood.global_position = global_position
 
+
+	# =====================================================
+	# HIDE FINISH HIM
+	# =====================================================
+
 	if is_instance_valid(finish_label):
 		finish_label.visible = false
 
+
+	# =====================================================
+	# HOLD DEATH
+	# =====================================================
+
 	await get_tree().create_timer(3.0).timeout
+
+
+	# =====================================================
+	# CLEANUP
+	# =====================================================
+
+	if is_instance_valid($fatalkick):
+
+		$fatalkick.stop()
+		$fatalkick.visible = false
+
+
+	# =====================================================
+	# ROUND DEATH
+	# =====================================================
 
 	round_death.emit(winner)
 
 	return
-
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
