@@ -164,11 +164,10 @@ func update_facing_offsets():
 
 # ---------------- READY ----------------
 func _ready():
-
 	print("SUBZERO READY:", self)
-
 	$Crispy.visible = false
 	$healthzero.visible = false
+	$fatalkick.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Subzero")
@@ -1731,6 +1730,7 @@ func die():
 
 	# =====================================================
 	# DETERMINE IF THIS DEATH ENDS THE MATCH
+	# BEST OF 3
 	# =====================================================
 
 	var match_will_end := false
@@ -1748,107 +1748,156 @@ func die():
 	print("MATCH WILL END: ", match_will_end)
 
 	# =====================================================
-	# DEATH VISUAL
+	# GET ATTACK THAT KILLED SUB-ZERO
 	# =====================================================
+
+	var incoming_attack := ""
+
+	if has_meta("last_attack_name"):
+		incoming_attack = str(
+			get_meta("last_attack_name")
+		).strip_edges().to_lower()
+
+		remove_meta("last_attack_name")
+
+	print("LAST ATTACK = [", incoming_attack, "]")
+
+	# =====================================================
+	# HIDE FATAL KICK INITIALLY
+	# =====================================================
+
+	if has_node("fatalkick"):
+		$fatalkick.visible = false
+
+	# =====================================================
+	# NORMAL ROUND DEATH VISUAL
 	#
 	# ROUND 1 = HEALTHZERO
 	# ROUND 2 / ROUND 3 = CRISPY
-	#
-	# THIS IS SET ONLY ONCE.
-	# NOTHING BELOW CHANGES THE DEATH SPRITE.
 	# =====================================================
 
-	if Game.current_round == 1:
+	if not match_will_end:
+
+		if Game.current_round == 1:
+
+			# -------------------------------------------------
+			# ROUND 1
+			# -------------------------------------------------
+
+			$Crispy.visible = false
+			$Sprite.visible = false
+
+			$healthzero.flip_h = facing > 0
+			$healthzero.visible = true
+
+			current_anim = ""
+
+			sprite.play("healthzero")
+
+			print("================================")
+			print("SUB-ZERO ROUND 1 DEATH")
+			print("PLAYING HEALTHZERO")
+			print("================================")
+
+		else:
+
+			# -------------------------------------------------
+			# ROUND 2 / ROUND 3
+			# -------------------------------------------------
+
+			$Sprite.visible = false
+			$Crispy.visible = true
+
+			# Crispy uses opposite flip direction
+			$Crispy.flip_h = facing > 0
+
+			current_anim = ""
+
+			print("================================")
+			print(
+				"SUB-ZERO ROUND ",
+				Game.current_round,
+				" DEATH"
+			)
+			print("PLAYING CRISPY")
+			print("================================")
 
 		# -------------------------------------------------
-		# ROUND 1
-		# PLAY HEALTHZERO
+		# NORMAL ROUND
+		# LEVEL1 HANDLES NEXT ROUND
 		# -------------------------------------------------
-
-		$Crispy.visible = false
-		$Sprite.visible = false
-		$healthzero.flip_h = facing > 0
-		$healthzero.visible = true
-
-		current_anim = ""
-		sprite.play("healthzero")
 
 		print("================================")
-		print("SUB-ZERO ROUND 1 DEATH")
-		print("PLAYING HEALTHZERO")
+		print("SUB-ZERO ROUND DEATH")
+		print("NO FATALITY")
+		print("LEVEL1 WILL HANDLE NEXT ROUND")
 		print("================================")
-
-	else:
-
-		# -------------------------------------------------
-		# ROUND 2 / ROUND 3
-		# PLAY CRISPY
-		# -------------------------------------------------
-
-		$Sprite.visible = false
-		$Crispy.visible = true
-
-		# Crispy uses opposite flip direction
-		$Crispy.flip_h = facing > 0
-
-		print("================================")
-		print("SUB-ZERO ROUND ", Game.current_round, " DEATH")
-		print("PLAYING CRISPY")
-		print("================================")
-
-	# =====================================================
-	# FINAL MATCH DEATH
-	# =====================================================
-
-	if match_will_end:
-
-		print("================================")
-		print("SUB-ZERO FINAL DEATH")
-		print("FATALITY ALLOWED")
-		print("================================")
-
-		# -------------------------------------------------
-		# BLOOD DEATH EFFECT
-		# -------------------------------------------------
-
-		if BLOOD_DEATH != null:
-
-			var blood = BLOOD_DEATH.instantiate()
-
-			get_tree().current_scene.add_child(blood)
-
-			blood.global_position = global_position
-
-		# -------------------------------------------------
-		# HIDE FINISH HIM
-		# -------------------------------------------------
 
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
-
-		# -------------------------------------------------
-		# WAIT FOR FINAL DEATH / FATALITY
-		# -------------------------------------------------
-
-		await get_tree().create_timer(3.0).timeout
-
-		# -------------------------------------------------
-		# TELL LEVEL1 WHO WON
-		# -------------------------------------------------
 
 		round_death.emit(winner)
 
 		return
 
 	# =====================================================
-	# NORMAL ROUND DEATH
+	# FINAL MATCH DEATH
 	# =====================================================
 
 	print("================================")
-	print("SUB-ZERO ROUND DEATH")
-	print("NO FATALITY")
-	print("LEVEL1 WILL HANDLE NEXT ROUND")
+	print("SUB-ZERO FINAL DEATH")
+	print("FATALITY ALLOWED")
+	print("LAST ATTACK = [", incoming_attack, "]")
 	print("================================")
+
+	# =====================================================
+	# HIDE NORMAL DEATH SPRITES
+	# =====================================================
+
+	$Sprite.visible = false
+	$Crispy.visible = false
+	$healthzero.visible = false
+
+	current_anim = ""
+
+	# =====================================================
+	# FATAL KICK
+	# =====================================================
+
+	if incoming_attack == "fatalkick":
+
+		print("SUB-ZERO FATAL KICK DEATH")
+
+		if has_node("fatalkick"):
+
+			$fatalkick.visible = true
+			$fatalkick.flip_h = facing > 0
+
+		await get_tree().create_timer(3.0).timeout
+
+		if has_node("fatalkick"):
+			$fatalkick.visible = false
+
+	# =====================================================
+	# NORMAL FINAL DEATH
+	# =====================================================
+
+	else:
+
+		$Crispy.visible = true
+		$Crispy.flip_h = facing > 0
+
+		print("SUB-ZERO FINAL CRISPY DEATH")
+
+	# =====================================================
+	# BLOOD DEATH EFFECT
+	# =====================================================
+
+	var blood = BLOOD_DEATH.instantiate()
+
+	get_tree().current_scene.add_child(blood)
+
+	blood.global_position = global_position
 
 	# =====================================================
 	# HIDE FINISH HIM
@@ -1858,22 +1907,24 @@ func die():
 		finish_label.visible = false
 
 	# =====================================================
-	# IMPORTANT
-	# =====================================================
-	#
-	# DO NOT TOUCH $Sprite OR $Crispy HERE.
-	#
-	# The correct death visual was already selected above.
-	#
-	# Round 1 stays on HEALTHZERO.
-	# Round 2+ stays on CRISPY.
-	# =====================================================
-
-	# =====================================================
-	# GIVE LEVEL1 CONTROL
+	# TELL LEVEL1 WHO WON
 	# =====================================================
 
 	round_death.emit(winner)
+
+	# =====================================================
+	# WAIT BEFORE RETURNING TO MAIN MENU
+	# =====================================================
+
+	await get_tree().create_timer(1.0).timeout
+
+	# =====================================================
+	# MAIN MENU
+	# =====================================================
+
+	get_tree().change_scene_to_file(
+		"res://Scenes/MainMenu.tscn"
+	)
 
 	return
 
