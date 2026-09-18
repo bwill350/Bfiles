@@ -155,6 +155,7 @@ func _ready():
 	$Sprite.modulate = Color(1, 1, 1, 1)
 	$Crispy.visible = false
 	$healthzero.visible = false
+	$fatalkick.visible = false
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("LiuKang")
@@ -1780,10 +1781,10 @@ func spawn_grab():
 	grab.global_position = $AttackMarker.global_position
 	await get_tree().create_timer(0.25).timeout
 
-func take_damage(amount: int):
+func take_damage(amount: int = 1) -> void:
 
 	# =====================================================
-	# BASIC DAMAGE LOCKS
+	# DAMAGE PROTECTION
 	# =====================================================
 
 	if state == State.DEAD:
@@ -1795,17 +1796,41 @@ func take_damage(amount: int):
 	if spawn_protection:
 		return
 
+
 	# =====================================================
-	# PREVENT MULTIPLE DAMAGE ON SAME PHYSICS FRAME
+	# PREVENT MULTIPLE DAMAGE SAME PHYSICS FRAME
 	# =====================================================
 
 	var frame := Engine.get_physics_frames()
 
 	if has_meta("last_damage_frame"):
+
 		if get_meta("last_damage_frame") == frame:
 			return
 
 	set_meta("last_damage_frame", frame)
+
+
+	# =====================================================
+	# GET INCOMING ATTACK
+	# =====================================================
+
+	var incoming_attack := ""
+
+	if has_meta("last_attack_name"):
+
+		incoming_attack = str(
+			get_meta("last_attack_name")
+		).strip_edges().to_lower()
+
+
+	print("================================")
+	print("LIU KANG TAKE DAMAGE")
+	print("ATTACK = [", incoming_attack, "]")
+	print("HEALTH BEFORE = ", health)
+	print("FINISH STATE = ", is_finish_state)
+	print("================================")
+
 
 	# =====================================================
 	# DAMAGE COOLDOWN
@@ -1813,12 +1838,12 @@ func take_damage(amount: int):
 
 	can_take_damage = false
 
-	get_tree().create_timer(0.20).timeout.connect(func():
-
-		if is_instance_valid(self) and state != State.DEAD:
-			can_take_damage = true
-
+	get_tree().create_timer(0.25).timeout.connect(
+		func():
+			if is_instance_valid(self) and state != State.DEAD:
+				can_take_damage = true
 	)
+
 
 	# =====================================================
 	# BLOCK
@@ -1830,8 +1855,9 @@ func take_damage(amount: int):
 	if amount <= 0:
 		return
 
+
 	# =====================================================
-	# APPLY DAMAGE IMMEDIATELY
+	# APPLY DAMAGE
 	# =====================================================
 
 	health -= amount
@@ -1841,18 +1867,26 @@ func take_damage(amount: int):
 
 	health_changed.emit(health)
 
+
 	# =====================================================
-	# HIT SOUND
+	# SOUND
 	# =====================================================
 
 	if is_instance_valid(hit_sound):
 		hit_sound.play()
+
 
 	# =====================================================
 	# DEATH
 	# =====================================================
 
 	if health <= 0:
+
+		print("================================")
+		print("LIU KANG HEALTH REACHED ZERO")
+		print("INCOMING ATTACK = [", incoming_attack, "]")
+		print("CALLING DIE")
+		print("================================")
 
 		is_attacking = false
 		is_shooting = false
@@ -1862,51 +1896,72 @@ func take_damage(amount: int):
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
 
+		# IMPORTANT:
+		# Keep the attack name available for die()
+		if incoming_attack != "":
+			set_meta(
+				"last_attack_name",
+				incoming_attack
+			)
+
 		die()
 		return
 
+
 	# =====================================================
-	# FINISH HIM
+	# 2 OUT OF 3 ROUNDS
+	# =====================================================
+	# Finish Him ONLY happens when:
+	#
+	# Liu Kang has reached 1 HP
+	# AND
+	# the opponent already won 1 round.
+	#
+	# That means the opponent is about to win
+	# the match on this death.
 	# =====================================================
 
 	if health == 1 and not is_finish_state:
 
 		var opponent_will_win_match := false
 
-		# =================================================
+
+		# -------------------------------------------------
 		# LIU KANG IS PLAYER 1
-		# =================================================
+		# -------------------------------------------------
 
 		if is_in_group("player1"):
 
 			if Game.p2_round_wins >= 1:
+
 				opponent_will_win_match = true
 
-		# =================================================
+
+		# -------------------------------------------------
 		# LIU KANG IS CPU
-		# =================================================
+		# -------------------------------------------------
 
 		else:
 
 			if Game.p1_round_wins >= 1:
+
 				opponent_will_win_match = true
 
-		# =================================================
-		# TRIGGER FINISH HIM
-		# =================================================
+
+		# -------------------------------------------------
+		# TRIGGER FINISH HIM ONLY FOR FINAL ROUND
+		# -------------------------------------------------
 
 		if opponent_will_win_match:
 
 			is_hurting = false
 			hurt_locked = false
 			action_locked = false
-			is_attacking = false
-			is_shooting = false
-			is_blocking = false
 
 			trigger_finish_state()
 
 			return
+
 
 	# =====================================================
 	# NORMAL HURT
@@ -1916,16 +1971,20 @@ func take_damage(amount: int):
 	hurt_locked = true
 	action_locked = true
 
-	combo.clear()
-
 	is_attacking = false
 	is_shooting = false
 	is_blocking = false
 
 	state = State.IDLE
 
-	if health > 0:
-		play_anim("hurt")
+	combo.clear()
+
+	play_anim("hurt")
+
+
+	if is_instance_valid(hurt_sound):
+		hurt_sound.play()
+
 
 	# =====================================================
 	# BLOOD EFFECT
@@ -1939,24 +1998,260 @@ func take_damage(amount: int):
 
 		blood.global_position = $BloodMarker.global_position
 
+
 	# =====================================================
-	# HURT RECOVERY
+	# HURT HOLD
 	# =====================================================
 
-	await get_tree().create_timer(0.20).timeout
+	await get_tree().create_timer(0.25).timeout
 
 	if state == State.DEAD:
-		return
-
-	if is_finish_state:
 		return
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
 
-	if state != State.DEAD:
+
+	if state != State.DEAD and not is_finish_state:
+
 		play_anim("idle")
+
+
+# =====================================================
+# DEATH
+# =====================================================
+
+func die():
+
+	if state == State.DEAD:
+		return
+
+	state = State.DEAD
+
+	velocity = Vector2.ZERO
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+	is_hurting = false
+
+	action_locked = true
+	hurt_locked = true
+	can_take_damage = false
+
+	stunned = false
+	uppercut_launched = false
+	jumpkick_launched = false
+
+	is_pulled = false
+	pull_timer = 0.0
+	pull_target = null
+
+	knockback_x = 0.0
+	ai_timer = 999999.0
+
+
+	# =====================================================
+	# WINNER
+	# =====================================================
+
+	var winner := ""
+
+	if is_in_group("player1"):
+
+		winner = "cpu"
+
+	else:
+
+		winner = "player1"
+
+
+	# =====================================================
+	# GET ATTACK THAT KILLED LIU KANG
+	# =====================================================
+
+	var incoming_attack := ""
+
+	if has_meta("last_attack_name"):
+
+		incoming_attack = str(
+			get_meta("last_attack_name")
+		).strip_edges().to_lower()
+
+		remove_meta("last_attack_name")
+
+
+	print("================================")
+	print("LIU KANG DEATH")
+	print("LAST ATTACK = [", incoming_attack, "]")
+	print("FINISH STATE = ", is_finish_state)
+	print("================================")
+
+
+	# =====================================================
+	# NORMAL ROUND DEATH
+	# =====================================================
+	# This happens in Round 1 or Round 2 when the death
+	# does NOT end the match.
+	# =====================================================
+
+	if not is_finish_state:
+
+		$Sprite.visible = false
+		$Crispy.visible = false
+
+		if has_node("healthzero"):
+
+			$healthzero.visible = true
+			$healthzero.flip_h = facing > 0
+
+		if has_node("fatalkick"):
+
+			$fatalkick.visible = false
+
+		current_anim = ""
+
+		if is_instance_valid(finish_label):
+
+			finish_label.visible = false
+
+		round_death.emit(winner)
+
+		return
+
+
+	# =====================================================
+	# FINAL ROUND / FINISH HIM DEATH
+	# =====================================================
+
+	$Sprite.visible = false
+	$Crispy.visible = false
+	$healthzero.visible = false
+
+	if has_node("fatalkick"):
+
+		$fatalkick.visible = false
+
+	current_anim = ""
+
+
+	# =====================================================
+	# JOHNNY CAGE FATAL KICK
+	# =====================================================
+
+	if incoming_attack == "fatalkick":
+
+		print("================================")
+		print("JOHNNY CAGE FATAL KICK")
+		print("LIU KANG FATALKICK SPRITE")
+		print("================================")
+
+
+		# ---------------------------------------------
+		# HIDE NORMAL LIU KANG SPRITES
+		# ---------------------------------------------
+
+		$Sprite.visible = false
+		$Crispy.visible = false
+		$healthzero.visible = false
+
+
+		# ---------------------------------------------
+		# SHOW FATAL KICK IMAGE
+		# ---------------------------------------------
+
+		if has_node("fatalkick"):
+
+			$fatalkick.visible = true
+			$fatalkick.flip_h = facing > 0
+
+
+		print(
+			"LIU KANG FATALKICK VISIBLE = ",
+			$fatalkick.visible
+		)
+
+
+		# ---------------------------------------------
+		# HOLD FATAL KICK IMAGE
+		# ---------------------------------------------
+
+		await get_tree().create_timer(3.0).timeout
+
+
+	# =====================================================
+	# ANY OTHER FINISH HIM MOVE
+	# =====================================================
+
+	else:
+
+		print("================================")
+		print("LIU KANG CRISPY DEATH")
+		print("ATTACK = [", incoming_attack, "]")
+		print("================================")
+
+
+		$Sprite.visible = false
+		$Crispy.visible = true
+		$Crispy.flip_h = facing > 0
+		$healthzero.visible = false
+
+
+		await get_tree().create_timer(0.5).timeout
+
+
+	# =====================================================
+	# BLOOD DEATH EFFECT
+	# =====================================================
+
+	var blood = BLOOD_DEATH.instantiate()
+
+	get_tree().current_scene.add_child(blood)
+
+	blood.global_position = global_position
+
+
+	# =====================================================
+	# HIDE FINISH HIM
+	# =====================================================
+
+	if is_instance_valid(finish_label):
+
+		finish_label.visible = false
+
+
+	# =====================================================
+	# NORMAL FINISH HIM DEATH HOLD
+	# =====================================================
+
+	if incoming_attack != "fatalkick":
+
+		await get_tree().create_timer(3.0).timeout
+
+
+	# =====================================================
+	# CLEANUP
+	# =====================================================
+
+	if has_node("fatalkick"):
+
+		$fatalkick.visible = false
+
+	if has_node("Crispy"):
+
+		$Crispy.visible = false
+
+
+	# =====================================================
+	# FINAL ROUND DEATH
+	# =====================================================
+
+	round_death.emit(winner)
+
+	return
+
+
 
 func trigger_finish_state():
 
@@ -2068,190 +2363,7 @@ func spawn_attack(anim_name: String):
 # =====================================================
 # DEATH
 # =====================================================
-func die():
 
-	# =====================================================
-	# ALREADY DEAD
-	# =====================================================
-
-	if state == State.DEAD:
-		return
-
-	# =====================================================
-	# LOCK LIU KANG AS DEAD
-	# =====================================================
-
-	state = State.DEAD
-
-	velocity = Vector2.ZERO
-
-	is_attacking = false
-	is_shooting = false
-	is_blocking = false
-	is_hurting = false
-
-	action_locked = true
-	hurt_locked = true
-
-	can_take_damage = false
-
-	stunned = false
-	special_move_invincible = false
-
-	uppercut_launched = false
-
-	is_pulled = false
-	pull_timer = 0.0
-	pull_target = null
-
-	knockback_x = 0.0
-
-	# =====================================================
-	# STOP CPU
-	# =====================================================
-
-	ai_timer = 999999.0
-
-	# =====================================================
-	# HIDE FINISH HIM
-	# =====================================================
-
-	if is_instance_valid(finish_label):
-		finish_label.visible = false
-
-	# =====================================================
-	# DETERMINE ROUND WINNER
-	# =====================================================
-
-	var winner := ""
-
-	if is_in_group("player1"):
-		winner = "cpu"
-	else:
-		winner = "player1"
-
-	# =====================================================
-	# DEBUG
-	# =====================================================
-
-	print("================================")
-	print("LIUKANG DIED")
-	print("ROUND: ", Game.current_round)
-	print(
-		"CURRENT SCORE: ",
-		Game.p1_round_wins,
-		" - ",
-		Game.p2_round_wins
-	)
-	print("ROUND WINNER: ", winner)
-	print("================================")
-
-	# =====================================================
-	# DETERMINE IF THIS DEATH ENDS THE MATCH
-	# =====================================================
-
-	var match_will_end := false
-
-	if winner == "player1":
-
-		if Game.p1_round_wins >= 1:
-			match_will_end = true
-
-	else:
-
-		if Game.p2_round_wins >= 1:
-			match_will_end = true
-
-	print("MATCH WILL END: ", match_will_end)
-
-	# =====================================================
-	# NORMAL ROUND DEATH
-	# =====================================================
-	#
-	# NOT the final match death.
-	# Play healthzero animation.
-	# Level1 handles the round transition.
-	# =====================================================
-
-	if not match_will_end:
-
-		print("================================")
-		print("LIUKANG ROUND DEATH")
-		print("NO FATALITY")
-		print("PLAYING HEALTHZERO")
-		print("================================")
-
-		# Show normal death animation
-		$Crispy.visible = false
-		$Sprite.visible = false
-
-		current_anim = ""
-
-		$Sprite.flip_h = facing < 0
-		$healthzero.flip_h = facing > 0
-		$healthzero.visible = true
-
-		# Hide FINISH HIM
-		if is_instance_valid(finish_label):
-			finish_label.visible = false
-
-		# Give Level1 control
-		round_death.emit(winner)
-
-		return
-
-	# =====================================================
-	# FINAL MATCH DEATH
-	# =====================================================
-
-	print("================================")
-	print("LIUKANG FINAL DEATH")
-	print("FATALITY ALLOWED")
-	print("================================")
-
-	# =====================================================
-	# SHOW CRISPY
-	# =====================================================
-
-	$Sprite.visible = false
-	$Crispy.visible = true
-
-	$Crispy.flip_h = facing > 0
-
-	# =====================================================
-	# BLOOD DEATH EFFECT
-	# =====================================================
-
-	var blood = BLOOD_DEATH.instantiate()
-
-	get_tree().current_scene.add_child(blood)
-
-	blood.global_position = global_position
-
-	# =====================================================
-	# HIDE FINISH HIM
-	# =====================================================
-
-	if is_instance_valid(finish_label):
-		finish_label.visible = false
-
-	# =====================================================
-	# WAIT FOR FINAL DEATH
-	# =====================================================
-
-	await get_tree().create_timer(3.0).timeout
-
-	# =====================================================
-	# TELL LEVEL1 WHO WON
-	# =====================================================
-
-	round_death.emit(winner)
-
-	return
-
-# =========================================================
-# ANIMATION
-# =========================================================
 
 # ---------------- ANIMATION ----------------
 func play_anim(anim_name: String):
@@ -2491,15 +2603,51 @@ func _on_liu_kang_hurt_box_area_entered(area: Area2D) -> void:
 
 		hurt_cooldown = true
 
+		# =====================================================
+		# SAVE THE ATTACK THAT HIT LIU KANG
+		# =====================================================
+
+		if area.get("attack_name") != null:
+
+			var incoming_attack_name := str(
+				area.get("attack_name")
+			).strip_edges().to_lower()
+
+			if incoming_attack_name != "":
+				set_meta(
+					"last_attack_name",
+					incoming_attack_name
+				)
+
+		# =====================================================
+		# KNOCKBACK
+		# =====================================================
+
 		knockback_x = -facing * 100
 
-		if area.get("attack_name") and area.attack_name == "uppercut":
+		# =====================================================
+		# HURT ANIMATION
+		# =====================================================
+
+		if area.get("attack_name") != null \
+			and str(area.get("attack_name")).to_lower() == "uppercut":
+
 			$Sprite.play("wasuppercut")
+
 		else:
+
 			$Sprite.play("hurt")
+
+		# =====================================================
+		# SOUND
+		# =====================================================
 
 		if is_instance_valid(hurt_sound):
 			hurt_sound.play()
+
+		# =====================================================
+		# DAMAGE
+		# =====================================================
 
 		take_damage(1)
 
