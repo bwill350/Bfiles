@@ -115,7 +115,6 @@ const BLOOD_EFFECT = preload("res://Projectiles/Bloodeffect.tscn")
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH_SCENE = preload("res://Deaths/FireDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
-const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 
 const FIRE_COMBO = ["down", "up"]
 const ICE_COMBO = ["up", "down"]
@@ -135,6 +134,7 @@ var combo_timer := 0.0
 @onready var you_win = $YouWin
 @onready var you_lose = $YouLosed
 @onready var sprite: AnimatedSprite2D = $Sprite
+@onready var fatalkick: Sprite2D = $fatalkick
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
 @onready var fatality_sound: AudioStreamPlayer2D = $Fatality
@@ -232,7 +232,8 @@ func run(input_dir: float):
 
 # ---------------- READY ----------------
 func _ready():
-
+	$fatalkick.visible = false
+	$firedeath.visible = false
 	$Sprite.visible = true
 	$Crispy.visible = false
 	$healthzero.visible = false
@@ -1231,21 +1232,19 @@ func spawn_attack(anim_name: String):
 	attack.attack_name = anim_name
 	attack.attack_type = anim_name
 
-
 # =========================================================
 # DAMAGE
 # =========================================================
-
 func take_damage(amount: int):
 
 	# =====================================================
-	# BASIC DAMAGE LOCKS
+	# BASIC PROTECTION
 	# =====================================================
 
-	if not can_take_damage:
+	if state == State.DEAD:
 		return
 
-	if state == State.DEAD:
+	if not can_take_damage:
 		return
 
 	if spawn_protection:
@@ -1253,7 +1252,7 @@ func take_damage(amount: int):
 
 
 	# =====================================================
-	# PREVENT MULTIPLE DAMAGE ON SAME PHYSICS FRAME
+	# DAMAGE FRAME PROTECTION
 	# =====================================================
 
 	var frame := Engine.get_physics_frames()
@@ -1263,11 +1262,39 @@ func take_damage(amount: int):
 		if get_meta("last_damage_frame") == frame:
 			return
 
-	set_meta("last_damage_frame", frame)
+	set_meta(
+		"last_damage_frame",
+		frame
+	)
 
 
 	# =====================================================
-	# TEMPORARY DAMAGE COOLDOWN
+	# GET ATTACK NAME
+	# =====================================================
+
+	var incoming_attack := ""
+
+	if has_meta("last_attack_name"):
+
+		incoming_attack = str(
+			get_meta("last_attack_name")
+		).strip_edges().to_lower()
+
+
+	# =====================================================
+	# DEBUG
+	# =====================================================
+
+	print("================================")
+	print("SONYA TAKE DAMAGE")
+	print("ATTACK = [", incoming_attack, "]")
+	print("HEALTH BEFORE = ", health)
+	print("FINISH STATE = ", is_finish_state)
+	print("================================")
+
+
+	# =====================================================
+	# DAMAGE LOCK
 	# =====================================================
 
 	can_take_damage = false
@@ -1275,13 +1302,16 @@ func take_damage(amount: int):
 	get_tree().create_timer(0.25).timeout.connect(
 		func():
 
-			if is_instance_valid(self) and state != State.DEAD:
-				can_take_damage = true
+			if is_instance_valid(self):
+
+				if state != State.DEAD:
+
+					can_take_damage = true
 	)
 
 
 	# =====================================================
-	# BLOCK REDUCTION
+	# BLOCK
 	# =====================================================
 
 	if is_blocking:
@@ -1291,7 +1321,9 @@ func take_damage(amount: int):
 			0
 		)
 
+
 	if amount <= 0:
+
 		return
 
 
@@ -1300,16 +1332,19 @@ func take_damage(amount: int):
 	# =====================================================
 
 	health -= amount
+
 	health = max(
 		health,
 		0
 	)
 
-	print("================================")
-	print("SONYA TOOK DAMAGE: ", amount)
-	print("SONYA HP: ", health)
-	print("ROUND: ", Game.current_round)
-	print("================================")
+
+	print(
+		"SONYA TOOK DAMAGE: ",
+		amount,
+		" HP = ",
+		health
+	)
 
 	health_changed.emit(health)
 
@@ -1319,22 +1354,80 @@ func take_damage(amount: int):
 	# =====================================================
 
 	if is_instance_valid(hit_sound):
+
 		hit_sound.play()
 
 
 	# =====================================================
-	# FINAL HIT
+	# DEATH
 	# =====================================================
 
 	if health <= 0:
+
+		print("================================")
+		print("SONYA HEALTH REACHED ZERO")
+		print("INCOMING ATTACK = [", incoming_attack, "]")
+		print("FINISH STATE = ", is_finish_state)
+		print("CALLING DIE")
+		print("================================")
+
+
+		# -------------------------------------------------
+		# STOP ALL ACTIONS
+		# -------------------------------------------------
 
 		is_attacking = false
 		is_shooting = false
 		is_hurting = false
 		is_blocking = false
 
+		action_locked = true
+		hurt_locked = true
+
+
+		# -------------------------------------------------
+		# STOP LAUNCH STATES
+		# -------------------------------------------------
+
+		uppercut_launched = false
+		jumpkick_launched = false
+		was_uppercut = false
+		was_jumpkick = false
+
+
+		# -------------------------------------------------
+		# HIDE FINISH LABEL
+		# -------------------------------------------------
+
 		if is_instance_valid(finish_label):
+
 			finish_label.visible = false
+
+
+		# -------------------------------------------------
+		# PRESERVE ATTACK NAME FOR DIE()
+		# -------------------------------------------------
+
+		if incoming_attack != "":
+
+			set_meta(
+				"last_attack_name",
+				incoming_attack
+			)
+
+		else:
+
+			# Make sure an old attack name cannot remain
+			# from a previous hit.
+
+			if has_meta("last_attack_name"):
+
+				remove_meta("last_attack_name")
+
+
+		# -------------------------------------------------
+		# DIE
+		# -------------------------------------------------
 
 		die()
 
@@ -1342,16 +1435,7 @@ func take_damage(amount: int):
 
 
 	# =====================================================
-	# FINISH HIM
-	# =====================================================
-	#
-	# ONLY trigger FINISH HIM when the opponent already
-	# has 1 round win.
-	#
-	# This means killing Reptile will give the opponent
-	# their SECOND round win.
-	#
-	# Game.current_round is NOT used here.
+	# FINISH HIM AT 1 HP
 	# =====================================================
 
 	if health == 1 and not is_finish_state:
@@ -1359,31 +1443,18 @@ func take_damage(amount: int):
 		var opponent_will_win_match := false
 
 
-		# =================================================
-		# REPTILE IS PLAYER 1
-		# =================================================
-
 		if is_in_group("player1"):
 
-			# CPU already has 1 round win.
 			if Game.p2_round_wins >= 1:
+
 				opponent_will_win_match = true
-
-
-		# =================================================
-		# REPTILE IS CPU
-		# =================================================
 
 		else:
 
-			# Player 1 already has 1 round win.
 			if Game.p1_round_wins >= 1:
+
 				opponent_will_win_match = true
 
-
-		# =================================================
-		# TRIGGER FINISH HIM
-		# =================================================
 
 		if opponent_will_win_match:
 
@@ -1412,6 +1483,12 @@ func take_damage(amount: int):
 
 	combo.clear()
 
+
+	# =====================================================
+	# HURT ANIMATION
+	# =====================================================
+
+	current_anim = ""
 	play_anim("hurt")
 
 
@@ -1420,6 +1497,7 @@ func take_damage(amount: int):
 	# =====================================================
 
 	if is_instance_valid(hurt_sound):
+
 		hurt_sound.play()
 
 
@@ -1437,30 +1515,27 @@ func take_damage(amount: int):
 
 
 	# =====================================================
-	# HURT DURATION
+	# HURT RECOVERY
 	# =====================================================
 
 	await get_tree().create_timer(0.25).timeout
 
+
 	if state == State.DEAD:
+
 		return
+
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
 
 
-	# =====================================================
-	# RETURN TO IDLE
-	# =====================================================
-
 	if state != State.DEAD and not is_finish_state:
 
+		current_anim = ""
 		play_anim("idle")
 
-# =========================================================
-# FINISH HIM
-# =========================================================
 
 func trigger_finish_state():
 
@@ -1530,12 +1605,15 @@ func trigger_finish_state():
 # =========================================================
 # DEATH
 # =========================================================
-
 func die():
 
 	if state == State.DEAD:
 		return
 
+
+	# =====================================================
+	# DEAD STATE
+	# =====================================================
 
 	state = State.DEAD
 
@@ -1548,10 +1626,12 @@ func die():
 
 	action_locked = true
 	hurt_locked = true
-
 	can_take_damage = false
 
 	stunned = false
+	uppercut_launched = false
+	jumpkick_launched = false
+
 	is_pulled = false
 	is_spear_pulled = false
 
@@ -1560,78 +1640,73 @@ func die():
 
 	knockback_x = 0.0
 
-	uppercut_launched = false
-	jumpkick_launched = false
-
 	hurt_cooldown = false
-
 	run_locked = false
 
 	ai_timer = 999999.0
 
 
-	if is_instance_valid(finish_label):
-		finish_label.visible = false
-
+	# =====================================================
+	# WINNER
+	# =====================================================
 
 	var winner := ""
 
 	if is_in_group("player1"):
+
 		winner = "cpu"
+
 	else:
+
 		winner = "player1"
 
 
+	# =====================================================
+	# GET ATTACK THAT KILLED SONYA
+	# =====================================================
+
+	var incoming_attack := ""
+
+	if has_meta("last_attack_name"):
+
+		incoming_attack = str(
+			get_meta("last_attack_name")
+		).strip_edges().to_lower()
+
+		remove_meta("last_attack_name")
+
+
 	print("================================")
-	print("SONYA DIED")
-	print("ROUND: ", Game.current_round)
-	print(
-		"CURRENT SCORE: ",
-		Game.p1_round_wins,
-		" - ",
-		Game.p2_round_wins
-	)
-	print("ROUND WINNER: ", winner)
+	print("SONYA DEATH")
+	print("LAST ATTACK = [", incoming_attack, "]")
+	print("FINISH STATE = ", is_finish_state)
 	print("================================")
 
 
-	var match_will_end := false
+	# =====================================================
+	# NORMAL ROUND DEATH
+	# =====================================================
 
-	if winner == "player1":
+	if not is_finish_state:
 
-		if Game.p1_round_wins >= 1:
-			match_will_end = true
+		print("SONYA NORMAL ROUND DEATH")
 
-	else:
-
-		if Game.p2_round_wins >= 1:
-			match_will_end = true
-
-
-	print(
-		"MATCH WILL END: ",
-		match_will_end
-	)
-
-
-	if not match_will_end:
-
-		print("================================")
-		print("SONYA ROUND DEATH")
-		print("NO FATALITY")
-		print("PLAYING HEALTHZERO")
-		print("================================")
-
-		$Crispy.visible = false
 		$Sprite.visible = false
+		$Crispy.visible = false
+
+		if has_node("healthzero"):
+
+			$healthzero.visible = true
+			$healthzero.flip_h = facing > 0
+
+		if has_node("fatalkick"):
+
+			$fatalkick.visible = false
 
 		current_anim = ""
 
-		$Sprite.flip_h = facing < 0
-		$healthzero.flip_h = facing > 0
-		$healthzero.visible = true
-
 		if is_instance_valid(finish_label):
+
 			finish_label.visible = false
 
 		round_death.emit(winner)
@@ -1639,17 +1714,88 @@ func die():
 		return
 
 
-	print("================================")
-	print("SONYA FINAL DEATH")
-	print("FATALITY ALLOWED")
-	print("================================")
+	# =====================================================
+	# FINISH HIM DEATH
+	# =====================================================
+
+	print("SONYA FINISH HIM DEATH")
 
 
 	$Sprite.visible = false
-	$Crispy.visible = true
+	$Crispy.visible = false
+	$healthzero.visible = false
 
-	$Crispy.flip_h = facing > 0
+	if has_node("fatalkick"):
 
+		$fatalkick.visible = false
+
+	current_anim = ""
+
+
+	# =====================================================
+	# JOHNNY CAGE FATAL KICK
+	# =====================================================
+
+	if incoming_attack == "fatalkick":
+
+		print("================================")
+		print("SONYA FATAL KICK DETECTED")
+		print("FATAL KICK SPRITE NODE = ", fatalkick)
+		print("FATAL KICK BEFORE = ", fatalkick.visible)
+		print("================================")
+
+
+		# Hide everything else
+
+		$Sprite.visible = false
+		$Crispy.visible = false
+		$healthzero.visible = false
+
+
+		# Show static Sprite2D
+
+		if is_instance_valid(fatalkick):
+
+			fatalkick.flip_h = facing > 0
+			fatalkick.visible = true
+
+
+		print("================================")
+		print("SONYA FATAL KICK AFTER = ", fatalkick.visible)
+		print("================================")
+
+
+		# Hold fatal kick image
+
+		await get_tree().create_timer(3.0).timeout
+
+
+	# =====================================================
+	# ANY OTHER FINISH HIM MOVE
+	# =====================================================
+
+	else:
+
+		print("================================")
+		print("SONYA CRISPY DEATH")
+		print("ATTACK = [", incoming_attack, "]")
+		print("================================")
+
+
+		$Sprite.visible = false
+		$Crispy.visible = true
+		$Crispy.flip_h = facing > 0
+		$healthzero.visible = false
+
+
+		# Delay BEFORE blood
+
+		await get_tree().create_timer(0.5).timeout
+
+
+	# =====================================================
+	# BLOOD DEATH
+	# =====================================================
 
 	var blood = BLOOD_DEATH.instantiate()
 
@@ -1658,21 +1804,45 @@ func die():
 	blood.global_position = global_position
 
 
+	# =====================================================
+	# HIDE FINISH LABEL
+	# =====================================================
+
 	if is_instance_valid(finish_label):
+
 		finish_label.visible = false
 
 
-	await get_tree().create_timer(3.0).timeout
+	# =====================================================
+	# CRISPY HOLD
+	# =====================================================
 
+	if incoming_attack != "fatalkick":
+
+		await get_tree().create_timer(3.0).timeout
+
+
+	# =====================================================
+	# CLEANUP
+	# =====================================================
+
+	if is_instance_valid(fatalkick):
+
+		fatalkick.visible = false
+
+	if has_node("Crispy"):
+
+		$Crispy.visible = false
+
+
+	# =====================================================
+	# ROUND DEATH
+	# =====================================================
 
 	round_death.emit(winner)
 
 	return
 
-
-# =========================================================
-# ANIMATION
-# =========================================================
 
 func play_anim(anim_name: String):
 
@@ -1687,25 +1857,48 @@ func play_anim(anim_name: String):
 # COMBOS
 # =========================================================
 
+# =========================================================
+# COMBOS
+# =========================================================
+
 func register_input(input: String):
+
+	# ---------------------------------------------------------
+	# ONLY PLAYER 1 CAN ENTER COMBOS
+	# ---------------------------------------------------------
 
 	if not is_in_group("player1"):
 		return
+
+	# ---------------------------------------------------------
+	# ADD INPUT TO BOTH COMBO BUFFERS
+	# ---------------------------------------------------------
 
 	combo.append(input)
 	input_buffer.append(input)
 
 	combo_timer = 0.0
 
+	# ---------------------------------------------------------
+	# CHECK ALL COMBOS
+	# ---------------------------------------------------------
+
 	check_combo()
 
-	_check_pink_combo()
-	_check_punch_combo()
 
+# =========================================================
+# SPAWN FX
+# =========================================================
 
 func spawn_fx(scene: PackedScene):
 
+	if scene == null:
+		return
+
 	var fx = scene.instantiate()
+
+	if fx == null:
+		return
 
 	fx.owner_character = self
 	fx.damage_done = false
@@ -1716,19 +1909,31 @@ func spawn_fx(scene: PackedScene):
 	)
 
 	if is_instance_valid(fatality_sound):
-
 		fatality_sound.play()
-
-		await get_tree().process_frame
-
 
 	await get_tree().process_frame
 
+	if not is_instance_valid(fx):
+		return
 
-	if target and is_instance_valid(target):
+	var victim = null
+
+	for fighter in get_tree().get_nodes_in_group("Fighter"):
+
+		if fighter == self:
+			continue
+
+		if not is_instance_valid(fighter):
+			continue
+
+		if fighter is Node2D:
+			victim = fighter
+			break
+
+	if victim != null:
 
 		fx.global_position = (
-			target.global_position +
+			victim.global_position +
 			Vector2(
 				60 * facing,
 				0
@@ -1746,69 +1951,122 @@ func spawn_fx(scene: PackedScene):
 		)
 
 
+# =========================================================
+# PINK DEATH
+# =========================================================
+
 func trigger_pink_death():
 
 	var victim = null
 
 	for fighter in get_tree().get_nodes_in_group("Fighter"):
 
-		if fighter != self:
+		if fighter == self:
+			continue
 
-			victim = fighter
-			break
+		if not is_instance_valid(fighter):
+			continue
 
+		victim = fighter
+		break
 
 	if victim == null:
 		return
 
-
 	var pink = PINK_DEATH_SCENE.instantiate()
+
+	if pink == null:
+		return
 
 	get_tree().current_scene.add_child(pink)
 
 	pink.global_position = victim.global_position
 	pink.owner_character = self
 
-
 	if is_instance_valid(fatality_sound):
-
 		fatality_sound.play()
 
-		await get_tree().process_frame
+	print("================================")
+	print("=========== FATALITY ===========")
+	print("=========== PINK DEATH =========")
+	print("================================")
 
-		print("================================")
-		print("===========FATALITY=============")
-		print("================================")
 
+# =========================================================
+# FIRE DEATH
+# =========================================================
 
 func trigger_fire_death():
 
-	if target == null or !is_instance_valid(target):
+	var victim = null
+
+	# ---------------------------------------------------------
+	# FIND THE OTHER FIGHTER
+	# ---------------------------------------------------------
+
+	for fighter in get_tree().get_nodes_in_group("Fighter"):
+
+		if fighter == self:
+			continue
+
+		if not is_instance_valid(fighter):
+			continue
+
+		victim = fighter
+		break
+
+	if victim == null:
 		return
 
-	var fire = preload(
-		"res://Deaths/FireDeath.tscn"
-	).instantiate()
+	# ---------------------------------------------------------
+	# SPAWN FIRE DEATH
+	# ---------------------------------------------------------
+
+	var fire = FIRE_DEATH_SCENE.instantiate()
+
+	if fire == null:
+		return
 
 	get_tree().current_scene.add_child(fire)
 
-	print("================================")
-	print("===========FATALITY=============")
-	print("================================")
-
-	fire.global_position = target.global_position
+	fire.global_position = victim.global_position
 	fire.owner_character = self
 
+	if is_instance_valid(fatality_sound):
+		fatality_sound.play()
+
+	print("================================")
+	print("=========== FATALITY ===========")
+	print("=========== FIRE DEATH =========")
+	print("================================")
+
+
+# =========================================================
+# CHECK LAST INPUTS
+# =========================================================
+
+func get_last_inputs(count: int) -> Array:
+
+	if input_buffer.size() < count:
+		return []
+
+	return input_buffer.slice(
+		input_buffer.size() - count,
+		input_buffer.size()
+	)
+
+
+# =========================================================
+# CHECK PINK COMBO
+# LEFT DOWN RIGHT
+# =========================================================
 
 func _check_pink_combo():
 
 	if input_buffer.size() < 3:
 		return
 
-	var last3 = input_buffer.slice(
-		input_buffer.size() - 3,
-		input_buffer.size()
-	)
+	var last3 = get_last_inputs(3)
 
 	if last3 == [
 		"left",
@@ -1817,19 +2075,25 @@ func _check_pink_combo():
 	]:
 
 		input_buffer.clear()
+		combo.clear()
+		combo_timer = 0.0
+
+		combo_used.emit("pink_death")
 
 		trigger_pink_death()
 
+
+# =========================================================
+# CHECK PUNCH COMBO
+# RIGHT DOWN RIGHT
+# =========================================================
 
 func _check_punch_combo():
 
 	if input_buffer.size() < 3:
 		return
 
-	var last3 = input_buffer.slice(
-		input_buffer.size() - 3,
-		input_buffer.size()
-	)
+	var last3 = get_last_inputs(3)
 
 	if last3 == [
 		"right",
@@ -1838,39 +2102,115 @@ func _check_punch_combo():
 	]:
 
 		input_buffer.clear()
+		combo.clear()
+		combo_timer = 0.0
+
+		combo_used.emit("punch_combo")
 
 		start_punch_combo()
 
 
+# =========================================================
+# MAIN COMBO CHECK
+# =========================================================
+
 func check_combo():
 
-	# ---------------- FIRE ----------------
+	# ---------------------------------------------------------
+	# DO NOT ACCEPT COMBOS FROM CPU
+	# ---------------------------------------------------------
 
-	if combo == FIRE_COMBO:
-
-		combo_used.emit("fire")
-
-		special_bullet = FIRE_BULLET
-
-		combo.clear()
-
-		shoot_player()
-
+	if is_cpu:
 		return
 
+	if not is_in_group("player1"):
+		return
 
-	# ---------------- KICK ----------------
+	if state == State.DEAD:
+		return
+
+	if is_finish_state:
+		return
+
+	# ---------------------------------------------------------
+	# FIRE
+	# DOWN UP
+	# ---------------------------------------------------------
+
+	if input_buffer.size() >= 2:
+
+		var last2 = get_last_inputs(2)
+
+		if last2 == FIRE_COMBO:
+
+			input_buffer.clear()
+			combo.clear()
+			combo_timer = 0.0
+
+			combo_used.emit("fire")
+
+			special_bullet = FIRE_BULLET
+
+			# -------------------------------------------------
+			# FIRE ANIMATION
+			# -------------------------------------------------
+
+			if has_node("firedeath"):
+
+				$firedeath.visible = true
+				$firedeath.play("fire")
+
+			$Sprite.visible = false
+
+			# -------------------------------------------------
+			# SHOOT FIRE BULLET
+			# -------------------------------------------------
+
+			shoot_player()
+
+			return
+
+
+	# ---------------------------------------------------------
+	# ICE
+	# UP DOWN
+	# ---------------------------------------------------------
+
+	if input_buffer.size() >= 2:
+
+		var last2_ice = get_last_inputs(2)
+
+		if last2_ice == ICE_COMBO:
+
+			input_buffer.clear()
+			combo.clear()
+			combo_timer = 0.0
+
+			combo_used.emit("ice")
+
+			# Use special bullet if assigned.
+			# Otherwise do nothing.
+			if special_bullet != null:
+
+				shoot_player()
+
+			return
+
+
+	# ---------------------------------------------------------
+	# KICK COMBO
+	# RIGHT DOWN DOWN
+	# ---------------------------------------------------------
 
 	if input_buffer.size() >= 3:
 
-		var last3 = input_buffer.slice(
-			input_buffer.size() - 3,
-			input_buffer.size()
-		)
+		var last3_kick = get_last_inputs(3)
 
-		if last3 == KICK_COMBO:
+		if last3_kick == KICK_COMBO:
 
 			input_buffer.clear()
+			combo.clear()
+			combo_timer = 0.0
 
 			combo_used.emit("kick_combo")
 
@@ -1879,18 +2219,47 @@ func check_combo():
 			return
 
 
-	# ---------------- PUNCH ----------------
+	# ---------------------------------------------------------
+	# ELECTRIC COMBO
+	# UP DOWN RIGHT
+	# ---------------------------------------------------------
 
 	if input_buffer.size() >= 3:
 
-		var last3 = input_buffer.slice(
-			input_buffer.size() - 3,
-			input_buffer.size()
-		)
+		var last3_electric = get_last_inputs(3)
 
-		if last3 == PUNCH_COMBO:
+		if last3_electric == ELECTRIC_COMBO:
 
 			input_buffer.clear()
+			combo.clear()
+			combo_timer = 0.0
+
+			combo_used.emit("electric")
+
+			# Sonya does not have an electric attack scene,
+			# so only execute this if a special bullet exists.
+
+			if special_bullet != null:
+
+				shoot_player()
+
+			return
+
+
+	# ---------------------------------------------------------
+	# PUNCH COMBO
+	# RIGHT DOWN RIGHT
+	# ---------------------------------------------------------
+
+	if input_buffer.size() >= 3:
+
+		var last3_punch = get_last_inputs(3)
+
+		if last3_punch == PUNCH_COMBO:
+
+			input_buffer.clear()
+			combo.clear()
+			combo_timer = 0.0
 
 			combo_used.emit("punch_combo")
 
@@ -1899,9 +2268,50 @@ func check_combo():
 			return
 
 
+	# ---------------------------------------------------------
+	# FATALITY
+	# DOWN RIGHT UP
+	# ---------------------------------------------------------
+
+	if input_buffer.size() >= 3:
+
+		var last3_fatality = get_last_inputs(3)
+
+		if last3_fatality == FATALITY_COMBO:
+
+			input_buffer.clear()
+			combo.clear()
+			combo_timer = 0.0
+
+			# -------------------------------------------------
+			# FATALITY ONLY WHEN FINISH HIM IS ACTIVE
+			# -------------------------------------------------
+
+			if is_finish_state:
+
+				combo_used.emit("fatality")
+
+				trigger_fire_death()
+
+			return
+
+
+# =========================================================
+# PUNCH COMBO
+# =========================================================
+
 func start_punch_combo():
 
-	if action_locked or is_hurting or state == State.DEAD:
+	if action_locked:
+		return
+
+	if is_hurting:
+		return
+
+	if state == State.DEAD:
+		return
+
+	if health <= 1:
 		return
 
 	await combo_attack([
@@ -1914,9 +2324,22 @@ func start_punch_combo():
 	])
 
 
+# =========================================================
+# KICK COMBO
+# =========================================================
+
 func start_kick_combo():
 
-	if action_locked or is_hurting or state == State.DEAD:
+	if action_locked:
+		return
+
+	if is_hurting:
+		return
+
+	if state == State.DEAD:
+		return
+
+	if health <= 1:
 		return
 
 	await combo_attack([
@@ -1930,14 +2353,30 @@ func start_kick_combo():
 	])
 
 
+# =========================================================
+# COMBO ATTACK
+# =========================================================
+
 func combo_attack(attacks: Array):
+
+	if state == State.DEAD:
+		return
+
+	if is_hurting:
+		return
 
 	action_locked = true
 	is_attacking = true
 
 	for attack in attacks:
 
-		if is_hurting or state == State.DEAD:
+		if state == State.DEAD:
+			break
+
+		if is_hurting:
+			break
+
+		if is_finish_state:
 			break
 
 		play_anim(attack)
@@ -1946,20 +2385,25 @@ func combo_attack(attacks: Array):
 
 		await sprite.animation_finished
 
+		if state == State.DEAD:
+			break
+
+		if is_hurting:
+			break
+
 
 	is_attacking = false
 	action_locked = false
+	hurt_locked = false
 
+	if state != State.DEAD and not is_hurting and not is_finish_state:
 
-	if not is_hurting:
-
+		current_anim = ""
 		play_anim("idle")
-
 
 # =========================================================
 # HURT BOX
 # =========================================================
-
 func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 
 	if hurt_cooldown:
@@ -1997,6 +2441,20 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 
 
 	hurt_cooldown = true
+
+
+	# =====================================================
+	# SAVE THE INCOMING ATTACK NAME
+	# THIS IS WHAT ALLOWS FATALKICK TO BE DETECTED IN DIE()
+	# =====================================================
+
+	if area.get("attack_name") != null:
+		set_meta(
+			"last_attack_name",
+			str(area.attack_name).strip_edges().to_lower()
+		)
+	elif has_meta("last_attack_name"):
+		remove_meta("last_attack_name")
 
 
 	# =====================================================
@@ -2124,3 +2582,4 @@ func _on_sonya_hurt_box_area_entered(area: Area2D) -> void:
 
 
 	hurt_cooldown = false
+
