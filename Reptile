@@ -247,7 +247,7 @@ func run(input_dir: float):
 # =========================================================
 
 func _ready():
-
+	$fatalkick.visible = false
 	$Sprite.visible = true
 	$Crispy.visible = false
 	$healthzero.visible = false
@@ -1882,7 +1882,6 @@ func spawn_attack(anim_name: String):
 		"fatalitycombo",
 		"FATALITY_COMBO"
 	]:
-
 		return
 
 	var attack = REPTILE_ATTACK.instantiate()
@@ -1897,59 +1896,54 @@ func spawn_attack(anim_name: String):
 	var dmg := 1
 
 	match anim_name:
-
 		"punch":
 			dmg = 1
-
 		"highpunch":
 			dmg = 1
-
 		"lowpunch":
 			dmg = 1
-
 		"kick":
 			dmg = 1
-
 		"highkick":
 			dmg = 1
-
 		"lowkick":
 			dmg = 1
-
-		"jumpkick":
-			dmg = 1
-
-		"uppercut":
-			dmg = 1
-
-		"roundhousekick":
-			dmg = 1
-
-		"knee":
-			dmg = 1
-
 		"slidekick":
 			dmg = 1
-
+		"jumpkick":
+			dmg = 1
+		"uppercut":
+			dmg = 1
+		"roundhousekick":
+			dmg = 1
+		"knee":
+			dmg = 1
 		"fatalitycombo":
 			dmg = 1
-
 		"FATALITY_COMBO":
 			dmg = 1
 
 	if attack.has_method("set_damage"):
-
 		attack.set_damage(dmg)
-
 	else:
-
 		attack.damage = dmg
 
-	attack.owner = self
+# =====================================================
+# ATTACK INFORMATION
+# =====================================================
+
 	attack.attack_owner = self
 	attack.attack_name = anim_name
 	attack.attack_type = anim_name
 
+# =====================================================
+# IMPORTANT:
+# DO NOT SHOW $fatalkick HERE
+#
+# die() controls the fatal-kick Sprite2D.
+# =====================================================
+
+	print("REPTILE ATTACK SPAWNED: ", anim_name)
 
 # =========================================================
 # TAKE DAMAGE
@@ -1969,7 +1963,6 @@ func take_damage(amount: int):
 
 	if spawn_protection:
 		return
-
 
 	# =====================================================
 	# PREVENT MULTIPLE DAMAGE ON SAME PHYSICS FRAME
@@ -2177,12 +2170,9 @@ func take_damage(amount: int):
 
 		play_anim("idle")
 
-
 # =========================================================
 # FINISH HIM
 # =========================================================
-
-
 
 func trigger_finish_state():
 
@@ -2252,6 +2242,14 @@ func trigger_finish_state():
 # DEATH
 # =========================================================
 
+# =========================================================
+# DEATH
+# =========================================================
+
+# =========================================================
+# DEATH
+# =========================================================
+
 func die():
 
 	# =====================================================
@@ -2262,7 +2260,7 @@ func die():
 		return
 
 	# =====================================================
-	# LOCK REPTILE AS DEAD
+	# LOCK SUB-ZERO AS DEAD
 	# =====================================================
 
 	state = State.DEAD
@@ -2280,19 +2278,18 @@ func die():
 	can_take_damage = false
 
 	stunned = false
-	special_move_invincible = false
-
-	uppercut_launched = false
-	jumpkick_launched = false
-
 	is_pulled = false
-	pull_timer = 0.0
+
 	pull_target = null
+	pull_timer = 0.0
 
 	knockback_x = 0.0
+	uppercut_launched = false
+	was_uppercut = false
+	hurt_cooldown = false
 
 	# =====================================================
-	# STOP CPU
+	# STOP CPU ACTIONS
 	# =====================================================
 
 	ai_timer = 999999.0
@@ -2311,8 +2308,13 @@ func die():
 	var winner := ""
 
 	if is_in_group("player1"):
+
+		# Sub-Zero is Player 1
 		winner = "cpu"
+
 	else:
+
+		# Sub-Zero is CPU
 		winner = "player1"
 
 	# =====================================================
@@ -2333,6 +2335,7 @@ func die():
 
 	# =====================================================
 	# DETERMINE IF THIS DEATH ENDS THE MATCH
+	# BEST OF 3
 	# =====================================================
 
 	var match_will_end := false
@@ -2350,126 +2353,158 @@ func die():
 	print("MATCH WILL END: ", match_will_end)
 
 	# =====================================================
-	# DEATH VISUAL
+	# GET ATTACK THAT KILLED SUB-ZERO
 	# =====================================================
+
+	var incoming_attack := ""
+
+	if has_meta("last_attack_name"):
+		incoming_attack = str(
+			get_meta("last_attack_name")
+		).strip_edges().to_lower()
+
+		remove_meta("last_attack_name")
+
+	print("LAST ATTACK = [", incoming_attack, "]")
+
+	# =====================================================
+	# HIDE FATAL KICK INITIALLY
+	# =====================================================
+
+	if has_node("fatalkick"):
+		$fatalkick.visible = false
+
+	# =====================================================
+	# NORMAL ROUND DEATH VISUAL
 	#
 	# ROUND 1 = HEALTHZERO
-	# ROUND 2+ = CRISPY
-	#
-	# THIS IS DONE ONLY ONCE.
-	# NOTHING BELOW CHANGES THE DEATH SPRITE.
+	# ROUND 2 / ROUND 3 = CRISPY
 	# =====================================================
 
-	if Game.current_round == 1:
+	if not match_will_end:
+
+		if Game.current_round == 1:
+
+			# -------------------------------------------------
+			# ROUND 1
+			# -------------------------------------------------
+
+			$Crispy.visible = false
+			$Sprite.visible = false
+
+			$healthzero.flip_h = facing > 0
+			$healthzero.visible = true
+
+			current_anim = ""
+
+			sprite.play("healthzero")
+
+			print("================================")
+			print("REPTILE ROUND 1 DEATH")
+			print("PLAYING HEALTHZERO")
+			print("================================")
+
+		else:
+
+			# -------------------------------------------------
+			# ROUND 2 / ROUND 3
+			# -------------------------------------------------
+
+			$Sprite.visible = false
+			$Crispy.visible = true
+
+			# Crispy uses opposite flip direction
+			$Crispy.flip_h = facing > 0
+
+			current_anim = ""
+
+			print("================================")
+			print(
+				"REPTILE ROUND ",
+				Game.current_round,
+				" DEATH"
+			)
+			print("PLAYING CRISPY")
+			print("================================")
 
 		# -------------------------------------------------
-		# ROUND 1
-		# PLAY HEALTHZEROa
+		# NORMAL ROUND
+		# LEVEL1 HANDLES NEXT ROUND
 		# -------------------------------------------------
 
-		$Crispy.visible = false
-		$Sprite.visible = false
-
-		current_anim = ""
-		$healthzero.flip_h = facing > 0
-		$healthzero.visible = true
-
 		print("================================")
-		print("REPTILE ROUND 1 DEATH")
-		print("PLAYING HEALTHZERO")
+		print("REPTILE ROUND DEATH")
+		print("NO FATALITY")
+		print("LEVEL1 WILL HANDLE NEXT ROUND")
 		print("================================")
 
-	else:
+		if is_instance_valid(finish_label):
+			finish_label.visible = false
 
-		# -------------------------------------------------
-		# ROUND 2 / ROUND 3
-		# PLAY CRISPY
-		# -------------------------------------------------
+		round_death.emit(winner)
 
-		$Sprite.visible = false
-		$Crispy.visible = true
-
-		$Crispy.flip_h = facing > 0
-
-		print("================================")
-		print("REPTILE ROUND ", Game.current_round, " DEATH")
-		print("PLAYING CRISPY")
-		print("================================")
+		return
 
 	# =====================================================
 	# FINAL MATCH DEATH
 	# =====================================================
 
-	if match_will_end:
-
-		print("================================")
-		print("REPTILE FINAL DEATH")
-		print("FATALITY ALLOWED")
-		print("================================")
-
-		# -------------------------------------------------
-		# BLOOD DEATH EFFECT
-		# -------------------------------------------------
-
-		if BLOOD_DEATH != null:
-
-			var blood = BLOOD_DEATH.instantiate()
-
-			get_tree().current_scene.add_child(blood)
-
-			blood.global_position = global_position
-
-		# -------------------------------------------------
-		# WAIT FOR FINAL DEATH / FATALITY
-		# -------------------------------------------------
-
-		await get_tree().create_timer(13.0).timeout
-
-		# -------------------------------------------------
-		# TELL LEVEL1 WHO WON
-		# -------------------------------------------------
-
-		round_death.emit(winner)
-
-		# -------------------------------------------------
-		# WAIT 5 MORE SECONDS
-		# -------------------------------------------------
-
-		print("================================")
-		print("WAITING 5 SECONDS BEFORE MAIN MENU")
-		print("================================")
-
-		await get_tree().create_timer(5.0).timeout
-
-		# -------------------------------------------------
-		# GO TO MAIN MENU
-		# -------------------------------------------------
-
-		print("================================")
-		print("REPTILE FATALITY COMPLETE")
-		print("RETURNING TO MAIN MENU")
-		print("================================")
-
-		get_tree().change_scene_to_file("res://MainMenu.tscn")
-
-		return
-
-	# =====================================================
-	# NORMAL ROUND DEATH
-	# =====================================================
-	#
-	# Match is NOT over.
-	#
-	# IMPORTANT:
-	# DO NOT CHANGE $Sprite OR $Crispy HERE.
-	# The death visual was already selected above.
-	# =====================================================
-
 	print("================================")
-	print("REPTILE ROUND DEATH")
-	print("NO FATALITY")
-	print("LEVEL1 WILL HANDLE NEXT ROUND")
+	print("REPTILE FINAL DEATH")
+	print("FATALITY ALLOWED")
+	print("LAST ATTACK = [", incoming_attack, "]")
 	print("================================")
+
+	# =====================================================
+	# HIDE NORMAL DEATH SPRITES
+	# =====================================================
+
+	$Sprite.visible = false
+	$Crispy.visible = false
+	$healthzero.visible = false
+
+	current_anim = ""
+
+	# =====================================================
+	# FATAL KICK
+	# =====================================================
+
+	if incoming_attack == "fatalkick":
+
+		print("SUB-ZERO FATAL KICK DEATH")
+
+		if has_node("fatalkick"):
+
+			$fatalkick.visible = true
+			$fatalkick.flip_h = facing > 0
+
+		await get_tree().create_timer(3.0).timeout
+
+		if has_node("fatalkick"):
+			$fatalkick.visible = false
+
+	# =====================================================
+	# NORMAL FINAL DEATH
+	# =====================================================
+
+	else:
+
+		$Crispy.visible = true
+		$Crispy.flip_h = facing > 0
+
+		print("SUB-ZERO FINAL CRISPY DEATH")
+
+		await get_tree().create_timer(1.0).timeout
+
+	# =====================================================
+	# BLOOD DEATH EFFECT
+	# =====================================================
+
+	var blood = BLOOD_DEATH.instantiate()
+
+	get_tree().current_scene.add_child(blood)
+
+	blood.global_position = global_position
 
 	# =====================================================
 	# HIDE FINISH HIM
@@ -2479,12 +2514,28 @@ func die():
 		finish_label.visible = false
 
 	# =====================================================
-	# TELL LEVEL1
+	# TELL LEVEL1 WHO WON
 	# =====================================================
 
 	round_death.emit(winner)
 
+	# =====================================================
+	# WAIT BEFORE RETURNING TO MAIN MENU
+	# =====================================================
+
+	await get_tree().create_timer(3.0).timeout
+
+	# =====================================================
+	# MAIN MENU
+	# =====================================================
+
+	get_tree().change_scene_to_file(
+		"res://Scenes/MainMenu.tscn"
+	)
+
 	return
+
+
 
 func play_anim(anim_name: String):
 
@@ -2537,23 +2588,22 @@ func spawn_attack_bullet(anim_name: String):
 # =========================================================
 # HURT BOX
 # =========================================================
-
 func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 
-	if hurt_cooldown:
-		return
-
 	if area == null or not is_instance_valid(area):
-		return
-
-	if not can_take_damage:
 		return
 
 	if state == State.DEAD:
 		return
 
+	if not can_take_damage:
+		return
+
+	if hurt_cooldown:
+		return
+
 	# =====================================================
-	# ONLY ACCEPT REAL ATTACK GROUPS
+	# ONLY ACCEPT REAL ATTACKS
 	# =====================================================
 
 	if not (
@@ -2571,13 +2621,33 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 	):
 		return
 
+	# =====================================================
+	# DAMAGE LOCK
+	# =====================================================
+
 	hurt_cooldown = true
+
+	# =====================================================
+	# GET ATTACK NAME
+	# =====================================================
+
+	var incoming_attack := ""
+
+	if area.get("attack_name") != null:
+		incoming_attack = str(area.attack_name)
+
+	# =====================================================
+	# SAVE ATTACK FOR DIE()
+	# =====================================================
+
+	if incoming_attack != "":
+		set_meta("last_attack_name", incoming_attack)
 
 	# =====================================================
 	# UPPERCUT
 	# =====================================================
 
-	if area.get("attack_name") == "uppercut":
+	if incoming_attack == "uppercut":
 
 		uppercut_launched = true
 		was_uppercut = true
@@ -2592,7 +2662,6 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 
 		state = State.JUMP
 
-		# Launch Reptile backwards
 		knockback_x = -facing * 400
 
 		velocity.x = knockback_x
@@ -2601,74 +2670,66 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 		current_anim = ""
 		sprite.play("wasuppercut")
 
-	if is_instance_valid(hurt_sound):
-		hurt_sound.play()
-
-	take_damage(1)
-
-	# Let _physics_process() handle the landing.
-	# It will return Reptile to IDLE when he touches the floor.
-
-	hurt_cooldown = false
-
-	return
-
-		# =================================================
-		# RETURN TO IDLE
-		# =================================================
-
-	if state != State.DEAD:
-		uppercut_launched = false
-		velocity.x = 0
-		velocity.y = 0
-		is_hurting = false
-		hurt_locked = false
-		action_locked = false
-		is_attacking = false
-		is_shooting = false
-		is_blocking = false
-		state = State.IDLE
-		current_anim = ""
-		play_anim("idle")
-		await get_tree().create_timer(0.2).timeout
-		hurt_cooldown = false
-		return
-
 	# =====================================================
 	# NORMAL HIT
 	# =====================================================
 
-	is_hurting = true
-	hurt_locked = true
-	action_locked = true
+	else:
 
-	is_attacking = false
-	is_shooting = false
-	is_blocking = false
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
 
-	knockback_x = -facing * 400
-	velocity.x = knockback_x
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
 
-	current_anim = ""
-	sprite.play("hurt")
+		knockback_x = -facing * 400
+		velocity.x = knockback_x
+
+		current_anim = ""
+		sprite.play("hurt")
+
+	# =====================================================
+	# HURT SOUND
+	# =====================================================
 
 	if is_instance_valid(hurt_sound):
 		hurt_sound.play()
 
+	# =====================================================
+	# APPLY DAMAGE
+	# =====================================================
+
 	take_damage(1)
 
-	await get_tree().create_timer(0.2).timeout
+	# =====================================================
+	# FATAL KICK
+	# =====================================================
 
-	if state != State.DEAD:
+	if incoming_attack == "fatalitycombo" \
+	or incoming_attack == "FATALITY_COMBO":
 
-		is_hurting = false
-		hurt_locked = false
-		action_locked = false
+		print("================================")
+		print("REPTILE WAS HIT BY FATALITY")
+		print("HEALTH = ", health)
+		print("================================")
 
-		state = State.IDLE
-		velocity.x = 0
+		if health <= 0:
 
-		current_anim = ""
-		play_anim("idle")
+			print("================================")
+			print("REPTILE FATALITY DEATH")
+			print("================================")
+
+			if has_node("fatalkick"):
+
+				$fatalkick.visible = true
+				$fatalkick.flip_h = facing > 0
+
+	# =====================================================
+	# RELEASE DAMAGE LOCK
+	# =====================================================
+
+	await get_tree().create_timer(0.20).timeout
 
 	hurt_cooldown = false
