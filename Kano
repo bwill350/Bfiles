@@ -122,6 +122,7 @@ const SMOKE_EFFECT = preload("res://Projectiles/SmokeEffect.tscn")
 @onready var you_win = $YouWin
 @onready var you_lose = $YouLosed
 @onready var sprite: AnimatedSprite2D = $Sprite
+@onready var fatalkick: Sprite2D = $fatalkick
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
 @onready var finishhim_sound: AudioStreamPlayer2D = $FinishHim
@@ -1358,6 +1359,8 @@ func shoot_player():
 
 # ---------------- DAMAGE ----------------
 
+# ---------------- DAMAGE ----------------
+
 func take_damage(amount: int):
 
 	if state == State.DEAD:
@@ -1368,6 +1371,11 @@ func take_damage(amount: int):
 
 	if spawn_protection:
 		return
+
+
+	# =====================================================
+	# DAMAGE FRAME PROTECTION
+	# =====================================================
 
 	var frame := Engine.get_physics_frames()
 
@@ -1381,14 +1389,46 @@ func take_damage(amount: int):
 		frame
 	)
 
+
+	# =====================================================
+	# GET ATTACK NAME BEFORE ANYTHING ELSE
+	# =====================================================
+
+	var incoming_attack := ""
+
+	if has_meta("last_attack_name"):
+
+		incoming_attack = str(
+			get_meta("last_attack_name")
+		).strip_edges().to_lower()
+
+
+	print("================================")
+	print("KANO TAKE DAMAGE")
+	print("ATTACK = [", incoming_attack, "]")
+	print("HEALTH BEFORE = ", health)
+	print("FINISH STATE = ", is_finish_state)
+	print("================================")
+
+
+	# =====================================================
+	# DAMAGE LOCK
+	# =====================================================
+
 	can_take_damage = false
 
-	get_tree().create_timer(0.25).timeout.connect(func():
+	get_tree().create_timer(0.25).timeout.connect(
+		func():
 
-		if is_instance_valid(self) and state != State.DEAD:
+			if is_instance_valid(self) and state != State.DEAD:
 
-			can_take_damage = true
+				can_take_damage = true
 	)
+
+
+	# =====================================================
+	# BLOCK
+	# =====================================================
 
 	if is_blocking:
 
@@ -1397,8 +1437,14 @@ func take_damage(amount: int):
 			0
 		)
 
+
 	if amount <= 0:
 		return
+
+
+	# =====================================================
+	# APPLY DAMAGE
+	# =====================================================
 
 	health -= amount
 
@@ -1406,6 +1452,7 @@ func take_damage(amount: int):
 		health,
 		0
 	)
+
 
 	print(
 		"Kano took damage: ",
@@ -1416,36 +1463,76 @@ func take_damage(amount: int):
 
 	health_changed.emit(health)
 
+
+	# =====================================================
+	# HIT SOUND
+	# =====================================================
+
 	if is_instance_valid(hit_sound):
+
 		hit_sound.play()
 
+
+	# =====================================================
+	# DEATH
+	# =====================================================
+
 	if health <= 0:
+
+		print("================================")
+		print("KANO HEALTH REACHED ZERO")
+		print("INCOMING ATTACK = [", incoming_attack, "]")
+		print("CALLING DIE")
+		print("================================")
+
 
 		is_attacking = false
 		is_shooting = false
 		is_hurting = false
 		is_blocking = false
 
+
 		if is_instance_valid(finish_label):
+
 			finish_label.visible = false
+
+
+		# IMPORTANT:
+		# Keep the attack name available for die()
+		if incoming_attack != "":
+
+			set_meta(
+				"last_attack_name",
+				incoming_attack
+			)
+
 
 		die()
 
 		return
 
+
+	# =====================================================
+	# FINISH HIM AT 1 HP
+	# =====================================================
+
 	if health == 1 and not is_finish_state:
 
 		var opponent_will_win_match := false
 
+
 		if is_in_group("player1"):
 
 			if Game.p2_round_wins >= 1:
+
 				opponent_will_win_match = true
 
 		else:
 
 			if Game.p1_round_wins >= 1:
+
 				opponent_will_win_match = true
+
 
 		if opponent_will_win_match:
 
@@ -1456,6 +1543,11 @@ func take_damage(amount: int):
 			trigger_finish_state()
 
 			return
+
+
+	# =====================================================
+	# NORMAL HURT
+	# =====================================================
 
 	is_hurting = true
 	hurt_locked = true
@@ -1471,8 +1563,15 @@ func take_damage(amount: int):
 
 	play_anim("hurt")
 
+
 	if is_instance_valid(hurt_sound):
+
 		hurt_sound.play()
+
+
+	# =====================================================
+	# BLOOD EFFECT
+	# =====================================================
 
 	if has_node("BloodMarker"):
 
@@ -1482,16 +1581,26 @@ func take_damage(amount: int):
 
 		blood.global_position = $BloodMarker.global_position
 
+
+	# =====================================================
+	# HURT RECOVERY
+	# =====================================================
+
 	await get_tree().create_timer(0.25).timeout
 
+
 	if state == State.DEAD:
+
 		return
+
 
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
 
+
 	if state != State.DEAD and not is_finish_state:
+
 		play_anim("idle")
 
 
@@ -1707,6 +1816,8 @@ func combo_attack(attacks: Array):
 
 
 # ---------------- DEATH ---------------
+# ---------------- DEATH ---------------
+# ---------------- DEATH ----------------
 func die():
 
 	if state == State.DEAD:
@@ -1736,9 +1847,6 @@ func die():
 	knockback_x = 0.0
 	ai_timer = 999999.0
 
-	if is_instance_valid(finish_label):
-		finish_label.visible = false
-
 
 	# =====================================================
 	# WINNER
@@ -1750,23 +1858,6 @@ func die():
 		winner = "cpu"
 	else:
 		winner = "player1"
-
-
-	# =====================================================
-	# CHECK IF MATCH ENDS
-	# =====================================================
-
-	var match_will_end := false
-
-	if winner == "player1":
-
-		if Game.p1_round_wins >= 1:
-			match_will_end = true
-
-	else:
-
-		if Game.p2_round_wins >= 1:
-			match_will_end = true
 
 
 	# =====================================================
@@ -1787,7 +1878,7 @@ func die():
 	print("================================")
 	print("KANO DEATH")
 	print("LAST ATTACK = [", incoming_attack, "]")
-	print("MATCH END = ", match_will_end)
+	print("FINISH STATE = ", is_finish_state)
 	print("================================")
 
 
@@ -1795,20 +1886,21 @@ func die():
 	# NORMAL ROUND DEATH
 	# =====================================================
 
-	if not match_will_end:
+	if not is_finish_state:
 
 		$Sprite.visible = false
 		$Crispy.visible = false
-		$healthzero.visible = true
 
-		if is_instance_valid($fatalkick):
+		if has_node("healthzero"):
 
-			$fatalkick.stop()
+			$healthzero.visible = true
+			$healthzero.flip_h = facing > 0
+
+		if has_node("fatalkick"):
+
 			$fatalkick.visible = false
 
 		current_anim = ""
-
-		$healthzero.flip_h = facing > 0
 
 		if is_instance_valid(finish_label):
 			finish_label.visible = false
@@ -1819,18 +1911,16 @@ func die():
 
 
 	# =====================================================
-	# HIDE NORMAL KANO
+	# FINISH HIM DEATH
 	# =====================================================
 
 	$Sprite.visible = false
 	$Crispy.visible = false
 	$healthzero.visible = false
 
-	if is_instance_valid($fatalkick):
+	if has_node("fatalkick"):
 
-		$fatalkick.stop()
 		$fatalkick.visible = false
-
 
 	current_anim = ""
 
@@ -1843,27 +1933,64 @@ func die():
 
 		print("================================")
 		print("JOHNNY CAGE FATAL KICK")
-		print("KANO FATAL KICK ANIMATION START")
+		print("KANO FATALKICK SPRITE")
 		print("================================")
 
-		$fatalkick.visible = true
-		$fatalkick.flip_h = facing > 0
 
-		$fatalkick.stop()
-		$fatalkick.frame = 0
-		$fatalkick.play("fatalkick")
+		# ---------------------------------------------
+		# HIDE NORMAL KANO SPRITES
+		# ---------------------------------------------
+
+		$Sprite.visible = false
+		$Crispy.visible = false
+		$healthzero.visible = false
+
+
+		# ---------------------------------------------
+		# SHOW STATIC FATALKICK IMAGE
+		# ---------------------------------------------
+
+		if has_node("fatalkick"):
+
+			$fatalkick.visible = true
+			$fatalkick.flip_h = facing > 0
+
+		print(
+			"KANO FATALKICK VISIBLE = ",
+			$fatalkick.visible
+		)
+
+
+		# ---------------------------------------------
+		# HOLD IMAGE
+		# ---------------------------------------------
+
+		await get_tree().create_timer(3.0).timeout
+
+
+	# =====================================================
+	# ANY OTHER FINISH HIM MOVE
+	# =====================================================
 
 	else:
 
-		print("KANO NORMAL CRISPY DEATH")
+		print("================================")
+		print("KANO CRISPY DEATH")
+		print("ATTACK = [", incoming_attack, "]")
+		print("================================")
 
+
+		$Sprite.visible = false
 		$Crispy.visible = true
 		$Crispy.flip_h = facing > 0
+		$healthzero.visible = false
 
-	await get_tree().create_timer(0.15).timeout
+
+		await get_tree().create_timer(0.5).timeout
+
 
 	# =====================================================
-	# BLOOD
+	# BLOOD DEATH EFFECT
 	# =====================================================
 
 	var blood = BLOOD_DEATH.instantiate()
@@ -1882,20 +2009,25 @@ func die():
 
 
 	# =====================================================
-	# HOLD DEATH
+	# NORMAL FINISH HIM DEATH HOLD
 	# =====================================================
 
-	await get_tree().create_timer(3.0).timeout
+	if incoming_attack != "fatalkick":
+
+		await get_tree().create_timer(3.0).timeout
 
 
 	# =====================================================
 	# CLEANUP
 	# =====================================================
 
-	if is_instance_valid($fatalkick):
+	if has_node("fatalkick"):
 
-		$fatalkick.stop()
 		$fatalkick.visible = false
+
+	if has_node("Crispy"):
+
+		$Crispy.visible = false
 
 
 	# =====================================================
@@ -1956,50 +2088,175 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 
 	hurt_cooldown = true
 
+	# =====================================================
+	# GET ATTACK NAME
+	# =====================================================
+
+	var incoming_attack := ""
+
+	if area.get("attack_name") != null:
+
+		incoming_attack = str(
+			area.attack_name
+		).strip_edges().to_lower()
+
+	if incoming_attack != "":
+
+		set_meta(
+			"last_attack_name",
+			incoming_attack
+		)
+
+	# =====================================================
+	# UPPERCUT
+	# =====================================================
+
 	var was_uppercut := false
 
 	if area.get("attack_name") != null:
 
-		if area.attack_name == "uppercut":
+		if str(area.attack_name).strip_edges().to_lower() == "uppercut":
+
 			was_uppercut = true
+
+	# =====================================================
+	# JUMPKICK
+	# =====================================================
 
 	var was_jumpkick := false
 
 	if area.get("attack_name") != null:
 
-		if area.attack_name == "jumpkick":
+		if str(area.attack_name).strip_edges().to_lower() == "jumpkick":
+
 			was_jumpkick = true
+
+	# =====================================================
+	# KNOCKBACK
+	# =====================================================
 
 	knockback_x = -facing * 100
 
+	# =====================================================
+	# STOP CURRENT ACTION
+	# =====================================================
+
+	is_attacking = false
+	is_shooting = false
+	is_blocking = false
+
+	# =====================================================
+	# HIT ANIMATION
+	# =====================================================
+
+	current_anim = ""
+
 	if was_uppercut:
 
-		current_anim = ""
 		sprite.play("wasuppercut")
 
 	elif was_jumpkick:
 
-		current_anim = ""
 		sprite.play("wasjumpkick")
 
 	else:
 
-		current_anim = ""
 		sprite.play("hurt")
 
+	# =====================================================
+	# HURT SOUND
+	# =====================================================
+
 	if is_instance_valid(hurt_sound):
+
 		hurt_sound.play()
 
+	# =====================================================
+	# DAMAGE
+	# =====================================================
+
 	take_damage(1)
+
+	# =====================================================
+	# DEATH
+	# =====================================================
 
 	if state == State.DEAD:
 
 		hurt_cooldown = false
 		return
 
-	if health > 1 and not is_finish_state:
+	# =====================================================
+	# FINISH HIM
+	# =====================================================
 
-		if was_uppercut or was_jumpkick:
+	if is_finish_state:
+
+		is_hurting = false
+		hurt_locked = false
+		action_locked = true
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		stunned = false
+
+		velocity = Vector2.ZERO
+		knockback_x = 0.0
+
+		state = State.IDLE
+
+		current_anim = ""
+
+		if is_instance_valid(sprite):
+
+			sprite.visible = true
+			sprite.play("idle")
+
+		if has_node("Crispy"):
+
+			$Crispy.visible = false
+
+		if has_node("healthzero"):
+
+			$healthzero.visible = false
+
+		if has_node("fatalkick"):
+
+			$fatalkick.visible = false
+
+		hurt_cooldown = false
+
+		return
+
+	# =====================================================
+	# UPPERCUT / JUMPKICK
+	# =====================================================
+
+	if health > 1:
+
+		is_hurting = true
+		hurt_locked = true
+		action_locked = true
+
+		is_attacking = false
+		is_shooting = false
+		is_blocking = false
+
+		stunned = false
+
+		if was_uppercut:
+
+			current_anim = ""
+			sprite.play("wasuppercut")
+
+			await sprite.animation_finished
+
+		elif was_jumpkick:
+
+			current_anim = ""
+			sprite.play("wasjumpkick")
 
 			await sprite.animation_finished
 
@@ -2007,15 +2264,27 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 
 			await get_tree().create_timer(0.2).timeout
 
-	if state == State.DEAD:
+	# =====================================================
+	# DEATH CHECK
+	# =====================================================
+
+	if state == State.DEAD or health <= 0:
 
 		hurt_cooldown = false
 		return
+
+	# =====================================================
+	# FINISH HIM CHECK
+	# =====================================================
 
 	if is_finish_state:
 
 		hurt_cooldown = false
 		return
+
+	# =====================================================
+	# 1 HP NORMAL STATE
+	# =====================================================
 
 	if health <= 1:
 
@@ -2042,11 +2311,24 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 			sprite.play("idle")
 
 		if has_node("Crispy"):
+
 			$Crispy.visible = false
+
+		if has_node("healthzero"):
+
+			$healthzero.visible = false
+
+		if has_node("fatalkick"):
+
+			$fatalkick.visible = false
 
 		hurt_cooldown = false
 
 		return
+
+	# =====================================================
+	# NORMAL HURT RECOVERY
+	# =====================================================
 
 	is_hurting = false
 	hurt_locked = false
@@ -2054,6 +2336,9 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 
 	is_attacking = false
 	is_shooting = false
+	is_blocking = false
+
+	stunned = false
 
 	state = State.IDLE
 
@@ -2068,5 +2353,18 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 		sprite.play("idle")
 
 	await get_tree().create_timer(0.2).timeout
+
+	if not is_instance_valid(self):
+
+		return
+
+	if state == State.DEAD:
+
+		return
+
+	if is_finish_state:
+
+		hurt_cooldown = false
+		return
 
 	hurt_cooldown = false
