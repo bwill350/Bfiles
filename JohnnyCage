@@ -272,7 +272,6 @@ func _ready():
 	$Sprite.visible = true
 	$Crispy.visible = false
 	$healthzero.visible = false
-
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("JohnnyCage")
@@ -1508,7 +1507,17 @@ func spawn_attack(anim_name: String):
 	]:
 		return
 
+
+	# =====================================================
+	# CREATE ATTACK
+	# =====================================================
+
 	var attack = JOHNNY_CAGE_ATTACK.instantiate()
+
+
+	# =====================================================
+	# DAMAGE
+	# =====================================================
 
 	var dmg := 1
 
@@ -1556,15 +1565,31 @@ func spawn_attack(anim_name: String):
 		"fatalkick":
 			dmg = 1
 
+
+	# =====================================================
+	# SET ATTACK DATA BEFORE ADDING TO TREE
+	# =====================================================
+
 	attack.attack_owner = self
 	attack.attack_name = anim_name
 	attack.attack_type = anim_name
 	attack.damage = dmg
 
+
 	if attack.has_method("set_damage"):
 		attack.set_damage(dmg)
 
+
+	# =====================================================
+	# ADD TO SCENE
+	# =====================================================
+
 	get_tree().current_scene.add_child(attack)
+
+
+	# =====================================================
+	# POSITION / FACING
+	# =====================================================
 
 	attack.global_position = $AttackMarker.global_position
 
@@ -1597,10 +1622,23 @@ func fatalkick(dir := 0):
 	velocity.x = facing * 1400
 	velocity.y = 0
 
+
+	# =====================================================
+	# FATAL KICK ACTIVE TIME
+	# =====================================================
+
 	get_tree().create_timer(0.4).timeout.connect(
 		func():
-			cannonkick_active = false
+
+			if is_instance_valid(self):
+
+				cannonkick_active = false
 	)
+
+
+	# =====================================================
+	# FATAL KICK LOOP
+	# =====================================================
 
 	while cannonkick_active:
 
@@ -1608,6 +1646,7 @@ func fatalkick(dir := 0):
 			break
 
 		velocity.x = facing * 1400
+		velocity.y = 0
 
 		move_and_slide()
 
@@ -1615,7 +1654,13 @@ func fatalkick(dir := 0):
 
 		await get_tree().process_frame
 
+
+	# =====================================================
+	# STOP MOVEMENT
+	# =====================================================
+
 	velocity.x = 0
+	velocity.y = 0
 
 	spawn_protection = false
 	cannonkick_active = false
@@ -1623,16 +1668,29 @@ func fatalkick(dir := 0):
 	is_attacking = false
 	action_locked = false
 
+
+	# =====================================================
+	# SOUNDS
+	# =====================================================
+
 	if is_instance_valid(fatality_sound):
 		fatality_sound.play()
 
 	if is_instance_valid(cannonkick_sound):
 		cannonkick_sound.play()
 
-	if state != State.DEAD:
-		state = State.IDLE
-		play_anim("idle")
 
+	# =====================================================
+	# RETURN TO IDLE
+	# =====================================================
+
+	if state != State.DEAD:
+
+		state = State.IDLE
+
+		current_anim = ""
+
+		play_anim("idle")
 
 # =========================================================
 # CANNON KICK
