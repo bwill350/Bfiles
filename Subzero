@@ -1916,7 +1916,7 @@ func die():
 	# WAIT BEFORE RETURNING TO MAIN MENU
 	# =====================================================
 
-	await get_tree().create_timer(1.0).timeout
+	await get_tree().create_timer(3.0).timeout
 
 	# =====================================================
 	# MAIN MENU
