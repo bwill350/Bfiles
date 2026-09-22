@@ -1815,8 +1815,6 @@ func combo_attack(attacks: Array):
 		play_anim("idle")
 
 
-# ---------------- DEATH ---------------
-# ---------------- DEATH ---------------
 # ---------------- DEATH ----------------
 func die():
 
@@ -2073,6 +2071,7 @@ func _on_kano_hurt_box_area_entered(area: Area2D) -> void:
 		area.is_in_group("HitBox")
 		or area.is_in_group("ReptileAcid")
 		or area.is_in_group("ReptileBullet")
+		or area.is_in_group("SubzeroBullet")
 		or area.is_in_group("RaidenElectricBullet")
 		or area.is_in_group("FireBullet")
 		or area.is_in_group("Fireball")
