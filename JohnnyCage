@@ -1619,7 +1619,7 @@ func fatalkick(dir := 0):
 
 	play_anim("cannonkick")
 
-	velocity.x = facing * 1400
+	velocity.x = facing * 0
 	velocity.y = 0
 
 
@@ -1645,7 +1645,7 @@ func fatalkick(dir := 0):
 		if state == State.DEAD:
 			break
 
-		velocity.x = facing * 1400
+		velocity.x = facing * 0
 		velocity.y = 0
 
 		move_and_slide()
