@@ -26,6 +26,7 @@ Subzero (CharacterBody2D)
 signal round_death(winner: String)
 signal health_changed(health)
 signal combo_used(combo_name: String)
+
 var combo := []
 var combo_timer := 0.0
 var spawn_locked := true
@@ -42,6 +43,7 @@ var stunned := false
 
 # ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, JUMPKICK, LOWKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
+
 var state: State = State.IDLE
 var is_finish_state := false
 var hurt_cooldown := false
@@ -73,11 +75,13 @@ var health: int
 var can_take_damage := true
 var is_blocking := false
 var shoot_cooldown := 0.0
+
 const ICE_COMBO = ["up", "down"]
 const PUNCH_COMBO = ["right", "down", "right"]
 const KICK_COMBO = ["right", "down", "down"]
 const ICE_DEATH_TWO_COMBO = ["down", "up", "down", "up", "right"]
 const SPLAT_COMBO = ["left", "right", "left", "right", "right"]
+
 const BLOOD_EFFECT = preload("res://Projectiles/Bloodeffect.tscn")
 const SMOKE_EFFECT = preload("res://Projectiles/SmokeEffect.tscn")
 
