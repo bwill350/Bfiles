@@ -27,15 +27,9 @@ signal health_changed(health)
 signal combo_used(combo_name: String)
 signal round_death(winner: String)
 
-# =========================================================
-# STATE
-# =========================================================
 enum State { IDLE, WALK, RUN, JUMP, LOWKICK, JUMPKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
-var state: State = State.IDLE
 
-# =========================================================
-# IMMUNITY / SPECIAL STATES
-# =========================================================
+var state: State = State.IDLE
 
 var immune_groups := [
 	"FireDeath",
@@ -43,6 +37,12 @@ var immune_groups := [
 	"ElectricDeath"
 ]
 
+var active := false
+var has_hit := false
+var damage := 1
+var attack_owner: Node = null
+var attack_name := ""
+var attack_type := ""
 var fire_finish_immunity := false
 var special_bullet: PackedScene = null
 var spawn_locked := true
@@ -50,24 +50,16 @@ var spawn_protection := false
 var special_move_invincible := false
 var special_move_timer := 0.0
 var dead_locked := false
-var attack_owner: Node = null
-var attack_type := ""
 var uppercut_launched := false
 var jumpkick_launched := false
 var was_uppercut := false
 var was_jumpkick := false
-# =========================================================
-# CPU
-# =========================================================
+
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
 var stunned := false
 
-
-# =========================================================
-# FLAGS
-# =========================================================
 var kick_combo_active := false
 var is_blocking := false
 var is_hurting := false
@@ -84,9 +76,6 @@ var pull_target: Node2D = null
 var pull_timer := 0.0
 var hurt_cooldown := false
 
-# =========================================================
-# MOVEMENT
-# =========================================================
 var facing := 1
 var current_anim := ""
 var health: int
@@ -96,14 +85,8 @@ var electricfly_active := false
 var special_move = true
 var knockback_x := 0.0
 
-# =========================================================
-# COOLDOWNS
-# ========================================================
 var shoot_cooldown: float = 0.0
 
-# =========================================================
-# EXPORTS
-# =========================================================
 @export var shoot_cooldown_time: float = 0.25
 @export var SPEED := 300.0
 @export var CLIMB_SPEED := 250.0
@@ -112,9 +95,6 @@ var shoot_cooldown: float = 0.0
 @export var combo_reset_time := 0.6
 @export var player_controlled := false
 
-# =========================================================
-# PRELOADS
-# =========================================================
 const BULLET_SCENE = preload("res://Projectiles/ReptileBullet.tscn")
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ACID_BULLET = preload("res://Projectiles/Reptilesacid.tscn")
@@ -124,15 +104,9 @@ const REPTILE_ATTACK = preload("res://Projectiles/ReptileAttack.tscn")
 const BLOOD_EFFECT = preload("res://Deaths/GreenBloodEffect.tscn")
 const REPTILE_BULLET = preload("res://Projectiles/ReptileBullet.tscn")
 
-# =========================================================
-# DEATH FX
-# =========================================================
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 
-# =========================================================
-# NODES
-# =========================================================
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
@@ -153,17 +127,17 @@ const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 @onready var you_lose = $YouLosed
 @onready var fatality_sound: AudioStreamPlayer2D = $Fatality
 
-# =========================================================
-# COMBOS
-# =========================================================
 var combo := []
 var combo_timer := 0.0
+
 const FIRE_COMBO = ["down", "up"]
 const ICE_COMBO = ["up", "down"]
 const KICK_COMBO = ["right", "down", "down"]
 const ELECTRIC_COMBO = ["up", "down", "right"]
 const PUNCH_COMBO = ["right", "down", "right"]
 const FATALITY_COMBO = ["down", "right", "up"]
+
+
 # =========================================================
 # DEATH BULLET
 # =========================================================
@@ -196,6 +170,10 @@ func spawn_fire_bullet():
 # STUN
 # =========================================================
 
+# =========================================================
+# STUN
+# =========================================================
+
 func apply_stun(_duration := 4.0):
 
 	if state == State.DEAD:
@@ -211,12 +189,32 @@ func apply_stun(_duration := 4.0):
 	is_shooting = false
 	is_blocking = false
 
-	velocity = Vector2.ZERO
-	knockback_x = 0
+	# =====================================================
+	# DO NOT DESTROY UPPERCUT PHYSICS
+	# =====================================================
 
-	play_anim("idle")
+	if not uppercut_launched:
+		velocity = Vector2.ZERO
+		knockback_x = 0
 
-	await get_tree().create_timer(4.0).timeout
+		play_anim("idle")
+
+	# =====================================================
+	# UPPERCUT LAUNCHED
+	# KEEP CURRENT UPPERCUT PHYSICS
+	# =====================================================
+
+	else:
+
+		if sprite.animation != "wasuppercut":
+			current_anim = ""
+			sprite.play("wasuppercut")
+
+	# =====================================================
+	# USE ACTUAL STUN DURATION
+	# =====================================================
+
+	await get_tree().create_timer(5,0).timeout
 
 	if state == State.DEAD:
 		return
@@ -226,6 +224,7 @@ func apply_stun(_duration := 4.0):
 	is_hurting = false
 	hurt_locked = false
 	action_locked = false
+
 
 # =========================================================
 # RUN
@@ -242,20 +241,24 @@ func run(input_dir: float):
 	if not is_attacking:
 		play_anim("run")
 
+
 # =========================================================
 # READY
 # =========================================================
 
 func _ready():
+
 	$fatalkick.visible = false
 	$Sprite.visible = true
 	$Crispy.visible = false
 	$healthzero.visible = false
+
 	facing = 1
 
 	sprite.flip_h = facing > 0
 	$Crispy.flip_h = facing < 0
 	$healthzero.flip_h = facing < 0
+
 	add_to_group("Fighter")
 	add_to_group("enemy")
 	add_to_group("Reptile")
@@ -289,6 +292,7 @@ func _unhandled_input(event):
 	# =====================================================
 
 	if event.is_action_pressed("jump"):
+
 		if is_on_floor():
 			velocity.y = jump_velocity
 
@@ -305,8 +309,10 @@ func _unhandled_input(event):
 	]
 
 	for i in inputs:
+
 		if event.is_action_pressed(i):
 			register_input(i)
+
 
 # =========================================================
 # PHYSICS
@@ -317,11 +323,71 @@ func _physics_process(delta):
 	if state == State.DEAD:
 		return
 
+
 	# =====================================================
 	# STUN
 	# =====================================================
 
 	if stunned:
+
+		# =================================================
+		# UPPERCUT LAUNCHED WHILE STUNNED
+		# KEEP SAME UPPERCUT PHYSICS
+		# =================================================
+
+		if uppercut_launched:
+
+			# Keep uppercut hurt animation
+			if sprite.animation != "wasuppercut":
+				current_anim = ""
+				sprite.play("wasuppercut")
+
+			# Do NOT allow normal movement while launched
+			velocity.x = move_toward(
+				velocity.x,
+				400.0,
+				1500.0 * delta
+			)
+
+			# Keep normal gravity
+			if not is_on_floor():
+				velocity.y += GRAVITY * delta
+			else:
+				velocity.y = 0
+
+			move_and_slide()
+
+			# =============================================
+			# LANDED AFTER UPPERCUT DURING STUN
+			# =============================================
+
+			if is_on_floor():
+
+				velocity.x = 0
+				velocity.y = 0
+
+				uppercut_launched = false
+				was_uppercut = false
+
+				is_hurting = false
+				hurt_locked = false
+				action_locked = false
+
+				is_attacking = false
+				is_shooting = false
+				is_blocking = false
+
+				state = State.IDLE
+
+				current_anim = ""
+				play_anim("idle")
+
+			return
+
+
+		# =================================================
+		# NORMAL STUN
+		# =================================================
 
 		if not is_on_floor():
 			velocity.y += GRAVITY * delta
@@ -795,6 +861,8 @@ func invisible():
 # =========================================================
 # CPU LOGIC
 # =========================================================
+
+
 
 func cpu_logic(delta):
 
@@ -2589,6 +2657,21 @@ func spawn_attack_bullet(anim_name: String):
 # HURT BOX
 # =========================================================
 func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
+# =====================================================
+	# FIRE DEATH
+	# ONLY DAMAGES CPU TARGET
+	# =====================================================
+
+	if area.is_in_group("FireDeath"):
+		# Target is NOT CPU -> ignore FireDeath
+		if not is_cpu:
+
+			hurt_cooldown = false
+			return
+
+		# Target IS CPU -> FireDeath DOES damage
+		take_damage(1)
+		return
 
 	if area == null or not is_instance_valid(area):
 		return
@@ -2733,3 +2816,5 @@ func _on_reptile_hurt_box_area_entered(area: Area2D) -> void:
 	await get_tree().create_timer(0.20).timeout
 
 	hurt_cooldown = false
+
+
