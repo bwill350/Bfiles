@@ -23,7 +23,6 @@ LiuKang (CharacterBody2D)
 │   └── FinishLabel
 │       └── Sprite2D
 
-# ---------------- SIGNALS ----------------
 signal round_death(winner: String)
 signal health_changed(health)
 signal combo_used(combo_name: String)
@@ -35,8 +34,8 @@ var was_uppercut := false
 var was_jumpkick := false
 const GRAB_TIME := 1.0
 
-# ---------------- STATE ----------------
 enum State { IDLE, WALK, RUN, JUMP, KICK, LOWKICK, JUMPKICK, HIGHKICK, PUNCH, LOWPUNCH, HIGHPUNCH, BLOCK, DEAD }
+
 var special_move := false
 var state: State = State.IDLE
 var special_bullet: PackedScene = null
@@ -58,14 +57,12 @@ var is_pulled := false
 var pull_timer := 0.0
 var pull_target: Node = null
 
-# ---------------- CPU ----------------
 var special_move_invincible := false
 var is_cpu := false
 var target: Node2D = null
 var ai_timer := 0.0
 var stunned := false
 
-# ---------------- FLAGS ----------------
 var is_blocking := false
 var is_hurting := false
 var is_shooting := false
@@ -85,14 +82,13 @@ var climb_pressed := Input.is_action_pressed("climb")
 var dragon_active := false
 var normal_modulate := Color(1, 1, 1, 1)
 
-# ---------------- MOVEMENT ----------------
 var facing := 1
 var current_anim := ""
 var health: int
 var knockback_x := 0.0
+
 const GRAVITY = 5000
 
-# ---------------- EXPORTS ----------------
 @export var SPEED := 300.0
 @export var CLIMB_SPEED := 250.0
 @export var max_health := 10
@@ -102,12 +98,10 @@ const GRAVITY = 5000
 @export var speed := 300.0
 @export var player_controlled := false
 
-# ---------------- PRELOADS ----------------
 const LIU_KANG_ATTACK = preload("res://Projectiles/LiuKangAttack.tscn")
 const FIREBALL = preload("res://Projectiles/Fireball.tscn")
 const GRAB_ATTACK = preload("res://GrabAttack.tscn")
 
-# ---------------- NODES ----------------
 @onready var sprite: AnimatedSprite2D = $Sprite
 @onready var hit_sound: AudioStreamPlayer2D = $Hit
 @onready var hurt_sound: AudioStreamPlayer2D = $Hurt
@@ -121,17 +115,15 @@ const GRAB_ATTACK = preload("res://GrabAttack.tscn")
 @onready var fatality_sound: AudioStreamPlayer2D = $Fatality
 @onready var character = get_parent()
 
-
-# ---------------- PRELOADS ----------------
 const FIRE_BULLET = preload("res://Projectiles/FireBullet.tscn")
 const ELECTRIC_BULLET = preload("res://Projectiles/ElectricBullet.tscn")
 const BLOOD_EFFECT = preload("res://Projectiles/Bloodeffect.tscn")
 
-# ---------------- DEATH FX ----------------
 const BLOOD_DEATH = preload("res://Deaths/BloodDeath.tscn")
 const FIRE_DEATH = preload("res://Deaths/FireDeath.tscn")
 const ELECTRIC_DEATH = preload("res://Deaths/ElectricDeath.tscn")
 const DRAGON_DEATH = preload("res://Deaths/DragonDeath.tscn")
+
 const ACID_COMBO = ["down", "down", "down", "right"]
 const FIRE_COMBO = ["down", "up"]
 const ICE_COMBO = ["up", "down"]
@@ -140,14 +132,13 @@ const PUNCH_COMBO = ["right", "down", "right"]
 const KICK_COMBO = ["right", "down", "down"]
 const DRAGON_COMBO = ["left", "down", "left", "right"]
 const FATALITY_COMBO = ["down", "right","up"]
+
 var special_move_x := 0.0
 var special_move_y := 0.0
 
-# ---------------- COMBOS ----------------
 var combo := []
 var combo_timer := 0.0
 
-# ---------------- COOLDOWNS ----------------
 var shoot_cooldown: float = 0.0
 
 # ---------------- READY ----------------
@@ -1198,6 +1189,10 @@ func cpu_logic(delta):
 
 		target = null
 
+		# =====================================================
+		# FIND PLAYER 1 AGAIN
+		# =====================================================
+
 		for node in get_tree().get_nodes_in_group("Fighter"):
 
 			if node == self:
@@ -1210,6 +1205,10 @@ func cpu_logic(delta):
 
 				target = node
 				break
+
+		# =====================================================
+		# HURT RECOVERY AI DELAY
+		# =====================================================
 
 		if Game.difficulty == "Easy":
 
@@ -1235,7 +1234,6 @@ func cpu_logic(delta):
 	if is_finish_state:
 
 		is_attacking = false
-		is_shooting = false
 		action_locked = true
 
 		velocity.x = 0.0
@@ -1264,6 +1262,10 @@ func cpu_logic(delta):
 			if not is_instance_valid(node):
 				continue
 
+			# =================================================
+			# ONLY FIND PLAYER 1
+			# =================================================
+
 			if node is Node2D and not node.is_cpu:
 
 				target = node
@@ -1286,7 +1288,7 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# TARGET HEALTH 0
+	# TARGET HEALTH CHECK
 	# =========================================================
 
 	if "health" in target and target.health <= 0:
@@ -1295,7 +1297,6 @@ func cpu_logic(delta):
 
 		is_attacking = false
 		is_shooting = false
-		is_blocking = false
 
 		action_locked = true
 
@@ -1319,7 +1320,6 @@ func cpu_logic(delta):
 
 			is_attacking = false
 			is_shooting = false
-			is_blocking = false
 
 			action_locked = true
 
@@ -1383,13 +1383,12 @@ func cpu_logic(delta):
 
 		$LiuKangShoot.position = Vector2(
 			63 * facing,
-			-211
+			-225
 		)
 
 
 	# =========================================================
 	# CPU DISTANCES
-	# SAME AS REPTILE
 	# =========================================================
 
 	var attack_range := 110.0
@@ -1397,7 +1396,7 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# STOP AT PLAYER 1
+	# MOVE TOWARD PLAYER 1
 	# =========================================================
 
 	if distance <= stopping_distance:
@@ -1420,7 +1419,23 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# CHECK TARGET AGAIN BEFORE ATTACKING
+	# CHECK TARGET AGAIN
+	# =========================================================
+
+	if not is_instance_valid(target):
+
+		target = null
+		velocity.x = 0.0
+
+		state = State.IDLE
+
+		play_anim("idle")
+
+		return
+
+
+	# =========================================================
+	# TARGET HEALTH CHECK
 	# =========================================================
 
 	if "health" in target and target.health <= 0:
@@ -1429,7 +1444,6 @@ func cpu_logic(delta):
 
 		is_attacking = false
 		is_shooting = false
-		is_blocking = false
 		action_locked = true
 
 		state = State.IDLE
@@ -1450,46 +1464,6 @@ func cpu_logic(delta):
 
 
 	# =========================================================
-	# TARGET VALIDITY CHECK
-	# =========================================================
-
-	if not is_instance_valid(target):
-
-		velocity.x = 0.0
-
-		is_attacking = false
-		is_shooting = false
-		is_blocking = false
-		action_locked = true
-
-		state = State.IDLE
-
-		play_anim("idle")
-
-		return
-
-
-	# =========================================================
-	# TARGET HEALTH CHECK
-	# =========================================================
-
-	if "health" in target and target.health <= 0:
-
-		velocity.x = 0.0
-
-		is_attacking = false
-		is_shooting = false
-		is_blocking = false
-		action_locked = true
-
-		state = State.IDLE
-
-		play_anim("idle")
-
-		return
-
-
-	# =========================================================
 	# ATTACK ONLY WHEN CLOSE
 	# =========================================================
 
@@ -1501,67 +1475,59 @@ func cpu_logic(delta):
 		and not is_attacking
 	):
 
-		# Stop Liu Kang completely before attacking
 		velocity.x = 0.0
 
 
 		# =====================================================
-		# DIFFICULTY
+		# HARD
 		# =====================================================
 
-		match Game.difficulty:
+		if Game.difficulty == "Hard":
 
+			ai_timer = randf_range(
+				0.05,
+				0.15
+			)
 
-			# =================================================
-			# HARD
-			# =================================================
+			var choice = randi() % 100
 
-			"Hard":
+			if choice < 15:
 
-				ai_timer = randf_range(
-					0.05,
-					0.15
-				)
+				do_action("punch")
 
-				var choice: int = randi() % 100
-
-				if choice < 15:
-
-					do_action("punch")
-
-				elif choice < 25:
+			elif choice < 25:
 
 					do_action("highpunch")
 
-				elif choice < 35:
+			elif choice < 35:
 
 					do_action("lowpunch")
 
-				elif choice < 50:
+			elif choice < 50:
 
 					do_action("kick")
 
-				elif choice < 60:
+			elif choice < 60:
 
 					do_action("highkick")
 
-				elif choice < 70:
+			elif choice < 70:
 
 					do_action("lowkick")
 
-				elif choice < 80:
+			elif choice < 80:
 
 					do_action("jumpkick")
 
-				elif choice < 88:
+			elif choice < 88:
 
 					do_action("uppercut")
 
-				elif choice < 95:
+			elif choice < 95:
 
 					do_action("roundhousekick")
 
-				else:
+			else:
 
 					do_action("knee")
 
@@ -1571,54 +1537,54 @@ func cpu_logic(delta):
 			# SAME BEHAVIOR AS REPTILE
 			# =================================================
 
-			"Easy":
+		if Game.difficulty == "easy":
 
-				ai_timer = randf_range(
-					0.5,
-					0.9
-				)
+			ai_timer = randf_range(
+				0.05,
+				0.9
+			)
 
-				var choice: int = randi() % 100
+		var choice: int = randi() % 100
 
-				if choice < 40:
+		if choice < 40:
 
-					do_action("punch")
+				do_action("punch")
 
-				elif choice < 45:
+		elif choice < 45:
 
-					do_action("highpunch")
+				do_action("highpunch")
 
-				elif choice < 50:
+		elif choice < 50:
 
-					do_action("lowpunch")
+				do_action("lowpunch")
 
-				elif choice < 70:
+		elif choice < 70:
 
-					do_action("kick")
+				do_action("kick")
 
-				elif choice < 75:
+		elif choice < 75:
 
-					do_action("highkick")
+				do_action("highkick")
 
-				elif choice < 80:
+		elif choice < 80:
 
-					do_action("lowkick")
+				do_action("lowkick")
 
-				elif choice < 85:
+		elif choice < 85:
 
-					do_action("jumpkick")
+				do_action("jumpkick")
 
-				elif choice < 90:
+		elif choice < 90:
 
-					do_action("uppercut")
+				do_action("uppercut")
 
-				elif choice < 95:
+		elif choice < 95:
 
-					do_action("roundhousekick")
+				do_action("roundhousekick")
 
-				else:
+		else:
 
-					shoot_fireball()
+				shoot_fireball()
 
 
 	# =========================================================
